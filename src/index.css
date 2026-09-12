@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Vô hiệu hóa viền trắng focus mặc định của trình duyệt trên toàn ứng dụng */
+*:focus, *:focus-visible {
+  outline: none !important;
+}
+
 /* Custom Scrollbar for professional desktop POS */
 ::-webkit-scrollbar {
   width: 5px;

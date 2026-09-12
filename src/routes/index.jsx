@@ -3,6 +3,8 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import AdminLayout from '@/layouts/AdminLayout';
 import TableManagePage from '@/pages/admin/TableManagePage';
 
+import MenuManagePage from '@/pages/admin/MenuManagePage';
+
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -18,11 +20,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'menu',
-        element: (
-          <div className="p-8 text-center text-gold font-serif text-lg">
-            Trang Quản Lý Thực Đơn (Đang xây dựng)
-          </div>
-        ),
+        element: <MenuManagePage />,
       },
       {
         path: 'tables-qr',

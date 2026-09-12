@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { Banknote, BellRing } from 'lucide-react';
 
 const TABS = [
   {
@@ -34,14 +35,14 @@ const TABS = [
     label: 'Chờ Thanh Toán',
     countKey: 'paying',
     color: '#3B82F6', // Xanh Dương
-    icon: '💵',
+    icon: <Banknote className="w-3.5 h-3.5 text-blue-400" />,
   },
   {
     id: 'CALL_STAFF',
     label: 'Có Chuông Gọi',
     countKey: 'callStaff',
     color: '#c41e3a', // Xích Diễm
-    icon: '🛎️',
+    icon: <BellRing className="w-3.5 h-3.5 text-crimson-glow" />,
   },
 ];
 
@@ -87,7 +88,17 @@ export default function FloorStatusHeader({
   }, [updateSlider]);
 
   return (
-    <header className="h-20 border-b border-surface-border px-8 py-4 flex items-center bg-surface/80 backdrop-blur-md flex-shrink-0 justify-end">
+    <header className="h-20 border-b border-surface-border px-8 py-4 flex items-center justify-between bg-surface/80 backdrop-blur-md flex-shrink-0 font-sans z-20">
+      {/* Tiêu đề trang Sơ Đồ Bàn Ăn đồng bộ với Quản Lý Thực Đơn */}
+      <div className="flex items-center gap-3">
+        <h1 className="text-base font-bold text-white tracking-wide">
+          Sơ Đồ Bàn Ăn
+        </h1>
+        <span className="hidden sm:inline-block text-[11px] px-2 py-0.5 rounded bg-surface-elevated text-gold/90 border border-gold/30">
+          Imperial Floor
+        </span>
+      </div>
+
       {/* Container nhóm các button tabs trạng thái với thanh trượt indicator */}
       <div
         ref={containerRef}
@@ -107,7 +118,7 @@ export default function FloorStatusHeader({
               role="tab"
               aria-selected={isActive}
               onClick={() => onSelectTab && onSelectTab(tab.id)}
-              className={`group relative px-3 py-2 text-xs transition-all duration-200 flex items-center gap-2 rounded-lg outline-none cursor-pointer select-none ${
+              className={`group relative px-3 py-2 text-xs transition-colors duration-150 flex items-center gap-2 rounded-lg outline-none focus:outline-none focus:ring-0 ring-0 focus-visible:outline-none focus-visible:ring-0 cursor-pointer select-none ${
                 isActive
                   ? 'text-white font-semibold bg-surface-elevated/40'
                   : 'text-[#A0A0A5] hover:text-[#EDEDED] hover:bg-surface-hover font-medium'
@@ -120,7 +131,7 @@ export default function FloorStatusHeader({
               )}
               {tab.icon && (
                 <span
-                  className={`text-xs inline-block ${
+                  className={`inline-flex items-center justify-center ${
                     count > 0 && tab.id === 'CALL_STAFF' ? 'animate-bell-shake' : ''
                   }`}
                 >

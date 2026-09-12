@@ -77,7 +77,7 @@ export default function AdminSidebar() {
     <aside className="w-[220px] flex-shrink-0 bg-[#121214] border-r border-surface-border flex flex-col justify-between z-20 h-screen select-none">
       <div>
         {/* Imperial Crest / Branding Header */}
-        <div className="p-4 border-b border-surface-border flex items-center justify-center">
+        <div className="h-20 px-4 border-b border-surface-border flex items-center justify-center">
           <img
             src={LOGO_URL}
             alt="Hỏa Diệm Các Logo"

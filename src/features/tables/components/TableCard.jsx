@@ -1,4 +1,5 @@
 import React from 'react';
+import { BellRing } from 'lucide-react';
 
 export function formatCurrencyVND(amount) {
   if (!amount) return '0 ₫';
@@ -97,7 +98,7 @@ export default function TableCard({ table, onSelect }) {
         {/* Huy hiệu Gọi phục vụ rung lắc */}
         {hasCallStaff && (
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-crimson border border-crimson-glow text-white shadow-md shadow-crimson-glow/60 animate-badge-shake font-sans">
-            <span className="text-xs">🛎️</span>
+            <BellRing className="w-3 h-3 text-white flex-shrink-0" />
             <span className="text-[10px] font-bold text-white uppercase tracking-wider">Gọi PV</span>
           </div>
         )}
