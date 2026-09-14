@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import AdminLayout from '@/layouts/AdminLayout';
 import TableManagePage from '@/pages/admin/TableManagePage';
 import MenuManagePage from '@/pages/admin/MenuManagePage';
+import AdminEmployeeManagePage from '@/pages/admin/AdminEmployeeManagePage';
 import CustomerLayout from '@/layouts/CustomerLayout';
 import MenuPage from '@/pages/customer/MenuPage';
 import LoginPage from '@/pages/auth/LoginPage';
@@ -65,6 +66,14 @@ export const router = createBrowserRouter([
       {
         path: 'menu',
         element: <MenuManagePage />,
+      },
+      {
+        path: 'employees',
+        element: <AdminEmployeeManagePage />,
+      },
+      {
+        path: 'staff',
+        element: <Navigate to="/admin/employees" replace />,
       },
       {
         path: 'tables-qr',
