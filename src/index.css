@@ -23,6 +23,15 @@
   background: #3a3a42;
 }
 
+/* Hide scrollbars for slick native app sensation */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Custom glow utility */
 .custom-ring-gold {
   box-shadow: 0 0 0 1.5px #D4AF37, 0 8px 24px -4px rgba(212, 175, 55, 0.25);

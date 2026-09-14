@@ -2,13 +2,48 @@ import React from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import AdminLayout from '@/layouts/AdminLayout';
 import TableManagePage from '@/pages/admin/TableManagePage';
-
 import MenuManagePage from '@/pages/admin/MenuManagePage';
+import CustomerLayout from '@/layouts/CustomerLayout';
+import MenuPage from '@/pages/customer/MenuPage';
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <Navigate to="/admin" replace />,
+  },
+  {
+    path: '/menu',
+    element: <CustomerLayout />,
+    children: [
+      {
+        index: true,
+        element: <MenuPage />,
+      },
+    ],
+  },
+  {
+    path: '/table/:tableId',
+    element: <CustomerLayout />,
+    children: [
+      {
+        index: true,
+        element: <MenuPage />,
+      },
+    ],
+  },
+  {
+    path: '/customer',
+    element: <CustomerLayout />,
+    children: [
+      {
+        index: true,
+        element: <Navigate to="menu" replace />,
+      },
+      {
+        path: 'menu',
+        element: <MenuPage />,
+      },
+    ],
   },
   {
     path: '/admin',

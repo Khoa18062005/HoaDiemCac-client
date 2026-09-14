@@ -1,7 +1,8 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import logoImg from '../../assets/images/logo.png';
 
-const LOGO_URL = "https://lh3.googleusercontent.com/aida/AEtjO1XGQC0CnR9Y1yLiduS5p_WzQKGg69Oe7whUPH433S0kRGGAnmkK8IuYTuK-7Fh9qK5s-0vKHyoHtZhdLj0R13mdmegsPq3Sq-6MQ-V29sNGSdx0MOVIGYujK8XfJdjXFozlFsxL4rblmoJuMq-kNa5coTkv2ikGf9T9Ke7TdJiTNx2VThXetFCl_tqqoeDvnJ0-zdELHehyVBOpfXzymq-Bi-z9vtVn-_nAk17eXQ1bpV6C-Fw8h2lL7FA";
+const LOGO_URL = logoImg;
 
 export default function AdminSidebar() {
   const navItems = [
@@ -68,6 +69,16 @@ export default function AdminSidebar() {
           <line x1="12" x2="12" y1="20" y2="10"></line>
           <line x1="18" x2="18" y1="20" y2="4"></line>
           <line x1="6" x2="6" y1="20" y2="16"></line>
+        </svg>
+      ),
+    },
+    {
+      to: '/menu',
+      label: 'Khách Gọi Món (Mobile)',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+          <rect height="20" rx="2" ry="2" width="14" x="5" y="2"></rect>
+          <line x1="12" x2="12.01" y1="18" y2="18"></line>
         </svg>
       ),
     },
