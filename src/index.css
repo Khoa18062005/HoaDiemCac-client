@@ -7,6 +7,49 @@
   outline: none !important;
 }
 
+/* Triệt tiêu nền trắng và viền trắng khi trình duyệt tự động điền (autofill) */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: #EDEDED !important;
+  -webkit-box-shadow: 0 0 0px 1000px #0D0D11 inset !important;
+  box-shadow: 0 0 0px 1000px #0D0D11 inset !important;
+  border-color: #D4AF37 !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Lớp input hoàng gia Hỏa Diệm Các - Viền vàng phát sáng khi focus & hover, triệt tiêu viền trắng */
+.input-imperial {
+  outline: none !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.input-imperial:hover {
+  border-color: rgba(212, 175, 55, 0.55) !important;
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.18) !important;
+}
+
+.input-imperial:focus,
+.input-imperial:focus-visible,
+.input-imperial:active {
+  outline: none !important;
+  border-color: #D4AF37 !important;
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.45), 0 0 16px rgba(212, 175, 55, 0.3) !important;
+}
+
+/* Hiệu ứng phát sáng dịu êm, sang trọng khi hover vào logo Hỏa Diệm Các */
+.logo-imperial-glow {
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 6px 18px rgba(196, 30, 58, 0.35));
+}
+
+.logo-imperial-glow:hover {
+  transform: scale(1.03);
+  filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.55)) drop-shadow(0 0 22px rgba(196, 30, 58, 0.35)) brightness(1.06);
+}
+
 /* Custom Scrollbar for professional desktop POS */
 ::-webkit-scrollbar {
   width: 5px;

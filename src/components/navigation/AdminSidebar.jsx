@@ -1,11 +1,47 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import logoImg from '../../assets/images/logo.png';
 import DbConnectionCheckButton from '../feedback/DbConnectionCheckButton';
 
 const LOGO_URL = logoImg;
 
 export default function AdminSidebar() {
+  const navigate = useNavigate();
+  const [currentUser, setCurrentUser] = useState({
+    fullName: 'Trần Gia Hưng',
+    roleName: 'Quản lý ca tối',
+    initials: 'TH',
+  });
+
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('currentUser');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const nameParts = (parsed.fullName || parsed.username || 'Admin').trim().split(' ');
+        const initials = nameParts.length >= 2 
+          ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+          : (parsed.username || 'AD').substring(0, 2).toUpperCase();
+
+        setCurrentUser({
+          fullName: parsed.fullName || parsed.username,
+          roleName: parsed.role || 'Quản trị viên',
+          initials,
+        });
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const handleLogout = () => {
+    try {
+      sessionStorage.removeItem('currentUser');
+    } catch {
+      // Ignore
+    }
+    navigate('/login');
+  };
   const navItems = [
     {
       to: '/admin',
@@ -133,17 +169,17 @@ export default function AdminSidebar() {
         <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-center justify-between">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="w-7 h-7 rounded-full bg-gold/20 border border-gold/40 flex items-center justify-center text-gold font-bold text-xs flex-shrink-0">
-              TH
+              {currentUser.initials}
             </div>
             <div className="overflow-hidden">
-              <p className="text-xs font-medium text-[#EDEDED] truncate">Trần Gia Hưng</p>
-              <p className="text-[10px] text-[#8E8E93] truncate">Quản lý ca tối</p>
+              <p className="text-xs font-medium text-[#EDEDED] truncate">{currentUser.fullName}</p>
+              <p className="text-[10px] text-[#8E8E93] truncate">{currentUser.roleName}</p>
             </div>
           </div>
           <button
             className="p-1.5 rounded hover:bg-surface-elevated text-[#8E8E93] hover:text-crimson transition-colors"
-            title="Đăng xuất"
-            onClick={() => alert('Đăng xuất thành công!')}
+            title="Đăng xuất khỏi hệ thống"
+            onClick={handleLogout}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>

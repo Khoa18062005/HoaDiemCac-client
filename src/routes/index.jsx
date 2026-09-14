@@ -5,11 +5,20 @@ import TableManagePage from '@/pages/admin/TableManagePage';
 import MenuManagePage from '@/pages/admin/MenuManagePage';
 import CustomerLayout from '@/layouts/CustomerLayout';
 import MenuPage from '@/pages/customer/MenuPage';
+import LoginPage from '@/pages/auth/LoginPage';
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <Navigate to="/admin" replace />,
+  },
+  {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
+    path: '/admin/login',
+    element: <Navigate to="/login" replace />,
   },
   {
     path: '/menu',
