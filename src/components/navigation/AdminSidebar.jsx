@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import logoImg from '../../assets/images/logo.png';
+import DbConnectionCheckButton from '../feedback/DbConnectionCheckButton';
 
 const LOGO_URL = logoImg;
 
@@ -125,8 +126,10 @@ export default function AdminSidebar() {
         </nav>
       </div>
 
-      {/* User Profile at Bottom */}
-      <div className="p-3 border-t border-surface-border bg-[#0E0E10]/50">
+      {/* Database Connection Check & User Profile at Bottom */}
+      <div className="p-3 border-t border-surface-border bg-[#0E0E10]/50 space-y-2.5">
+        <DbConnectionCheckButton />
+
         <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-center justify-between">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="w-7 h-7 rounded-full bg-gold/20 border border-gold/40 flex items-center justify-center text-gold font-bold text-xs flex-shrink-0">
