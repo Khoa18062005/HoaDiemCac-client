@@ -137,16 +137,6 @@ export default function AdminSidebar() {
         </svg>
       ),
     },
-    {
-      to: '/menu',
-      label: 'Khách Gọi Món (Mobile)',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-          <rect height="20" rx="2" ry="2" width="14" x="5" y="2"></rect>
-          <line x1="12" x2="12.01" y1="18" y2="18"></line>
-        </svg>
-      ),
-    },
   ];
 
   return (

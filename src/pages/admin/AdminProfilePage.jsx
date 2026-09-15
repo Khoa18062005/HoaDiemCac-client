@@ -24,66 +24,30 @@ import {
 } from 'lucide-react';
 import { SYSTEM_PERMISSIONS } from '@/features/employee';
 
+import { useAuthStore } from '@/stores/useAuthStore';
+
 export default function AdminProfilePage() {
-  // 1. Dữ liệu nhân viên đang đăng nhập
+  const { user } = useAuthStore();
+
+  // 1. Dữ liệu nhân viên đang đăng nhập (Lấy từ hệ thống Backend + fallback fake data cho phần chưa có API)
   const [profile, setProfile] = useState(() => {
-    try {
-      const stored = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        let cleanFullName = parsed.fullName || 'Nguyễn Quốc Khoa';
-        if (/nguyenquockhoa/i.test(cleanFullName) || /nguyenquockhoa/i.test(parsed.email || '') || cleanFullName.includes(' - Quản Lý')) {
-          cleanFullName = 'Nguyễn Quốc Khoa';
-          // Tự động đồng bộ chuẩn lại vào storage
-          try {
-            const upd = { ...parsed, fullName: 'Nguyễn Quốc Khoa' };
-            sessionStorage.setItem('currentUser', JSON.stringify(upd));
-            localStorage.setItem('currentUser', JSON.stringify(upd));
-            window.dispatchEvent(new Event('currentUserUpdated'));
-          } catch {}
-        }
-
-        return {
-          id: parsed.id || 'NV-001',
-          code: parsed.code || 'HDC-QL01',
-          username: parsed.username || 'admin',
-          fullName: cleanFullName,
-          roleName: parsed.roleName || parsed.role || 'Quản lý nhà hàng',
-          rolePreset: parsed.rolePreset || 'MANAGER',
-          email: parsed.email || 'hung.tran@hoadiemcat.vn',
-          phone: parsed.phone || '0908 123 456',
-          dob: parsed.dob || '1994-06-18',
-          gender: parsed.gender || 'Nam',
-          branch: parsed.branch || 'Hỏa Diệm Các - Chi nhánh Tràng Tiền, Hoàn Kiếm',
-          bio: parsed.bio || 'Phụ trách điều phối vận hành bàn ăn, kiểm soát chất lượng phục vụ và xử lý sự cố đợt gọi món.',
-          joinedDate: parsed.joinedDate || '15/01/2023',
-          shift: parsed.shift || 'Ca tối (16:00 - 23:30)',
-          lastLogin: parsed.lastLogin || 'Hôm nay lúc 14:30',
-          avatarUrl: parsed.avatarUrl || '',
-          permissions: parsed.permissions || ['tables', 'menu', 'tables_qr', 'kds_orders', 'invoices', 'reports', 'employees'],
-        };
-      }
-    } catch {
-      // Fallback
-    }
-
     return {
-      id: 'NV-001',
-      code: 'HDC-QL01',
-      username: 'admin',
-      fullName: 'Trần Gia Hưng',
-      roleName: 'Quản lý nhà hàng',
-      rolePreset: 'MANAGER',
-      email: 'hung.tran@hoadiemcat.vn',
-      phone: '0908 123 456',
-      dob: '1994-06-18',
-      gender: 'Nam',
+      id: user?.id || 'NV-001',
+      code: user?.id ? `HDC-NV${user.id.toString().padStart(3, '0')}` : 'HDC-QL01',
+      username: user?.username || 'admin',
+      fullName: user?.fullName || 'Nguyễn Quốc Khoa',
+      roleName: user?.role === 'ADMIN' ? 'Quản Trị Viên' : (user?.role || 'Quản lý nhà hàng'),
+      rolePreset: user?.role || 'MANAGER',
+      email: user?.email || 'kqtthings@gmail.com',
+      phone: '',
+      dob: '', // Empty for date input, placeholder can be 'Chưa cập nhật' or handled in UI
+      gender: 'Chưa cập nhật',
       branch: 'Hỏa Diệm Các - Chi nhánh Tràng Tiền, Hoàn Kiếm',
-      bio: 'Phụ trách điều phối vận hành bàn ăn, kiểm soát chất lượng phục vụ và xử lý sự cố đợt gọi món.',
+      bio: 'Phụ trách điều phối vận hành bàn ăn, kiểm soát chất lượng phục vụ và xử lý sự cố.',
       joinedDate: '15/01/2023',
       shift: 'Ca tối (16:00 - 23:30)',
-      lastLogin: 'Hôm nay lúc 14:30',
-      avatarUrl: '',
+      lastLogin: 'Hôm nay',
+      avatarUrl: user?.avatarUrl || '',
       permissions: ['tables', 'menu', 'tables_qr', 'kds_orders', 'invoices', 'reports', 'employees'],
     };
   });
@@ -356,16 +320,19 @@ export default function AdminProfilePage() {
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                       className="w-full px-3.5 py-2.5 rounded-lg bg-surface-card border border-surface-border text-white placeholder-[#555] focus:outline-none focus:border-gold transition-colors"
-                      placeholder="09xx xxx xxx"
+                      placeholder="Chưa cập nhật"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4">
                     {/* Ngày sinh */}
                     <div className="space-y-1.5">
                       <label className="text-[#A0A0A5] font-medium">Ngày sinh</label>
                       <input
-                        type="date"
+                        type={formData.dob ? "date" : "text"}
+                        placeholder={!formData.dob ? "Chưa cập nhật" : ""}
+                        onFocus={(e) => { e.target.type = 'date'; }}
+                        onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
                         value={formData.dob}
                         onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
                         className="w-full px-3.5 py-2.5 rounded-lg bg-surface-card border border-surface-border text-white focus:outline-none focus:border-gold transition-colors"
@@ -376,10 +343,11 @@ export default function AdminProfilePage() {
                     <div className="space-y-1.5">
                       <label className="text-[#A0A0A5] font-medium">Giới tính</label>
                       <select
-                        value={formData.gender}
+                        value={formData.gender || "Chưa cập nhật"}
                         onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
                         className="w-full px-3.5 py-2.5 rounded-lg bg-surface-card border border-surface-border text-white focus:outline-none focus:border-gold transition-colors"
                       >
+                        <option value="Chưa cập nhật">Chưa cập nhật</option>
                         <option value="Nam">Nam</option>
                         <option value="Nữ">Nữ</option>
                         <option value="Khác">Khác</option>

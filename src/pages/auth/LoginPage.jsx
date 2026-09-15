@@ -13,9 +13,12 @@ import {
 } from 'lucide-react';
 import logoImg from '@/assets/images/logo.png';
 import hotpotImg from '@/assets/images/hotpot-banner.jpg';
+import { apiClient } from '@/lib/axios';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const login = useAuthStore((state) => state.login);
 
   // Form State
   const [email, setEmail] = useState('');
@@ -23,38 +26,33 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [error, setError] = useState('');
 
   // Xử lý nộp form đăng nhập
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
+    if (!email.trim() || !password.trim()) {
+      setError('Vui lòng nhập đầy đủ email và mật khẩu');
+      return;
+    }
+    setError('');
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
-      const usernamePrefix = email.trim() ? email.split('@')[0] : 'Admin';
-      let displayName = 'Nguyễn Quốc Khoa';
-      if (!/nguyenquockhoa/i.test(email) && usernamePrefix !== 'admin') {
-        displayName = usernamePrefix.charAt(0).toUpperCase() + usernamePrefix.slice(1);
-      }
+    try {
+      const response = await apiClient.post('/auth/login', {
+        usernameOrEmail: email,
+        password: password
+      });
 
-      // Lưu thông tin phiên đăng nhập
-      try {
-        const userInfo = {
-          username: usernamePrefix,
-          email: email.trim() || 'nguyenquockhoa00725005@gmail.com',
-          role: 'Quản Trị Viên',
-          roleName: 'Quản Trị Viên',
-          fullName: displayName,
-          loginTime: new Date().toISOString(),
-        };
-        sessionStorage.setItem('currentUser', JSON.stringify(userInfo));
-        localStorage.setItem('currentUser', JSON.stringify(userInfo));
-      } catch {
-        // Ignore if storage restricted
-      }
-
+      const { accessToken, user } = response;
+      // Lưu thông tin phiên đăng nhập vào Zustand Auth Store
+      login(user, accessToken);
       navigate('/admin');
-    }, 400);
+    } catch (err) {
+      setError(err.message || 'Đăng nhập thất bại, vui lòng kiểm tra lại!');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -165,6 +163,12 @@ export default function LoginPage() {
             {/* Form Đăng Nhập với khoảng cách trên dưới thoáng đãng */}
             <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
               
+              {/* Error Message */}
+              {error && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-center text-red-400 text-xs font-medium">
+                  {error}
+                </div>
+              )}
               {/* Field: Email */}
               <div>
                 <label className="block text-xs font-medium text-[#C8C8CE] mb-2">

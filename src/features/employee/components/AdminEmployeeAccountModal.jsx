@@ -189,7 +189,7 @@ export default function AdminEmployeeAccountModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-obsidian/85 backdrop-blur-md font-sans overflow-y-auto animate-fadeIn">
-      <div className="relative bg-[#131317] border border-gold/30 rounded-2xl w-full max-w-5xl shadow-[0_25px_70px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col my-auto max-h-[95vh]">
+      <div className="relative bg-[#131317] border border-gold/30 rounded-2xl w-full max-w-6xl shadow-[0_25px_70px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col my-auto max-h-[95vh]">
         
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-surface-border bg-[#18181D] flex items-center justify-between flex-shrink-0">
@@ -198,15 +198,12 @@ export default function AdminEmployeeAccountModal({
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white font-serif tracking-wide flex items-center gap-2">
+              <h3 className="text-base font-bold text-white font-sans tracking-wide flex items-center gap-2">
                 {isEditing ? 'Chỉnh Sửa Tài Khoản Nhân Viên' : 'Bảng Tạo Tài Khoản Nhân Viên'}
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-gold/15 text-gold border border-gold/30 font-sans font-medium">
                   {isEditing ? 'Cập nhật' : 'Tạo mới'}
                 </span>
               </h3>
-              <p className="text-xs text-[#9E9EA6]">
-                Phân quyền truy cập chức năng và thiết lập thông tin đăng nhập bảo mật
-              </p>
             </div>
           </div>
 
@@ -286,7 +283,7 @@ export default function AdminEmployeeAccountModal({
               </div>
 
               {/* Danh sách các chức năng (Permissions Checkboxes) */}
-              <div className="space-y-2 pt-1 max-h-[360px] overflow-y-auto pr-1">
+              <div className="space-y-2 pt-1 max-h-[360px] overflow-y-auto pr-4 custom-scrollbar">
                 {SYSTEM_PERMISSIONS.map((perm) => {
                   const isChecked = selectedPermissions.includes(perm.id);
                   const IconComp = ICON_MAP[perm.icon] || ShieldCheck;

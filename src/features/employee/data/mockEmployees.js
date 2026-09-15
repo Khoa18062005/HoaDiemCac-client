@@ -132,91 +132,17 @@ export function generateEmployeePassword() {
   return char0 + remainingSlots.join('');
 }
 
-// Danh sách nhân viên ban đầu của nhà hàng
-export const initialEmployees = [
-  {
-    id: 'emp-001',
-    code: 'QL-01',
-    fullName: 'Trần Gia Hưng',
-    email: 'hung.tran@hoadiemcac.vn',
-    phone: '0908 123 456',
-    role: 'Quản Lý Ca Tối',
-    rolePreset: 'MANAGER',
-    permissions: ['TABLES', 'MENU', 'QR_TABLES', 'KDS_ORDERS', 'INVOICES', 'REPORTS'],
-    status: 'ACTIVE',
-    createdAt: '2026-03-01T08:00:00Z',
-    lastLoginAt: '2026-09-14T21:45:00Z',
-  },
-  {
-    id: 'emp-002',
-    code: 'TN-01',
-    fullName: 'Lê Thục Anh',
-    email: 'thucanh.le@hoadiemcac.vn',
-    phone: '0912 345 678',
-    role: 'Thu Ngân Quầy 1',
-    rolePreset: 'CASHIER',
-    permissions: ['TABLES', 'INVOICES', 'REPORTS'],
-    status: 'ACTIVE',
-    createdAt: '2026-03-10T09:30:00Z',
-    lastLoginAt: '2026-09-14T20:10:00Z',
-  },
-  {
-    id: 'emp-003',
-    code: 'PV-01',
-    fullName: 'Nguyễn Văn Hoàng',
-    email: 'hoang.nguyen@hoadiemcac.vn',
-    phone: '0938 765 432',
-    role: 'Trưởng Ca Phục Vụ',
-    rolePreset: 'SERVER',
-    permissions: ['TABLES', 'KDS_ORDERS'],
-    status: 'ACTIVE',
-    createdAt: '2026-04-05T14:15:00Z',
-    lastLoginAt: '2026-09-14T19:25:00Z',
-  },
-  {
-    id: 'emp-004',
-    code: 'BP-01',
-    fullName: 'Phạm Quốc Bảo',
-    email: 'bao.pham@hoadiemcac.vn',
-    phone: '0977 889 900',
-    role: 'Bếp Trưởng Nước Lẩu',
-    rolePreset: 'KITCHEN',
-    permissions: ['MENU', 'KDS_ORDERS'],
-    status: 'ACTIVE',
-    createdAt: '2026-04-12T10:00:00Z',
-    lastLoginAt: '2026-09-14T18:00:00Z',
-  },
-  {
-    id: 'emp-005',
-    code: 'PV-02',
-    fullName: 'Đỗ Thảo Vy',
-    email: 'thaovy.do@hoadiemcac.vn',
-    phone: '0981 223 344',
-    role: 'Nhân Viên Phục Vụ VIP',
-    rolePreset: 'SERVER',
-    permissions: ['TABLES', 'KDS_ORDERS'],
-    status: 'INACTIVE',
-    createdAt: '2026-05-18T16:00:00Z',
-    lastLoginAt: '2026-08-30T22:15:00Z',
-  },
-];
+export const initialEmployees = [];
 
 const STORAGE_KEY = 'hoadiemcac_employees_list';
 
 // Helper tải danh sách nhân viên từ localStorage hoặc fallback về mặc định
 export function loadEmployeesFromStorage() {
+  // Force clear mock data from localStorage
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return initialEmployees;
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {}
+  return [];
 }
 
 // Helper lưu danh sách nhân viên vào localStorage

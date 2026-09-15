@@ -33,12 +33,12 @@ export default function AdminEmployeeControlBar({
 
       {/* Cột phải: Nút lọc trạng thái & Nút Tạo Tài Khoản */}
       <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap sm:flex-nowrap">
-        {/* Nút lọc trạng thái: Grid 3 cột cố định 285px x h-9 */}
-        <div className="grid grid-cols-3 w-[285px] h-9 rounded-lg bg-surface-card border border-surface-border p-0.5 text-xs flex-shrink-0 box-border">
+        {/* Nút lọc trạng thái: Flexbox thay vì Grid để không bị dính chữ */}
+        <div className="flex w-auto h-9 rounded-lg bg-surface-card border border-surface-border p-0.5 text-xs flex-shrink-0 box-border gap-1">
           <button
             type="button"
             onClick={() => onStatusFilterChange('all')}
-            className={`w-full h-full rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-colors duration-75 outline-none focus:outline-none focus:ring-0 select-none border ${
+            className={`px-4 h-full rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-colors duration-75 outline-none focus:outline-none focus:ring-0 select-none border whitespace-nowrap ${
               statusFilter === 'all'
                 ? 'bg-surface-elevated text-white border-white/20'
                 : 'text-[#A0A0A5] hover:text-[#EDEDED] border-transparent hover:bg-surface-hover'
@@ -55,7 +55,7 @@ export default function AdminEmployeeControlBar({
           <button
             type="button"
             onClick={() => onStatusFilterChange('active')}
-            className={`w-full h-full rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-colors duration-75 outline-none focus:outline-none focus:ring-0 select-none border ${
+            className={`px-4 h-full rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-colors duration-75 outline-none focus:outline-none focus:ring-0 select-none border whitespace-nowrap ${
               statusFilter === 'active'
                 ? 'bg-jade-bright/20 text-jade-bright border-jade-bright/40'
                 : 'text-[#A0A0A5] hover:text-[#EDEDED] border-transparent hover:bg-surface-hover'
@@ -72,7 +72,7 @@ export default function AdminEmployeeControlBar({
           <button
             type="button"
             onClick={() => onStatusFilterChange('locked')}
-            className={`w-full h-full rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-colors duration-75 outline-none focus:outline-none focus:ring-0 select-none border ${
+            className={`px-4 h-full rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-colors duration-75 outline-none focus:outline-none focus:ring-0 select-none border whitespace-nowrap ${
               statusFilter === 'locked'
                 ? 'bg-crimson/20 text-[#ff8080] border-crimson/40'
                 : 'text-[#A0A0A5] hover:text-[#EDEDED] border-transparent hover:bg-surface-hover'
