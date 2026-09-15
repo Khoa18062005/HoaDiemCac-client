@@ -32,16 +32,23 @@ export default function LoginPage() {
     setTimeout(() => {
       setIsLoading(false);
       const usernamePrefix = email.trim() ? email.split('@')[0] : 'Admin';
+      let displayName = 'Nguyễn Quốc Khoa';
+      if (!/nguyenquockhoa/i.test(email) && usernamePrefix !== 'admin') {
+        displayName = usernamePrefix.charAt(0).toUpperCase() + usernamePrefix.slice(1);
+      }
 
       // Lưu thông tin phiên đăng nhập
       try {
-        sessionStorage.setItem('currentUser', JSON.stringify({
+        const userInfo = {
           username: usernamePrefix,
-          email: email.trim() || 'admin@hoadiemcac.vn',
+          email: email.trim() || 'nguyenquockhoa00725005@gmail.com',
           role: 'Quản Trị Viên',
-          fullName: (usernamePrefix || 'Admin').toUpperCase() + ' - Quản Lý',
+          roleName: 'Quản Trị Viên',
+          fullName: displayName,
           loginTime: new Date().toISOString(),
-        }));
+        };
+        sessionStorage.setItem('currentUser', JSON.stringify(userInfo));
+        localStorage.setItem('currentUser', JSON.stringify(userInfo));
       } catch {
         // Ignore if storage restricted
       }

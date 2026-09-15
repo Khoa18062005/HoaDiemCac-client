@@ -14,24 +14,30 @@ export default function AdminSidebar() {
   });
 
   useEffect(() => {
-    try {
-      const stored = sessionStorage.getItem('currentUser');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const nameParts = (parsed.fullName || parsed.username || 'Admin').trim().split(' ');
-        const initials = nameParts.length >= 2 
-          ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
-          : (parsed.username || 'AD').substring(0, 2).toUpperCase();
+    const loadUser = () => {
+      try {
+        const stored = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const nameParts = (parsed.fullName || parsed.username || 'Admin').trim().split(' ');
+          const initials = nameParts.length >= 2 
+            ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+            : (parsed.username || 'AD').substring(0, 2).toUpperCase();
 
-        setCurrentUser({
-          fullName: parsed.fullName || parsed.username,
-          roleName: parsed.role || 'Quản trị viên',
-          initials,
-        });
+          setCurrentUser({
+            fullName: parsed.fullName || parsed.username,
+            roleName: parsed.roleName || parsed.role || 'Quản trị viên',
+            initials,
+          });
+        }
+      } catch {
+        // Ignore
       }
-    } catch {
-      // Ignore
-    }
+    };
+
+    loadUser();
+    window.addEventListener('currentUserUpdated', loadUser);
+    return () => window.removeEventListener('currentUserUpdated', loadUser);
   }, []);
 
   const handleLogout = () => {
@@ -75,6 +81,16 @@ export default function AdminSidebar() {
           <circle cx="9" cy="7" r="4"></circle>
           <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
           <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+      ),
+    },
+    {
+      to: '/admin/profile',
+      label: 'Hồ Sơ Cá Nhân',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
         </svg>
       ),
     },
@@ -178,20 +194,27 @@ export default function AdminSidebar() {
       <div className="p-3 border-t border-surface-border bg-[#0E0E10]/50 space-y-2.5">
         <DbConnectionCheckButton />
 
-        <div className="p-2 rounded-lg bg-surface-card border border-surface-border flex items-center justify-between">
+        <div
+          onClick={() => navigate('/admin/profile')}
+          className="p-2 rounded-lg bg-surface-card border border-surface-border hover:border-gold/50 hover:bg-surface-elevated transition-all cursor-pointer flex items-center justify-between group select-none"
+          title="Xem & Chỉnh sửa hồ sơ cá nhân"
+        >
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-7 h-7 rounded-full bg-gold/20 border border-gold/40 flex items-center justify-center text-gold font-bold text-xs flex-shrink-0">
+            <div className="w-7 h-7 rounded-full bg-gold/20 border border-gold/40 flex items-center justify-center text-gold font-bold text-xs flex-shrink-0 group-hover:scale-105 transition-transform">
               {currentUser.initials}
             </div>
             <div className="overflow-hidden">
-              <p className="text-xs font-medium text-[#EDEDED] truncate">{currentUser.fullName}</p>
+              <p className="text-xs font-medium text-[#EDEDED] group-hover:text-gold transition-colors truncate">{currentUser.fullName}</p>
               <p className="text-[10px] text-[#8E8E93] truncate">{currentUser.roleName}</p>
             </div>
           </div>
           <button
-            className="p-1.5 rounded hover:bg-surface-elevated text-[#8E8E93] hover:text-crimson transition-colors"
+            className="p-1.5 rounded hover:bg-surface-card text-[#8E8E93] hover:text-crimson transition-colors"
             title="Đăng xuất khỏi hệ thống"
-            onClick={handleLogout}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleLogout();
+            }}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
