@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { Loader2, Utensils } from 'lucide-react';
 import {
   CustomerHeader,
   CollaborativeBanner,
@@ -15,6 +16,7 @@ import {
 import TablePasscodeModal from '@/features/tables/components/TablePasscodeModal';
 import TableDevicesModal from '@/features/customer/components/TableDevicesModal';
 import { getStoredTableSession, saveTableSession, tableApi } from '@/features/tables/api/tableApi';
+import { menuApi } from '@/features/menu';
 
 /**
  * MenuPage (Customer Responsive với ScrollSpy 2 chiều)
@@ -23,9 +25,7 @@ import { getStoredTableSession, saveTableSession, tableApi } from '@/features/ta
  * - Máy tính bảng (iPad): Lưới 2 cột món ăn rộng rãi + giỏ hàng nổi chân trang.
  * - Máy tính/Laptop (Desktop): Bố cục 3 cột (Danh mục - Lưới món ăn - Bảng giỏ hàng cố định bên phải).
  *
- * Tính năng ScrollSpy 2 chiều:
- * 1. Cuộn thực đơn -> Tab danh mục bên trái tự động nhảy sáng theo section đang xem.
- * 2. Click tab danh mục bên trái -> Màn hình phải tự động cuộn lướt êm ái đến đúng nhóm món.
+ * Tích hợp tự động tải thực đơn trực tiếp từ Database MySQL (API /api/v1/menu-items).
  */
 export default function MenuPage() {
   const { tableId } = useParams();
@@ -90,10 +90,111 @@ export default function MenuPage() {
     }
   };
 
+  // State lưu dữ liệu từ Database
+  const [dbItems, setDbItems] = useState([]);
+  const [dbCategories, setDbCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   // Refs cho cơ chế ScrollSpy đồng bộ 2 chiều
   const scrollContainerRef = useRef(null);
   const isProgrammaticScroll = useRef(false);
   const scrollTimeoutRef = useRef(null);
+
+  // Tải danh sách món ăn và danh mục từ Database
+  useEffect(() => {
+    let isMounted = true;
+    const loadMenuFromDB = async () => {
+      try {
+        setLoading(true);
+        const [items, cats] = await Promise.all([
+          menuApi.getMenuItems(),
+          menuApi.getCategories().catch(() => []),
+        ]);
+        if (isMounted) {
+          if (Array.isArray(items) && items.length > 0) {
+            setDbItems(items);
+          }
+          if (Array.isArray(cats) && cats.length > 0) {
+            setDbCategories(cats);
+          }
+        }
+      } catch (err) {
+        console.warn('Lỗi khi tải thực đơn từ Database, dùng dữ liệu mẫu dự phòng:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    loadMenuFromDB();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Hiển thị TẤT CẢ danh mục từ Database trên màn hình khách hàng
+  const customerCategories = useMemo(() => {
+    if (dbCategories.length > 0) {
+      // Lấy toàn bộ danh mục đang hoạt động (isActive !== false)
+      const activeCats = dbCategories.filter((c) => c.isActive !== false);
+      const mapped = activeCats.map((c) => {
+        const slug = (c.slug || '').toLowerCase();
+        let icon = 'flame';
+        if (slug.includes('lau')) icon = 'pot';
+        else if (slug.includes('bo') || slug.includes('thit')) icon = 'beef';
+        else if (slug.includes('hai-san') || slug.includes('ca') || slug.includes('tom')) icon = 'seafood';
+        else if (slug.includes('vien')) icon = 'meatball';
+        else if (slug.includes('rau') || slug.includes('nam')) icon = 'veggie';
+        else if (slug.includes('uong') || slug.includes('nuoc') || slug.includes('tra') || slug.includes('bia') || slug.includes('ruou')) icon = 'drink';
+
+        return {
+          id: c.slug || String(c.id),
+          numericId: c.id,
+          name: c.name,
+          icon,
+          highlight: false,
+        };
+      });
+
+      return [
+        {
+          id: 'ban-chay',
+          name: 'Bán Chạy',
+          icon: 'flame',
+          highlight: true,
+        },
+        ...mapped,
+      ];
+    }
+    return CUSTOMER_CATEGORIES;
+  }, [dbCategories]);
+
+  // Danh sách món ăn chuẩn hóa từ Database
+  const dishesList = useMemo(() => {
+    if (dbItems.length > 0) {
+      return dbItems.map((item) => {
+        let catId = item.categoryId;
+        if (!catId && item.categories && item.categories.length > 0) {
+          catId = item.categories[0].slug || item.categories[0].id;
+        }
+        return {
+          id: item.id,
+          code: item.code,
+          name: item.name,
+          categoryId: catId || 'khac',
+          categories: item.categories || [],
+          subTitle: item.unit || '',
+          description: item.description || '',
+          price: Number(item.price),
+          image: item.image || item.imageUrl || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80',
+          tag: item.isFeatured ? 'Đặc sắc' : null,
+          tagType: item.isFeatured ? 'gold' : 'crimson',
+          isAvailable: item.isAvailable ?? true,
+          isFeatured: item.isFeatured ?? false,
+        };
+      });
+    }
+    return mockCustomerDishes;
+  }, [dbItems]);
 
   // Khởi tạo giỏ hàng sẵn món theo thiết kế hoàng triều
   const [cartItems, setCartItems] = useState([
@@ -102,14 +203,14 @@ export default function MenuPage() {
       name: 'Ba Chỉ Bò Mỹ Thượng Hạng',
       price: 220000,
       quantity: 1,
-      image: mockCustomerDishes[1].image,
+      image: mockCustomerDishes[1]?.image || '',
     },
     {
       id: 'c04',
       name: 'Bò Wagyu A5 Xếp Cánh Sen',
       price: 399000,
       quantity: 1,
-      image: mockCustomerDishes[3].image,
+      image: mockCustomerDishes[3]?.image || '',
     },
   ]);
 
@@ -122,7 +223,7 @@ export default function MenuPage() {
       price: 289000,
       quantity: 1,
       note: 'Ít cay',
-      image: mockCustomerDishes[0].image,
+      image: mockCustomerDishes[0]?.image || '',
       orderedAt: '12:15',
       status: 'served', // 'served' (Đã lên bàn) | 'cooking' (Bếp đang nấu)
     },
@@ -133,7 +234,7 @@ export default function MenuPage() {
       price: 95000,
       quantity: 1,
       note: '',
-      image: mockCustomerDishes[6].image,
+      image: mockCustomerDishes[6]?.image || '',
       orderedAt: '12:18',
       status: 'served',
     },
@@ -141,18 +242,26 @@ export default function MenuPage() {
 
   // Chuẩn bị các section danh mục liên tục phục vụ trải nghiệm cuộn liền mạch (Continuous Scroll)
   const categorySections = useMemo(() => {
-    return CUSTOMER_CATEGORIES.map((cat) => {
+    // Chỉ hiển thị các món đang mở bán (isAvailable !== false)
+    const availableDishes = dishesList.filter((d) => d.isAvailable !== false);
+
+    return customerCategories.map((cat) => {
       let dishes = [];
       if (cat.id === 'ban-chay') {
-        // Món Bán Chạy: Lấy 4 món tiêu biểu đặc sắc nhất
-        dishes = [
-          mockCustomerDishes[0], // Lẩu Cay Tứ Xuyên 9 Ngăn
-          mockCustomerDishes[1], // Ba Chỉ Bò Mỹ Thượng Hạng
-          mockCustomerDishes[2], // Khay Hải Sản Tôm Sú
-          mockCustomerDishes[3], // Bò Wagyu A5 Xếp Cánh Sen
-        ];
+        // Món Bán Chạy: Lấy các món nổi bật (isFeatured), nếu ít hơn 4 thì lấy thêm các món đầu tiên
+        const featured = availableDishes.filter((d) => d.isFeatured);
+        dishes = featured.length >= 2 ? featured : availableDishes.slice(0, 6);
       } else {
-        dishes = mockCustomerDishes.filter((d) => d.categoryId === cat.id);
+        dishes = availableDishes.filter((d) => {
+          if (d.categoryId === cat.id || String(d.categoryId) === String(cat.id)) return true;
+          if (cat.numericId && String(d.categoryId) === String(cat.numericId)) return true;
+          if (d.categories && Array.isArray(d.categories)) {
+            return d.categories.some(
+              (c) => (c.slug && c.slug === cat.id) || String(c.id) === String(cat.id) || (cat.numericId && c.id === cat.numericId)
+            );
+          }
+          return false;
+        });
       }
 
       // Lọc theo từ khóa tìm kiếm nếu có
@@ -161,7 +270,7 @@ export default function MenuPage() {
         dishes = dishes.filter(
           (d) =>
             d.name.toLowerCase().includes(q) ||
-            d.description.toLowerCase().includes(q) ||
+            (d.description && d.description.toLowerCase().includes(q)) ||
             (d.subTitle && d.subTitle.toLowerCase().includes(q))
         );
       }
@@ -170,8 +279,15 @@ export default function MenuPage() {
         category: cat,
         dishes,
       };
-    }).filter((section) => section.dishes.length > 0);
-  }, [searchQuery]);
+    }).filter((section) => {
+      // Khi đang tìm kiếm theo từ khóa thì chỉ hiện các nhóm có món khớp
+      if (searchQuery.trim()) {
+        return section.dishes.length > 0;
+      }
+      // Bình thường: hiển thị TẤT CẢ các danh mục trong Database
+      return true;
+    });
+  }, [customerCategories, dishesList, searchQuery]);
 
   // Chiều 1: Khi khách bấm vào Tab danh mục bên trái -> Cuộn mượt màn hình bên phải đến đúng nhóm món
   const handleSelectCategory = (categoryId) => {
@@ -340,7 +456,7 @@ export default function MenuPage() {
       <main className="flex-1 flex overflow-hidden relative">
         {/* Cột 1: Danh Mục (Thanh Nav cuộn đồng bộ 2 chiều) */}
         <CustomerCategorySidebar
-          categories={CUSTOMER_CATEGORIES}
+          categories={customerCategories}
           activeCategoryId={activeCategoryId}
           onSelectCategory={handleSelectCategory}
         />
@@ -351,48 +467,69 @@ export default function MenuPage() {
           onScroll={handleScroll}
           className="flex-1 bg-[#141418] px-3 sm:px-5 py-3 overflow-y-auto no-scrollbar pb-32 lg:pb-8 space-y-7"
         >
-          {categorySections.map(({ category, dishes }) => (
-            <div
-              key={category.id}
-              id={`section-${category.id}`}
-              data-category-section={category.id}
-              className="space-y-3 pt-1 scroll-mt-2"
-            >
-              {/* Section Header: Cuộn tự nhiên cùng danh sách món, không ghim đè lên menu */}
-              <div className="flex items-center justify-between border-l-4 border-[#C41E3A] pl-2.5 py-1">
-                <h2 className="flex items-center gap-2 font-bold text-xs sm:text-sm uppercase tracking-wide text-[#FFE088]">
-                  <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-[#FFD54F]">
-                    {CATEGORY_ICONS[category.icon] || CATEGORY_ICONS.flame}
-                  </span>
-                  <span>
-                    {category.name === 'Bán Chạy' ? 'Món Bán Chạy & Nổi Bật' : category.name}
-                  </span>
-                </h2>
-              </div>
-
-              {/* Lưới Thẻ Món: 1 cột trên Mobile, 2 cột trên iPad & Laptop */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-3.5 items-start">
-                {dishes.map((dish) => {
-                  const cartQuantity = getDishCartQuantity(dish.id);
-
-                  return (
-                    <CustomerDishCard
-                      key={dish.id}
-                      dish={dish}
-                      cartQuantity={cartQuantity}
-                      onAddToCart={handleAddToCart}
-                      onUpdateQuantity={handleUpdateQuantity}
-                    />
-                  );
-                })}
-              </div>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-28 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-[#FFD54F]" />
+              <span className="text-xs text-[#D6D3CD] font-medium tracking-wide">
+                Đang tải thực đơn Hỏa Diệm Các từ máy chủ...
+              </span>
             </div>
-          ))}
-
-          {categorySections.length === 0 && (
+          ) : categorySections.length === 0 ? (
             <div className="py-16 text-center text-[#9E9AA0] text-xs">
               Không tìm thấy món ăn phù hợp với từ khóa "{searchQuery}".
             </div>
+          ) : (
+            categorySections.map(({ category, dishes }) => (
+              <div
+                key={category.id}
+                id={`section-${category.id}`}
+                data-category-section={category.id}
+                className="space-y-3 pt-1 scroll-mt-2"
+              >
+                {/* Section Header: Cuộn tự nhiên cùng danh sách món, không ghim đè lên menu */}
+                <div className="flex items-center justify-between border-l-4 border-[#C41E3A] pl-2.5 py-1">
+                  <h2 className="flex items-center gap-2 font-bold text-xs sm:text-sm uppercase tracking-wide text-[#FFE088]">
+                    <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-[#FFD54F]">
+                      {CATEGORY_ICONS[category.icon] || CATEGORY_ICONS.flame}
+                    </span>
+                    <span>
+                      {category.name === 'Bán Chạy' ? 'Món Bán Chạy & Nổi Bật' : category.name}
+                    </span>
+                  </h2>
+                </div>
+
+                {/* Lưới Thẻ Món: 1 cột trên Mobile, 2 cột trên iPad & Laptop */}
+                {dishes.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-3.5 items-start">
+                    {dishes.map((dish) => {
+                      const cartQuantity = getDishCartQuantity(dish.id);
+
+                      return (
+                        <CustomerDishCard
+                          key={dish.id}
+                          dish={dish}
+                          cartQuantity={cartQuantity}
+                          onAddToCart={handleAddToCart}
+                          onUpdateQuantity={handleUpdateQuantity}
+                        />
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-5 sm:p-6 rounded-2xl bg-[#1D1D22]/60 border border-white/5 flex flex-col items-center justify-center text-center gap-1.5 py-6 sm:py-7">
+                    <div className="w-9 h-9 rounded-full bg-gold/10 border border-gold/30 flex items-center justify-center text-gold mb-0.5">
+                      <Utensils className="w-4 h-4 text-gold" />
+                    </div>
+                    <p className="text-xs font-semibold text-[#FFE088]">
+                      Danh mục đang được cập nhật món mới
+                    </p>
+                    <p className="text-[11px] text-[#9E9AA0] max-w-xs leading-relaxed">
+                      Bếp trưởng Hỏa Diệm Các đang chuẩn bị các món ăn đặc sắc cho nhóm thực đơn này.
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))
           )}
         </section>
 
