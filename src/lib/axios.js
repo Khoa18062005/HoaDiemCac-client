@@ -31,21 +31,24 @@ apiClient.interceptors.request.use(
       }
     }
 
-    // 2. Gắn Session Token & Device Token bàn ăn cho khách hàng tại bàn
-    const tableData = localStorage.getItem('hoadiemcat_table_session');
-    if (tableData) {
-      try {
-        const parsed = JSON.parse(tableData);
-        const sessionToken = parsed?.sessionToken || parsed?.state?.sessionToken;
-        const deviceToken = parsed?.deviceToken || parsed?.state?.deviceToken;
-        if (sessionToken) {
-          config.headers[TABLE_SESSION_HEADER] = sessionToken;
+    // 2. Gắn Session Token & Device Token bàn ăn cho khách hàng tại bàn (không gắn vào các request admin)
+    const isCustomerRequest = !config.url?.startsWith('/admin') && !config.url?.startsWith('/auth');
+    if (isCustomerRequest) {
+      const tableData = localStorage.getItem('hoadiemcat_table_session');
+      if (tableData) {
+        try {
+          const parsed = JSON.parse(tableData);
+          const sessionToken = parsed?.sessionToken || parsed?.state?.sessionToken;
+          const deviceToken = parsed?.deviceToken || parsed?.state?.deviceToken;
+          if (sessionToken) {
+            config.headers[TABLE_SESSION_HEADER] = sessionToken;
+          }
+          if (deviceToken) {
+            config.headers['X-Device-Token'] = deviceToken;
+          }
+        } catch (e) {
+          // Parse error ignored
         }
-        if (deviceToken) {
-          config.headers['X-Device-Token'] = deviceToken;
-        }
-      } catch (e) {
-        // Parse error ignored
       }
     }
 
