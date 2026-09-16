@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Loader2, Utensils } from 'lucide-react';
 import {
   CustomerHeader,
@@ -15,7 +15,12 @@ import {
 } from '@/features/customer';
 import TablePasscodeModal from '@/features/tables/components/TablePasscodeModal';
 import TableDevicesModal from '@/features/customer/components/TableDevicesModal';
-import { getStoredTableSession, saveTableSession, tableApi } from '@/features/tables/api/tableApi';
+import {
+  getStoredTableSession,
+  saveTableSession,
+  clearTableSession,
+  tableApi,
+} from '@/features/tables/api/tableApi';
 import { menuApi } from '@/features/menu';
 
 /**
@@ -30,7 +35,18 @@ import { menuApi } from '@/features/menu';
 export default function MenuPage() {
   const { tableId } = useParams();
   const [searchParams] = useSearchParams();
-  const tableNumber = tableId || searchParams.get('table') || '08';
+  const navigate = useNavigate();
+
+  const normalizeTableNumber = (raw) => {
+    if (!raw) return 'B01';
+    const upper = raw.toUpperCase().trim();
+    if (/^\d+$/.test(upper)) {
+      return `B${upper.padStart(2, '0')}`;
+    }
+    return upper;
+  };
+
+  const tableNumber = normalizeTableNumber(tableId || searchParams.get('table') || 'B01');
 
   const [activeCategoryId, setActiveCategoryId] = useState('ban-chay');
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,23 +54,44 @@ export default function MenuPage() {
   const [isPasscodeRequired, setIsPasscodeRequired] = useState(false);
 
   // Trạng thái Chủ Bàn (Host) & Quản lý thiết bị
-  const [isHost, setIsHost] = useState(() => getStoredTableSession()?.isHost ?? true);
+  const [isHost, setIsHost] = useState(() => {
+    const s = getStoredTableSession();
+    return s && s.tableNumber === tableNumber ? (s.isHost ?? true) : false;
+  });
   const [deviceCount, setDeviceCount] = useState(1);
   const [isDevicesModalOpen, setIsDevicesModalOpen] = useState(false);
 
   // Kiểm tra phiên bàn ăn hợp lệ từ localStorage và đồng bộ trạng thái thiết bị
   useEffect(() => {
-    const session = getStoredTableSession();
-    if (!session || !session.sessionToken) {
-      setIsPasscodeRequired(true);
-    } else if (session.isHost !== undefined) {
-      setIsHost(Boolean(session.isHost));
-    }
+    const checkSessionAndDevices = async () => {
+      const session = getStoredTableSession();
 
-    // Tải danh sách thiết bị kết nối thời gian thực
-    const loadDevices = async () => {
+      // Bắt buộc phải có session VÀ session phải đúng bàn này
+      if (!session || !session.sessionToken || session.tableNumber !== tableNumber) {
+        setIsPasscodeRequired(true);
+        return;
+      }
+
+      // Xác thực session với Backend xem bàn có bị khóa hoặc reset không
       try {
-        const devices = await tableApi.getDevices();
+        const isValid = await tableApi.validateSession();
+        if (!isValid) {
+          clearTableSession();
+          setIsPasscodeRequired(true);
+          return;
+        }
+      } catch (err) {
+        console.warn('Lỗi kiểm tra session bàn ăn:', err.message);
+      }
+
+      setIsPasscodeRequired(false);
+      if (session.isHost !== undefined) {
+        setIsHost(Boolean(session.isHost));
+      }
+
+      // Tải danh sách thiết bị kết nối thời gian thực
+      try {
+        const devices = await tableApi.getDevices(tableNumber);
         if (Array.isArray(devices) && devices.length > 0) {
           const activeList = devices.filter((d) => d.isActive);
           setDeviceCount(activeList.length);
@@ -66,6 +103,7 @@ export default function MenuPage() {
               setIsHost(Boolean(currentDev.isHost));
               if (!currentDev.isActive) {
                 alert('Thiết bị của bạn đã bị Chủ Bàn hoặc Quản Trị Viên ngắt kết nối khỏi bàn.');
+                clearTableSession();
                 window.location.reload();
               }
             }
@@ -76,8 +114,8 @@ export default function MenuPage() {
       }
     };
 
-    loadDevices();
-    const interval = setInterval(loadDevices, 10000);
+    checkSessionAndDevices();
+    const interval = setInterval(checkSessionAndDevices, 5000);
     return () => clearInterval(interval);
   }, [tableNumber]);
 
@@ -574,8 +612,13 @@ export default function MenuPage() {
       <TablePasscodeModal
         isOpen={isPasscodeRequired}
         tableCode={tableNumber}
-        onClose={() => setIsPasscodeRequired(false)}
-        onSuccess={() => setIsPasscodeRequired(false)}
+        onClose={() => {
+          navigate(`/table/${tableNumber.toLowerCase()}`);
+        }}
+        onSuccess={(res) => {
+          setIsPasscodeRequired(false);
+          setIsHost(Boolean(res?.isHost));
+        }}
       />
 
       {/* 7. Modal Quản Lý Thiết Bị Kết Nối & Nhượng Quyền Chủ Bàn */}

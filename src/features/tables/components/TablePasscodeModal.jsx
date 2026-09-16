@@ -7,6 +7,34 @@ export default function TablePasscodeModal({ isOpen, onClose, tableCode, onSucce
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const normalizeTableNumber = (raw) => {
+    if (!raw) return 'B01';
+    const upper = raw.toUpperCase().trim();
+    if (/^\d+$/.test(upper)) {
+      return `B${upper.padStart(2, '0')}`;
+    }
+    return upper;
+  };
+
+  const normalizedCode = normalizeTableNumber(tableCode);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key >= '0' && e.key <= '9') {
+        handleKeyPress(e.key);
+      } else if (e.key === 'Backspace') {
+        setPin((p) => p.slice(0, -1));
+        setErrorMsg('');
+      } else if (e.key === 'Escape') {
+        setPin('');
+        setErrorMsg('');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, pin, loading]);
+
   if (!isOpen) return null;
 
   const handleKeyPress = (num) => {
@@ -24,19 +52,21 @@ export default function TablePasscodeModal({ isOpen, onClose, tableCode, onSucce
     try {
       setLoading(true);
       setErrorMsg('');
-      const res = await tableApi.verifyPasscode(tableCode || 'B01', codeToVerify);
+      const res = await tableApi.verifyPasscode(normalizedCode, codeToVerify);
       saveTableSession({
-        tableNumber: res.tableNumber || tableCode,
-        tableName: res.tableName,
+        tableNumber: res.tableNumber || normalizedCode,
+        tableName: res.tableName || `Bàn ${normalizedCode}`,
         sessionToken: res.sessionToken,
         deviceToken: res.deviceToken,
+        deviceName: res.deviceName,
+        isHost: res.isHost ?? true,
         verifiedAt: new Date().toISOString(),
       });
       if (onSuccess) onSuccess(res);
       if (onClose) onClose();
     } catch (err) {
       setPin('');
-      setErrorMsg(err.response?.data?.message || err.message || 'Mã PIN không chính xác!');
+      setErrorMsg(err.response?.data?.message || err.message || 'Mã PIN không chính xác. Vui lòng kiểm tra lại!');
     } finally {
       setLoading(false);
     }

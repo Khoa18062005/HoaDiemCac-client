@@ -14,7 +14,8 @@ import logoTabImg from '@/assets/images/logo_tab.png';
 import {
   tableApi,
   getStoredTableSession,
-  saveTableSession
+  saveTableSession,
+  clearTableSession,
 } from '@/features/tables/api/tableApi';
 
 export default function TableEntryPage() {
@@ -28,19 +29,32 @@ export default function TableEntryPage() {
   const [isLockedCountdown, setIsLockedCountdown] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
 
-  const normalizedTableCode = (tableId || 'B01').toUpperCase();
-
-  // Kiểm tra phiên đăng nhập sẵn trong localStorage
-  useEffect(() => {
-    const existingSession = getStoredTableSession();
-    if (existingSession && existingSession.tableNumber === normalizedTableCode && existingSession.sessionToken) {
-      // Đã có phiên, chuyển thẳng vào thực đơn
-      navigate(`/menu?table=${normalizedTableCode}`);
-      return;
+  const normalizeTableNumber = (raw) => {
+    if (!raw) return 'B01';
+    const upper = raw.toUpperCase().trim();
+    if (/^\d+$/.test(upper)) {
+      return `B${upper.padStart(2, '0')}`;
     }
+    return upper;
+  };
 
-    // Tải thông tin công khai của bàn
-    const fetchInfo = async () => {
+  const normalizedTableCode = normalizeTableNumber(tableId || 'B01');
+
+  // Kiểm tra phiên đăng nhập sẵn trong localStorage và xác thực với server
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      const existingSession = getStoredTableSession();
+      if (existingSession && existingSession.tableNumber === normalizedTableCode && existingSession.sessionToken) {
+        const isValid = await tableApi.validateSession();
+        if (isValid) {
+          navigate(`/menu?table=${normalizedTableCode}`);
+          return;
+        } else {
+          clearTableSession();
+        }
+      }
+
+      // Tải thông tin công khai của bàn
       try {
         const info = await tableApi.getTablePublicInfo(normalizedTableCode);
         setTableInfo(info);
@@ -48,7 +62,8 @@ export default function TableEntryPage() {
         console.error('Lỗi khi tải thông tin bàn:', err);
       }
     };
-    fetchInfo();
+
+    checkExistingSession();
   }, [normalizedTableCode, navigate]);
 
   // Bộ đếm ngược khóa 60s khi nhập sai 5 lần
