@@ -64,14 +64,14 @@ export default function TablePasscodeModal({ isOpen, onClose, tableCode, onSucce
         </p>
 
         {/* 4 dots */}
-        <div className="flex gap-2.5 mb-4">
+        <div className="flex items-center justify-center gap-3 mb-4">
           {[0, 1, 2, 3].map((i) => (
             <div
               key={i}
-              className={`w-11 h-12 rounded-lg border flex items-center justify-center text-lg font-bold font-mono ${
+              className={`w-12 h-12 min-w-[48px] rounded-xl border-2 flex items-center justify-center text-xl font-bold font-mono transition-all ${
                 pin[i]
-                  ? 'border-gold bg-[#221C16] text-gold'
-                  : 'border-[#27272A] bg-[#121214] text-[#71717A]'
+                  ? 'border-gold bg-[#221C16] text-gold scale-105'
+                  : 'border-[#2E2E34] bg-[#141417] text-transparent'
               }`}
             >
               {pin[i] ? '•' : ''}

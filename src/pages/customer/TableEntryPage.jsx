@@ -175,19 +175,19 @@ export default function TableEntryPage() {
         </div>
 
         {/* 4 Ô hiển thị số PIN */}
-        <div className="flex items-center justify-center gap-3 mb-4">
+        <div className="flex items-center justify-center gap-3.5 mb-6">
           {[0, 1, 2, 3].map((index) => {
             const digit = pin[index];
             const isCurrent = pin.length === index;
             return (
               <div
                 key={index}
-                className={`w-13 h-14 rounded-xl border-2 flex items-center justify-center text-2xl font-bold font-mono transition-all duration-150 shadow-md ${
+                className={`w-14 h-14 min-w-[56px] rounded-2xl border-2 flex items-center justify-center text-3xl font-bold font-mono transition-all duration-200 shadow-lg ${
                   digit
-                    ? 'border-gold bg-[#1F1915] text-gold scale-105'
+                    ? 'border-gold bg-[#221C16] text-gold scale-105 shadow-gold/20'
                     : isCurrent
-                    ? 'border-gold/60 bg-[#18181B] ring-2 ring-gold/20'
-                    : 'border-[#27272A] bg-[#121214] text-[#71717A]'
+                    ? 'border-gold/70 bg-[#1A1A1E] ring-4 ring-gold/20'
+                    : 'border-[#2E2E34] bg-[#141417] text-transparent'
                 }`}
               >
                 {digit ? '•' : ''}
