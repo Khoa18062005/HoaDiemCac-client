@@ -9,6 +9,8 @@ import {
   Minus,
   Clock,
   UtensilsCrossed,
+  Crown,
+  Lock,
 } from 'lucide-react';
 import { CATEGORY_ICONS } from './CustomerCategorySidebar';
 
@@ -22,6 +24,7 @@ export default function CustomerCartSidebar({
   tableNumber = '08',
   cartItems = [],
   orderedItems = [],
+  isHost = true,
   onUpdateQuantity,
   onRemoveItem,
   onClearCart,
@@ -349,14 +352,26 @@ export default function CustomerCartSidebar({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleConfirmSubmit}
-            className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#990000] via-[#C41E3A] to-[#E63946] text-white font-extrabold text-xs shadow-[0_4px_16px_rgba(196,30,58,0.5)] active:scale-95 transition-transform flex items-center justify-center space-x-2 border border-[#FFE699]/30 hover:brightness-110"
-          >
-            <span>Gửi Vào Bếp ({draftCount} món)</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          {isHost ? (
+            <button
+              type="button"
+              onClick={handleConfirmSubmit}
+              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#990000] via-[#C41E3A] to-[#E63946] text-white font-extrabold text-xs shadow-[0_4px_16px_rgba(196,30,58,0.5)] active:scale-95 transition-transform flex items-center justify-center space-x-2 border border-[#FFE699]/30 hover:brightness-110"
+            >
+              <span>Gửi Vào Bếp ({draftCount} món)</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <div className="w-full py-2.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold text-xs flex items-center justify-center space-x-2">
+                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                <span>Chờ Chủ Bàn Gửi Bếp ({draftCount} món)</span>
+              </div>
+              <p className="text-[11px] text-amber-200/70 text-center leading-relaxed">
+                Bạn đã thêm món vào giỏ chung. Chỉ <span className="text-amber-400 font-semibold">Chủ Bàn (👑)</span> mới có quyền gửi đơn vào bếp.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

@@ -9,6 +9,8 @@ import {
   Minus,
   Clock,
   UtensilsCrossed,
+  Crown,
+  Lock,
 } from 'lucide-react';
 
 /**
@@ -23,6 +25,7 @@ export default function CustomerCartDrawer({
   cartItems = [],
   orderedItems = [],
   tableNumber = '08',
+  isHost = true,
   onUpdateQuantity,
   onRemoveItem,
   onClearCart,
@@ -287,13 +290,30 @@ export default function CustomerCartDrawer({
                     Xóa hết
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={handleConfirmSubmit}
-                    className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#990000] via-[#C41E3A] to-[#E63946] text-white font-extrabold text-xs shadow-[0_4px_16px_rgba(196,30,58,0.5)] active:scale-95 transition-transform flex items-center justify-center space-x-1.5 border border-[#FFE699]/30"
-                  >
-                    <span>Xác Nhận Gửi Bếp ({draftCount} món)</span>
-                  </button>
+                  {isHost ? (
+                    <button
+                      type="button"
+                      onClick={handleConfirmSubmit}
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#990000] via-[#C41E3A] to-[#E63946] text-white font-extrabold text-xs shadow-[0_4px_16px_rgba(196,30,58,0.5)] active:scale-95 transition-transform flex items-center justify-center space-x-1.5 border border-[#FFE699]/30 hover:brightness-110 select-none"
+                    >
+                      <Crown className="w-3.5 h-3.5 text-gold" />
+                      <span>Xác Nhận Gửi Bếp ({draftCount} món)</span>
+                    </button>
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center">
+                      <button
+                        type="button"
+                        onClick={() => alert('Bạn đang là Thành viên của bàn. Chỉ Chủ Bàn mới có quyền bấm Gửi Bếp để tránh đặt nhầm hoặc quậy phá.')}
+                        className="w-full py-2.5 px-3 rounded-xl bg-zinc-800/90 text-zinc-300 border border-zinc-700 text-xs font-bold flex items-center justify-center gap-1.5 cursor-not-allowed opacity-90 shadow-sm select-none"
+                      >
+                        <Lock className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Chờ Chủ Bàn Gửi Bếp ({draftCount} món)</span>
+                      </button>
+                      <p className="text-[10px] text-amber-400/90 mt-1 italic">
+                        Chỉ Chủ Bàn mới có quyền gửi đơn vào bếp
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
