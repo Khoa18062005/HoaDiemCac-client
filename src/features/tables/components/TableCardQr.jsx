@@ -95,8 +95,8 @@ export default function TableCardQr({
             </p>
           </div>
 
-          {/* Trạng thái Bàn Badge */}
-          <div className="flex flex-col items-end gap-1">
+          {/* Trạng thái Bàn & Khóa Order Badges */}
+          <div className="flex flex-col items-end gap-1.5">
             <span
               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border ${statusConfig.badge}`}
             >
@@ -104,10 +104,15 @@ export default function TableCardQr({
               {statusConfig.label}
             </span>
 
-            {table.isOrderLocked && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                <ShieldAlert className="w-3 h-3" />
-                Khóa Order
+            {table.isOrderLocked ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                <Lock className="w-2.5 h-2.5" />
+                Đang Khóa Order
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                <Unlock className="w-2.5 h-2.5" />
+                Mở Nhận Đơn
               </span>
             )}
           </div>
@@ -174,7 +179,7 @@ export default function TableCardQr({
                 className={`p-2 rounded-lg border border-[#3F3F46] hover:border-gold/50 bg-[#1F1F23] hover:bg-[#27272A] text-[#EDEDED] transition-colors ${
                   isRotating ? 'animate-spin text-gold' : ''
                 }`}
-                title="Đổi mã PIN mới (Vô hiệu hóa phiên cũ để chống quét phá)"
+                title="Đổi mã PIN mới & Giải phóng bàn về Bàn Trống (như thanh toán xong)"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
@@ -235,12 +240,12 @@ export default function TableCardQr({
           {/* Nút Khóa / Mở Order */}
           <button
             onClick={() => onToggleLock(table.id)}
-            className={`p-1.5 rounded-lg border text-xs font-medium flex items-center justify-center transition-colors ${
+            className={`p-1.5 rounded-lg border text-xs font-medium flex items-center justify-center transition-all ${
               table.isOrderLocked
-                ? 'border-rose-500/50 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'
-                : 'border-[#3F3F46] hover:bg-[#27272A] text-[#8E8E93] hover:text-[#EDEDED]'
+                ? 'border-rose-500/50 bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 shadow-sm shadow-rose-950/40'
+                : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 shadow-sm shadow-emerald-950/40'
             }`}
-            title={table.isOrderLocked ? 'Mở khóa order cho bàn này' : 'Khóa order khẩn cấp (khách không thể gửi đơn)'}
+            title={table.isOrderLocked ? 'Đang KHÓA order - Bấm để MỞ KHÓA cho bàn' : 'Đang MỞ order - Bấm để KHÓA KHẨN CẤP'}
           >
             {table.isOrderLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
           </button>

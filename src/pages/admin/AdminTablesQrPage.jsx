@@ -75,18 +75,25 @@ export default function AdminTablesQrPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Handler đổi mã PIN mới
+  // Handler đổi mã PIN mới (thanh toán / giải phóng bàn về BÀN TRỐNG, mở khóa order)
   const handleRegeneratePin = async (tableId) => {
     try {
       const res = await tableApi.regeneratePin(tableId);
       setTables((prev) =>
         prev.map((t) =>
           t.id === tableId
-            ? { ...t, currentPasscode: res.currentPasscode || String(Math.floor(1000 + Math.random() * 9000)), activeDeviceCount: 0 }
+            ? {
+                ...t,
+                ...res,
+                status: res.status || 'AVAILABLE',
+                isOrderLocked: false,
+                activeDeviceCount: 0,
+                currentPasscode: res.currentPasscode || String(Math.floor(1000 + Math.random() * 9000)),
+              }
             : t
         )
       );
-      showToast(`Đã sinh mã PIN mới cho bàn ${tables.find(t => t.id === tableId)?.tableNumber || ''}`);
+      showToast(`Đã làm mới PIN & giải phóng bàn ${res.tableNumber || ''} về Bàn Trống (Sẵn sàng)`);
     } catch (err) {
       showToast('Lỗi khi sinh mã PIN mới', 'error');
     }
@@ -97,9 +104,9 @@ export default function AdminTablesQrPage() {
     try {
       const current = tables.find((t) => t.id === tableId);
       const newLocked = !Boolean(current?.isOrderLocked);
-      await tableApi.toggleOrderLock(tableId);
+      const res = await tableApi.toggleOrderLock(tableId);
       setTables((prev) =>
-        prev.map((t) => (t.id === tableId ? { ...t, isOrderLocked: newLocked } : t))
+        prev.map((t) => (t.id === tableId ? { ...t, ...res, isOrderLocked: res.isOrderLocked ?? newLocked } : t))
       );
       showToast(newLocked ? 'Đã kích hoạt khóa order khẩn cấp' : 'Đã mở khóa order cho bàn');
     } catch (err) {
@@ -110,19 +117,27 @@ export default function AdminTablesQrPage() {
   // Handler cập nhật trạng thái bàn
   const handleUpdateStatus = async (tableId, newStatus) => {
     try {
-      await tableApi.updateTableStatus(tableId, newStatus);
+      const res = await tableApi.updateTableStatus(tableId, newStatus);
       setTables((prev) =>
         prev.map((t) =>
           t.id === tableId
             ? {
                 ...t,
+                ...res,
                 status: newStatus,
-                activeDeviceCount: newStatus === 'AVAILABLE' ? 0 : t.activeDeviceCount,
+                activeDeviceCount: newStatus === 'AVAILABLE' ? 0 : (res?.activeDeviceCount ?? t.activeDeviceCount),
+                isOrderLocked: newStatus === 'AVAILABLE' ? false : (res?.isOrderLocked ?? t.isOrderLocked),
+                currentPasscode: res?.currentPasscode || t.currentPasscode,
               }
             : t
         )
       );
-      showToast(`Đã cập nhật trạng thái sang: ${newStatus}`);
+      const statusLabels = {
+        AVAILABLE: 'Bàn Trống (Sẵn sàng - Mở khóa order)',
+        OCCUPIED: 'Có Khách',
+        CLEANING: 'Dọn Dẹp',
+      };
+      showToast(`Đã chuyển trạng thái sang: ${statusLabels[newStatus] || newStatus}`);
     } catch (err) {
       showToast('Lỗi khi cập nhật trạng thái bàn', 'error');
     }
