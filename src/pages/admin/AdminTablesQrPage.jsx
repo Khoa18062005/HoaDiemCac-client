@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import TableCardQr from '@/features/tables/components/TableCardQr';
 import TableQrPrintModal from '@/features/tables/components/TableQrPrintModal';
+import AdminTableDevicesModal from '@/features/tables/components/AdminTableDevicesModal';
 import { tableApi } from '@/features/tables/api/tableApi';
 
 export default function AdminTablesQrPage() {
@@ -26,6 +27,9 @@ export default function AdminTablesQrPage() {
 
   // Modal in ấn standee QR
   const [selectedPrintTable, setSelectedPrintTable] = useState(null);
+
+  // Modal quản lý thiết bị kết nối & phân quyền Chủ Bàn
+  const [selectedDevicesTable, setSelectedDevicesTable] = useState(null);
 
   // Modal tạo bàn mới
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -331,6 +335,7 @@ export default function AdminTablesQrPage() {
                 onToggleLock={handleToggleLock}
                 onUpdateStatus={handleUpdateStatus}
                 onOpenPrintModal={(tbl) => setSelectedPrintTable(tbl)}
+                onOpenDevices={(tbl) => setSelectedDevicesTable(tbl)}
               />
             ))}
           </div>
@@ -348,6 +353,14 @@ export default function AdminTablesQrPage() {
         table={selectedPrintTable}
         isOpen={Boolean(selectedPrintTable)}
         onClose={() => setSelectedPrintTable(null)}
+      />
+
+      {/* Modal Quản Lý Thiết Bị Kết Nối & Quyền Chủ Bàn */}
+      <AdminTableDevicesModal
+        table={selectedDevicesTable}
+        isOpen={Boolean(selectedDevicesTable)}
+        onClose={() => setSelectedDevicesTable(null)}
+        onDeviceUpdated={fetchTables}
       />
 
       {/* Modal Thêm Bàn Mới */}

@@ -20,6 +20,7 @@ export default function TableCardQr({
   onToggleLock,
   onUpdateStatus,
   onOpenPrintModal,
+  onOpenDevices,
 }) {
   const [copied, setCopied] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
@@ -179,17 +180,28 @@ export default function TableCardQr({
               </button>
             </div>
 
-            {/* Chỉ số thiết bị đang kết nối */}
-            <div className="flex items-center gap-1.5 mt-2 text-[11px] text-[#8E8E93]">
-              <Smartphone className="w-3.5 h-3.5 text-zinc-400" />
-              <span>
-                Thiết bị kết nối:{' '}
+            {/* Chỉ số thiết bị đang kết nối (Click để quản lý thiết bị và quyền Chủ Bàn) */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onOpenDevices) onOpenDevices(table);
+              }}
+              className="flex items-center justify-between w-full mt-2 py-1.5 px-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/60 hover:border-gold/50 text-[11px] text-[#8E8E93] hover:text-zinc-200 transition-all cursor-pointer group/dev select-none"
+              title="Xem danh sách thiết bị đang kết nối, quyền Chủ Bàn và thao tác đá thiết bị"
+            >
+              <div className="flex items-center gap-1.5">
+                <Smartphone className="w-3.5 h-3.5 text-zinc-400 group-hover/dev:text-gold transition-colors" />
+                <span>Thiết bị:</span>
                 <strong className="text-[#EDEDED] font-mono">
                   {table.activeDeviceCount || 0}
-                </strong>{' '}
-                / {table.maxActiveDevices || 6}
+                </strong>
+                <span>/ {table.maxActiveDevices || 6}</span>
+              </div>
+              <span className="text-[10px] text-gold/80 font-medium group-hover/dev:text-gold group-hover/dev:underline">
+                Chi tiết →
               </span>
-            </div>
+            </button>
           </div>
         </div>
       </div>
