@@ -39,18 +39,18 @@ export const tableApi = {
     } catch (err) {
       console.warn('Backend chưa khả dụng, sử dụng dữ liệu giả lập cho Bàn & QR:', err.message);
     }
-    // Fallback data
+    // Fallback data: Toàn bộ bàn ban đầu ở trạng thái Bàn Trống (AVAILABLE), 0 thiết bị kết nối
     return initialTables.map((t, idx) => ({
       id: idx + 1,
       tableNumber: t.code.replace('BÀN ', 'B').replace('VIP ', 'VIP'),
       name: t.code,
       area: t.isVip ? 'VIP' : 'COMMON',
       capacity: t.isVip ? 10 : 4,
-      status: t.status,
+      status: t.status || 'AVAILABLE',
       isOrderLocked: false,
-      currentPasscode: String(1000 + (idx * 37) % 9000),
-      currentSessionToken: `mock-session-${t.id}`,
-      activeDeviceCount: t.status === 'OCCUPIED' ? (t.isVip ? 5 : 2) : 0,
+      currentPasscode: String(1000 + ((idx + 1) * 123) % 8999),
+      currentSessionToken: null,
+      activeDeviceCount: 0,
       maxActiveDevices: t.isVip ? 15 : 6,
       isTemporarilyLocked: false,
       failedAttempts: 0,
