@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import {
   CustomerHeader,
@@ -12,6 +12,8 @@ import {
   CATEGORY_ICONS,
   mockCustomerDishes,
 } from '@/features/customer';
+import TablePasscodeModal from '@/features/tables/components/TablePasscodeModal';
+import { getStoredTableSession } from '@/features/tables/api/tableApi';
 
 /**
  * MenuPage (Customer Responsive với ScrollSpy 2 chiều)
@@ -32,6 +34,15 @@ export default function MenuPage() {
   const [activeCategoryId, setActiveCategoryId] = useState('ban-chay');
   const [searchQuery, setSearchQuery] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isPasscodeRequired, setIsPasscodeRequired] = useState(false);
+
+  // Kiểm tra phiên bàn ăn hợp lệ từ localStorage
+  useEffect(() => {
+    const session = getStoredTableSession();
+    if (!session || !session.sessionToken) {
+      setIsPasscodeRequired(true);
+    }
+  }, [tableNumber]);
 
   // Refs cho cơ chế ScrollSpy đồng bộ 2 chiều
   const scrollContainerRef = useRef(null);
@@ -368,6 +379,14 @@ export default function MenuPage() {
         onClearCart={handleClearCart}
         onSubmitOrder={handleSubmitOrder}
         onUpdateNote={handleUpdateItemNote}
+      />
+
+      {/* 6. Modal Xác Thực Mã PIN Bàn Ăn nếu chưa có phiên hợp lệ */}
+      <TablePasscodeModal
+        isOpen={isPasscodeRequired}
+        tableCode={tableNumber}
+        onClose={() => setIsPasscodeRequired(false)}
+        onSuccess={() => setIsPasscodeRequired(false)}
       />
     </div>
   );
