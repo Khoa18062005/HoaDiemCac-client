@@ -5,5 +5,7 @@ export { default as MenuSummaryControlBar } from './components/MenuSummaryContro
 export { default as CategoryFilterRibbon } from './components/CategoryFilterRibbon';
 export { default as MenuItemRow } from './components/MenuItemRow';
 export { default as MenuItemModal } from './components/MenuItemModal';
+export { default as CategoryModal } from './components/CategoryModal';
+export { default as CategoryManageSection } from './components/CategoryManageSection';
 export { default as KdsToastNotification } from './components/KdsToastNotification';
 export { default as MenuPagination } from './components/MenuPagination';
