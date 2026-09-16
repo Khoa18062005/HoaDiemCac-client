@@ -49,21 +49,30 @@ export default function AdminTablesQrPage() {
     setTimeout(() => setToast({ visible: false, message: '', type: 'success' }), 3000);
   };
 
-  const fetchTables = async () => {
+  const fetchTables = async (isInitial = false) => {
     try {
-      setLoading(true);
+      if (isInitial) setLoading(true);
       const data = await tableApi.getAllTables();
-      setTables(data);
+      if (Array.isArray(data)) {
+        setTables(data);
+      }
     } catch (err) {
       console.error('Lỗi tải danh sách bàn:', err);
-      showToast('Lỗi khi tải danh sách bàn', 'error');
+      if (isInitial) showToast('Lỗi khi tải danh sách bàn', 'error');
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTables();
+    fetchTables(true);
+
+    // Tự động đồng bộ thời gian thực từ Database định kỳ mỗi 3 giây
+    const interval = setInterval(() => {
+      fetchTables(false);
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Handler đổi mã PIN mới
@@ -203,17 +212,26 @@ export default function AdminTablesQrPage() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            {/* Live Realtime Sync Badge */}
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-950/50 border border-emerald-500/30 text-[11px] text-emerald-300 font-medium select-none shadow-xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+              </span>
+              <span>Đồng bộ thời gian thực: 3s</span>
+            </div>
+
             <button
-              onClick={fetchTables}
-              className="p-2.5 rounded-xl border border-surface-border hover:bg-surface-hover text-[#A0A0A5] hover:text-[#EDEDED] transition-colors"
-              title="Tải lại dữ liệu"
+              onClick={() => fetchTables(true)}
+              className="p-2.5 rounded-xl border border-surface-border hover:bg-surface-hover text-[#A0A0A5] hover:text-[#EDEDED] transition-colors cursor-pointer"
+              title="Tải lại dữ liệu ngay lập tức"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-gold' : ''}`} />
             </button>
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-crimson to-[#B91C1C] hover:from-[#B91C1C] hover:to-crimson text-white text-xs font-semibold shadow-lg shadow-crimson/20 flex items-center gap-2 transition-all"
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-crimson to-[#B91C1C] hover:from-[#B91C1C] hover:to-crimson text-white text-xs font-semibold shadow-lg shadow-crimson/20 flex items-center gap-2 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Thêm Bàn Mới</span>

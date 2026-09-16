@@ -24,22 +24,26 @@ export default function AdminTableDevicesModal({
   const [actionLoading, setActionLoading] = useState(null);
   const [feedback, setFeedback] = useState(null);
 
-  const fetchDevices = async () => {
+  const fetchDevices = async (showLoading = true) => {
     if (!table?.id) return;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     try {
       const data = await tableApi.getAdminDevices(table.id);
       setDevices(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Lỗi khi tải danh sách thiết bị admin:', err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
     if (isOpen && table?.id) {
-      fetchDevices();
+      fetchDevices(true);
+      const timer = setInterval(() => {
+        fetchDevices(false);
+      }, 3000);
+      return () => clearInterval(timer);
     }
   }, [isOpen, table?.id]);
 
