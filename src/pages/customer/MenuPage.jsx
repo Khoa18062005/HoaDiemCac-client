@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Utensils } from 'lucide-react';
 import {
   CustomerHeader,
   CollaborativeBanner,
@@ -74,9 +74,10 @@ export default function MenuPage() {
     };
   }, []);
 
-  // Danh mục thích ứng từ Database
+  // Hiển thị TẤT CẢ danh mục từ Database trên màn hình khách hàng
   const customerCategories = useMemo(() => {
     if (dbCategories.length > 0) {
+      // Lấy toàn bộ danh mục đang hoạt động (isActive !== false)
       const activeCats = dbCategories.filter((c) => c.isActive !== false);
       const mapped = activeCats.map((c) => {
         const slug = (c.slug || '').toLowerCase();
@@ -86,10 +87,11 @@ export default function MenuPage() {
         else if (slug.includes('hai-san') || slug.includes('ca') || slug.includes('tom')) icon = 'seafood';
         else if (slug.includes('vien')) icon = 'meatball';
         else if (slug.includes('rau') || slug.includes('nam')) icon = 'veggie';
-        else if (slug.includes('uong') || slug.includes('nuoc') || slug.includes('tra') || slug.includes('bia')) icon = 'drink';
+        else if (slug.includes('uong') || slug.includes('nuoc') || slug.includes('tra') || slug.includes('bia') || slug.includes('ruou')) icon = 'drink';
 
         return {
           id: c.slug || String(c.id),
+          numericId: c.id,
           name: c.name,
           icon,
           highlight: false,
@@ -122,6 +124,7 @@ export default function MenuPage() {
           code: item.code,
           name: item.name,
           categoryId: catId || 'khac',
+          categories: item.categories || [],
           subTitle: item.unit || '',
           description: item.description || '',
           price: Number(item.price),
@@ -193,7 +196,14 @@ export default function MenuPage() {
         dishes = featured.length >= 2 ? featured : availableDishes.slice(0, 6);
       } else {
         dishes = availableDishes.filter((d) => {
-          return d.categoryId === cat.id || String(d.categoryId) === String(cat.id);
+          if (d.categoryId === cat.id || String(d.categoryId) === String(cat.id)) return true;
+          if (cat.numericId && String(d.categoryId) === String(cat.numericId)) return true;
+          if (d.categories && Array.isArray(d.categories)) {
+            return d.categories.some(
+              (c) => (c.slug && c.slug === cat.id) || String(c.id) === String(cat.id) || (cat.numericId && c.id === cat.numericId)
+            );
+          }
+          return false;
         });
       }
 
@@ -212,7 +222,14 @@ export default function MenuPage() {
         category: cat,
         dishes,
       };
-    }).filter((section) => section.dishes.length > 0);
+    }).filter((section) => {
+      // Khi đang tìm kiếm theo từ khóa thì chỉ hiện các nhóm có món khớp
+      if (searchQuery.trim()) {
+        return section.dishes.length > 0;
+      }
+      // Bình thường: hiển thị TẤT CẢ các danh mục trong Database
+      return true;
+    });
   }, [customerCategories, dishesList, searchQuery]);
 
   // Chiều 1: Khi khách bấm vào Tab danh mục bên trái -> Cuộn mượt màn hình bên phải đến đúng nhóm món
@@ -422,21 +439,35 @@ export default function MenuPage() {
                 </div>
 
                 {/* Lưới Thẻ Món: 1 cột trên Mobile, 2 cột trên iPad & Laptop */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-3.5 items-start">
-                  {dishes.map((dish) => {
-                    const cartQuantity = getDishCartQuantity(dish.id);
+                {dishes.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-3.5 items-start">
+                    {dishes.map((dish) => {
+                      const cartQuantity = getDishCartQuantity(dish.id);
 
-                    return (
-                      <CustomerDishCard
-                        key={dish.id}
-                        dish={dish}
-                        cartQuantity={cartQuantity}
-                        onAddToCart={handleAddToCart}
-                        onUpdateQuantity={handleUpdateQuantity}
-                      />
-                    );
-                  })}
-                </div>
+                      return (
+                        <CustomerDishCard
+                          key={dish.id}
+                          dish={dish}
+                          cartQuantity={cartQuantity}
+                          onAddToCart={handleAddToCart}
+                          onUpdateQuantity={handleUpdateQuantity}
+                        />
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-5 sm:p-6 rounded-2xl bg-[#1D1D22]/60 border border-white/5 flex flex-col items-center justify-center text-center gap-1.5 py-6 sm:py-7">
+                    <div className="w-9 h-9 rounded-full bg-gold/10 border border-gold/30 flex items-center justify-center text-gold mb-0.5">
+                      <Utensils className="w-4 h-4 text-gold" />
+                    </div>
+                    <p className="text-xs font-semibold text-[#FFE088]">
+                      Danh mục đang được cập nhật món mới
+                    </p>
+                    <p className="text-[11px] text-[#9E9AA0] max-w-xs leading-relaxed">
+                      Bếp trưởng Hỏa Diệm Các đang chuẩn bị các món ăn đặc sắc cho nhóm thực đơn này.
+                    </p>
+                  </div>
+                )}
               </div>
             ))
           )}
