@@ -5,9 +5,13 @@ import TableManagePage from '@/pages/admin/TableManagePage';
 import MenuManagePage from '@/pages/admin/MenuManagePage';
 import AdminEmployeeManagePage from '@/pages/admin/AdminEmployeeManagePage';
 import AdminProfilePage from '@/pages/admin/AdminProfilePage';
+import AdminTablesQrPage from '@/pages/admin/AdminTablesQrPage';
+import AdminInvoicesPage from '@/pages/admin/AdminInvoicesPage';
+import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
 import CustomerLayout from '@/layouts/CustomerLayout';
 import KitchenLayout from '@/layouts/KitchenLayout';
 import MenuPage from '@/pages/customer/MenuPage';
+import TableEntryPage from '@/pages/customer/TableEntryPage';
 import KitchenKdsPage from '@/pages/kitchen/KitchenKdsPage';
 import WaiterDisplayPage from '@/pages/waiter/WaiterDisplayPage';
 import LoginPage from '@/pages/auth/LoginPage';
@@ -67,13 +71,7 @@ export const router = createBrowserRouter([
   },
   {
     path: '/table/:tableId',
-    element: <CustomerLayout />,
-    children: [
-      {
-        index: true,
-        element: <MenuPage />,
-      },
-    ],
+    element: <TableEntryPage />,
   },
   {
     path: '/customer',
@@ -129,9 +127,7 @@ export const router = createBrowserRouter([
         path: 'tables-qr',
         element: (
           <PermissionRoute adminOnly>
-            <div className="p-8 text-center text-gold font-sans text-lg">
-              Trang Quản Lý Bàn & QR (Đang xây dựng)
-            </div>
+            <AdminTablesQrPage />
           </PermissionRoute>
         ),
       },
@@ -139,9 +135,7 @@ export const router = createBrowserRouter([
         path: 'invoices',
         element: (
           <PermissionRoute adminOnly>
-            <div className="p-8 text-center text-gold font-sans text-lg">
-              Trang Lịch Sử Hóa Đơn (Đang xây dựng)
-            </div>
+            <AdminInvoicesPage />
           </PermissionRoute>
         ),
       },
@@ -149,9 +143,7 @@ export const router = createBrowserRouter([
         path: 'dashboard',
         element: (
           <PermissionRoute adminOnly>
-            <div className="p-8 text-center text-gold font-sans text-lg">
-              Trang Báo Cáo Doanh Thu (Đang xây dựng)
-            </div>
+            <AdminDashboardPage />
           </PermissionRoute>
         ),
       },

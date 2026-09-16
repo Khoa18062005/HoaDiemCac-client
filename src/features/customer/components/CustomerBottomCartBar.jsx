@@ -9,6 +9,7 @@ import { ArrowRight, ShoppingBag } from 'lucide-react';
 export default function CustomerBottomCartBar({
   totalCount = 0,
   totalAmount = 0,
+  isHost = true,
   onOpenCart,
 }) {
   const formatPrice = (amount) => {
@@ -53,10 +54,10 @@ export default function CustomerBottomCartBar({
         <button
           type="button"
           onClick={onOpenCart}
-          aria-label="Xem giỏ hàng và gửi bếp"
+          aria-label={isHost ? 'Xem giỏ hàng và gửi bếp' : 'Xem giỏ hàng'}
           className="bg-gradient-to-r from-[#FFD54F] via-[#F3C649] to-[#D4AF37] text-[#5A0808] font-extrabold text-xs px-3.5 py-2.5 rounded-xl shadow-[0_2px_10px_rgba(212,175,55,0.4)] flex items-center space-x-1.5 active:scale-95 transition-transform hover:brightness-105 select-none"
         >
-          <span>Gửi Bếp</span>
+          <span>{isHost ? 'Gửi Bếp' : 'Xem Giỏ'}</span>
           <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
         </button>
       </div>
