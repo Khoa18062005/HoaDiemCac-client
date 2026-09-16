@@ -96,8 +96,7 @@ export default function AdminSidebar() {
     {
       to: '/admin/profile',
       label: 'Hồ Sơ Cá Nhân',
-      permission: 'PROFILE',
-      adminOnly: true,
+      alwaysShow: true,
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
@@ -158,6 +157,7 @@ export default function AdminSidebar() {
 
   const navItems = allNavItems.filter((item) => {
     if (isAdmin) return true;
+    if (item.alwaysShow) return true;
     if (item.adminOnly) return false;
     return permissions.includes(item.permission);
   });
