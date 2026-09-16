@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { X, Printer, Download, Sparkles, ShieldCheck } from 'lucide-react';
-import logoImg from '@/assets/images/logo.png';
+import logoTabImg from '@/assets/images/logo_tab.png';
 
 export default function TableQrPrintModal({ table, isOpen, onClose }) {
   const printRef = useRef(null);
@@ -65,9 +65,16 @@ export default function TableQrPrintModal({ table, isOpen, onClose }) {
 
             {/* Restaurant Logo & Title */}
             <div className="flex flex-col items-center mb-3">
-              <img src={logoImg} alt="Hỏa Diệm Các" className="h-10 object-contain mb-1" />
-              <p className="text-[10px] tracking-widest text-gold/80 uppercase font-serif">
-                Hỏa Diệm Các • Lẩu Hoàng Gia
+              <img
+                src={logoTabImg}
+                alt="Hỏa Diệm Các"
+                className="w-12 h-12 object-contain drop-shadow-[0_2px_10px_rgba(212,175,55,0.35)] mb-1"
+              />
+              <h2 className="text-sm font-bold font-serif text-gold tracking-widest uppercase">
+                HỎA DIỆM CÁC
+              </h2>
+              <p className="text-[9px] tracking-widest text-gold/80 uppercase font-serif">
+                Mỹ Vị Lẩu Hoàng Triều
               </p>
             </div>
 
@@ -88,14 +95,6 @@ export default function TableQrPrintModal({ table, isOpen, onClose }) {
                 size={180}
                 level="H"
                 includeMargin={false}
-                imageSettings={{
-                  src: logoImg,
-                  x: undefined,
-                  y: undefined,
-                  height: 32,
-                  width: 32,
-                  excavate: true,
-                }}
               />
             </div>
 

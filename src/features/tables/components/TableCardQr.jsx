@@ -13,7 +13,6 @@ import {
   Sparkles,
   ExternalLink
 } from 'lucide-react';
-import logoImg from '@/assets/images/logo.png';
 
 export default function TableCardQr({
   table,
@@ -126,14 +125,6 @@ export default function TableCardQr({
                 value={qrUrl}
                 size={64}
                 level="M"
-                imageSettings={{
-                  src: logoImg,
-                  x: undefined,
-                  y: undefined,
-                  height: 14,
-                  width: 14,
-                  excavate: true,
-                }}
               />
               <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover/qr:opacity-100 flex items-center justify-center transition-opacity text-white">
                 <Eye className="w-4 h-4 text-gold" />

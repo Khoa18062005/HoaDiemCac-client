@@ -10,7 +10,7 @@ import {
   HelpCircle,
   RotateCcw
 } from 'lucide-react';
-import logoImg from '@/assets/images/logo.png';
+import logoTabImg from '@/assets/images/logo_tab.png';
 import {
   tableApi,
   getStoredTableSession,
@@ -146,9 +146,9 @@ export default function TableEntryPage() {
       {/* 1. Header Thương Hiệu (Đã nhích lên phía trên) */}
       <div className="w-full max-w-sm flex flex-col items-center pt-2 pb-1">
         <img
-          src={logoImg}
+          src={logoTabImg}
           alt="Hỏa Diệm Các"
-          className="h-14 w-auto object-contain drop-shadow-[0_4px_12px_rgba(212,175,55,0.2)] mb-1.5"
+          className="w-14 h-14 object-contain drop-shadow-[0_4px_14px_rgba(212,175,55,0.35)] mb-1.5"
         />
         <h1 className="text-lg font-bold font-serif text-gold tracking-wide">
           HỎA DIỆM CÁC
