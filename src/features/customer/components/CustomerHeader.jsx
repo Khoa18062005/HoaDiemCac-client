@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Search, Bell, X, Check } from 'lucide-react';
+import { ShoppingBag, Search, Bell, X, Check, Crown, Users } from 'lucide-react';
 
 /**
  * CustomerHeader
@@ -13,6 +13,9 @@ export default function CustomerHeader({
   onOpenCart,
   searchQuery = '',
   onSearchChange,
+  isHost = true,
+  deviceCount = 1,
+  onOpenDevices,
 }) {
   const [calledService, setCalledService] = useState(false);
 
@@ -89,15 +92,46 @@ export default function CustomerHeader({
             )}
           </button>
 
-          {/* Table Status Pill */}
-          <div className="bg-[#2A1014] text-[#FFB4AB] font-bold px-2.5 py-1 rounded-full border border-[rgba(212,175,55,0.4)] flex items-center gap-1.5 shadow-xs select-none">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
-            </span>
-            <span className="text-[11px] font-extrabold tracking-tight text-[#FFE699] whitespace-nowrap">
-              Bàn {tableNumber}
-            </span>
+          {/* Table Status Pill & Host Badge */}
+          <div className="flex items-center gap-1.5">
+            <div className="bg-[#2A1014] text-[#FFB4AB] font-bold px-2.5 py-1 rounded-full border border-[rgba(212,175,55,0.4)] flex items-center gap-1.5 shadow-xs select-none">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+              </span>
+              <span className="text-[11px] font-extrabold tracking-tight text-[#FFE699] whitespace-nowrap">
+                Bàn {tableNumber}
+              </span>
+            </div>
+
+            {/* Host / Member Role Badge & Devices Modal Trigger */}
+            <button
+              type="button"
+              onClick={onOpenDevices}
+              className={`py-1 px-2 rounded-full border text-[10px] font-bold flex items-center gap-1 transition-all shadow-xs cursor-pointer select-none ${
+                isHost
+                  ? 'bg-gradient-to-r from-amber-500/20 to-amber-600/20 text-[#FFD54F] border-amber-500/40 hover:border-amber-400'
+                  : 'bg-zinc-800/80 text-zinc-300 border-zinc-700 hover:border-zinc-500'
+              }`}
+              title="Nhấn để xem danh sách thiết bị đang kết nối vào bàn"
+            >
+              {isHost ? (
+                <>
+                  <Crown className="w-3 h-3 text-gold" />
+                  <span className="hidden xs:inline">Chủ Bàn</span>
+                </>
+              ) : (
+                <>
+                  <Users className="w-3 h-3 text-zinc-400" />
+                  <span className="hidden xs:inline">Thành Viên</span>
+                </>
+              )}
+              {deviceCount > 0 && (
+                <span className="bg-black/50 px-1.5 py-0.2 rounded-full text-[9px] font-mono text-gold border border-gold/20">
+                  {deviceCount}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Quick Cart Button (chỉ hiện trên Mobile & Tablet, ẩn trên Laptop vì đã có docked sidebar) */}

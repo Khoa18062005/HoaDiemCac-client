@@ -13,7 +13,8 @@ import {
   mockCustomerDishes,
 } from '@/features/customer';
 import TablePasscodeModal from '@/features/tables/components/TablePasscodeModal';
-import { getStoredTableSession } from '@/features/tables/api/tableApi';
+import TableDevicesModal from '@/features/customer/components/TableDevicesModal';
+import { getStoredTableSession, saveTableSession, tableApi } from '@/features/tables/api/tableApi';
 
 /**
  * MenuPage (Customer Responsive với ScrollSpy 2 chiều)
@@ -36,13 +37,58 @@ export default function MenuPage() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isPasscodeRequired, setIsPasscodeRequired] = useState(false);
 
-  // Kiểm tra phiên bàn ăn hợp lệ từ localStorage
+  // Trạng thái Chủ Bàn (Host) & Quản lý thiết bị
+  const [isHost, setIsHost] = useState(() => getStoredTableSession()?.isHost ?? true);
+  const [deviceCount, setDeviceCount] = useState(1);
+  const [isDevicesModalOpen, setIsDevicesModalOpen] = useState(false);
+
+  // Kiểm tra phiên bàn ăn hợp lệ từ localStorage và đồng bộ trạng thái thiết bị
   useEffect(() => {
     const session = getStoredTableSession();
     if (!session || !session.sessionToken) {
       setIsPasscodeRequired(true);
+    } else if (session.isHost !== undefined) {
+      setIsHost(Boolean(session.isHost));
     }
+
+    // Tải danh sách thiết bị kết nối thời gian thực
+    const loadDevices = async () => {
+      try {
+        const devices = await tableApi.getDevices();
+        if (Array.isArray(devices) && devices.length > 0) {
+          const activeList = devices.filter((d) => d.isActive);
+          setDeviceCount(activeList.length);
+
+          const currentToken = session?.deviceToken;
+          if (currentToken) {
+            const currentDev = devices.find((d) => d.deviceToken === currentToken);
+            if (currentDev) {
+              setIsHost(Boolean(currentDev.isHost));
+              if (!currentDev.isActive) {
+                alert('Thiết bị của bạn đã bị Chủ Bàn hoặc Quản Trị Viên ngắt kết nối khỏi bàn.');
+                window.location.reload();
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Lỗi khi tải danh sách thiết bị:', err.message);
+      }
+    };
+
+    loadDevices();
+    const interval = setInterval(loadDevices, 10000);
+    return () => clearInterval(interval);
   }, [tableNumber]);
+
+  // Xử lý khi nhượng quyền Chủ Bàn thành công
+  const handleHostTransferred = (newHostToken) => {
+    setIsHost(false);
+    const curr = getStoredTableSession();
+    if (curr) {
+      saveTableSession({ ...curr, isHost: false });
+    }
+  };
 
   // Refs cho cơ chế ScrollSpy đồng bộ 2 chiều
   const scrollContainerRef = useRef(null);
@@ -275,17 +321,20 @@ export default function MenuPage() {
 
   return (
     <div className="h-full flex flex-col justify-between overflow-hidden bg-[#0F0F12]">
-      {/* 1. Header Thích Ứng (Brand, Search Bar, Table Pill, Cart Button) */}
+      {/* 1. Header Thích Ứng (Brand, Search Bar, Table Pill, Cart Button, Host Badge) */}
       <CustomerHeader
         tableNumber={tableNumber}
         cartCount={totalCount}
         onOpenCart={() => setIsCartOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        isHost={isHost}
+        deviceCount={deviceCount}
+        onOpenDevices={() => setIsDevicesModalOpen(true)}
       />
 
       {/* 2. Thanh Thông Báo Thời Gian Thực Cùng Bàn */}
-      <CollaborativeBanner collaboratorCount={3} />
+      <CollaborativeBanner collaboratorCount={deviceCount} />
 
       {/* 3. Khung Chính: Cột Trái Danh Mục + Cột Giữa Cuộn Món (ScrollSpy) + Cột Phải Giỏ Hàng Desktop */}
       <main className="flex-1 flex overflow-hidden relative">
@@ -352,6 +401,7 @@ export default function MenuPage() {
           tableNumber={tableNumber}
           cartItems={cartItems}
           orderedItems={orderedItems}
+          isHost={isHost}
           onUpdateQuantity={handleUpdateQuantity}
           onRemoveItem={handleRemoveItem}
           onClearCart={handleClearCart}
@@ -364,6 +414,7 @@ export default function MenuPage() {
       <CustomerBottomCartBar
         totalCount={totalCount}
         totalAmount={totalAmount}
+        isHost={isHost}
         onOpenCart={() => setIsCartOpen(true)}
       />
 
@@ -374,6 +425,7 @@ export default function MenuPage() {
         cartItems={cartItems}
         orderedItems={orderedItems}
         tableNumber={tableNumber}
+        isHost={isHost}
         onUpdateQuantity={handleUpdateQuantity}
         onRemoveItem={handleRemoveItem}
         onClearCart={handleClearCart}
@@ -387,6 +439,15 @@ export default function MenuPage() {
         tableCode={tableNumber}
         onClose={() => setIsPasscodeRequired(false)}
         onSuccess={() => setIsPasscodeRequired(false)}
+      />
+
+      {/* 7. Modal Quản Lý Thiết Bị Kết Nối & Nhượng Quyền Chủ Bàn */}
+      <TableDevicesModal
+        isOpen={isDevicesModalOpen}
+        onClose={() => setIsDevicesModalOpen(false)}
+        tableNumber={tableNumber}
+        isCurrentHost={isHost}
+        onHostTransferred={handleHostTransferred}
       />
     </div>
   );
