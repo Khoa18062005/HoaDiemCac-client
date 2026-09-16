@@ -1,4 +1,5 @@
 export { MENU_CATEGORIES, initialMenuItems } from './data/mockMenuItems';
+export { menuApi } from './api/menuApi';
 export { default as AdminMenuHeader } from './components/AdminMenuHeader';
 export { default as MenuSummaryControlBar } from './components/MenuSummaryControlBar';
 export { default as CategoryFilterRibbon } from './components/CategoryFilterRibbon';

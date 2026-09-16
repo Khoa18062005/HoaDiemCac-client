@@ -5,10 +5,11 @@ export default function CategoryFilterRibbon({
   selectedCategory = 'all',
   onSelectCategory,
   categoryCounts = {},
+  categories = MENU_CATEGORIES,
 }) {
   return (
     <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-surface-border font-sans no-scrollbar">
-      {MENU_CATEGORIES.map(cat => {
+      {categories.map(cat => {
         const isActive = selectedCategory === cat.id;
         const count = categoryCounts[cat.id] ?? 0;
 
