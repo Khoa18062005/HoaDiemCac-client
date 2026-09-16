@@ -142,24 +142,24 @@ export default function TableEntryPage() {
   }, [pin, isLockedCountdown, loading]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#181212] via-[#121214] to-[#0A0A0C] text-[#EDEDED] flex flex-col justify-between items-center p-4 selection:bg-gold selection:text-black">
-      {/* 1. Header Thương Hiệu */}
-      <div className="w-full max-w-sm flex flex-col items-center pt-8 pb-4">
+    <div className="min-h-screen bg-gradient-to-b from-[#181212] via-[#121214] to-[#0A0A0C] text-[#EDEDED] flex flex-col justify-between items-center px-4 pt-2 pb-4 selection:bg-gold selection:text-black">
+      {/* 1. Header Thương Hiệu (Đã nhích lên phía trên) */}
+      <div className="w-full max-w-sm flex flex-col items-center pt-2 pb-1">
         <img
           src={logoImg}
           alt="Hỏa Diệm Các"
-          className="h-16 w-auto object-contain drop-shadow-[0_4px_12px_rgba(212,175,55,0.2)] mb-2"
+          className="h-14 w-auto object-contain drop-shadow-[0_4px_12px_rgba(212,175,55,0.2)] mb-1.5"
         />
-        <h1 className="text-xl font-bold font-serif text-gold tracking-wide">
+        <h1 className="text-lg font-bold font-serif text-gold tracking-wide">
           HỎA DIỆM CÁC
         </h1>
-        <p className="text-[11px] text-[#A0A0A5] tracking-widest uppercase">
+        <p className="text-[10px] text-[#A0A0A5] tracking-widest uppercase mt-0.5">
           Mỹ Vị Lẩu Hoàng Triều
         </p>
 
         {/* Thông tin Bàn */}
-        <div className="mt-5 px-4 py-2 rounded-full bg-crimson-subtle border border-crimson-border text-center shadow-lg">
-          <p className="text-xs text-[#A0A0A5]">Quý khách đang ngồi tại</p>
+        <div className="mt-2.5 px-4 py-1.5 rounded-full bg-crimson-subtle border border-crimson-border text-center shadow-lg">
+          <p className="text-[11px] text-[#A0A0A5]">Quý khách đang ngồi tại</p>
           <p className="text-sm font-bold text-gold font-serif">
             {tableInfo?.name || `Bàn ${normalizedTableCode}`}
             {tableInfo?.area === 'VIP' && ' • Phòng VIP'}
