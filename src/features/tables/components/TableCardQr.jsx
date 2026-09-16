@@ -69,7 +69,7 @@ export default function TableCardQr({
 
   return (
     <div
-      className={`group relative bg-[#18181B] border rounded-2xl p-5 transition-all duration-200 hover:shadow-xl hover:border-gold/40 flex flex-col justify-between ${
+      className={`group relative bg-[#18181B] border rounded-2xl p-5 transition-all duration-200 hover:shadow-xl hover:border-gold/40 flex flex-col justify-between overflow-hidden ${
         table.isOrderLocked
           ? 'border-red-900/60 bg-red-950/10'
           : 'border-[#27272A] hover:bg-[#1C1C20]'
@@ -138,7 +138,7 @@ export default function TableCardQr({
                 e.stopPropagation();
                 window.open(qrUrl, '_blank');
               }}
-              className="text-[10px] text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-0.5 cursor-pointer"
+              className="mt-1.5 w-full py-1 px-1 rounded-md bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-[10px] text-blue-300 hover:text-blue-200 font-medium flex items-center justify-center gap-1 transition-all shadow-sm cursor-pointer"
               title={`Mở link khách quét bàn ${table.tableNumber}: ${qrUrl}`}
             >
               <ExternalLink className="w-2.5 h-2.5" />
@@ -200,18 +200,18 @@ export default function TableCardQr({
         <select
           value={table.status}
           onChange={(e) => onUpdateStatus(table.id, e.target.value)}
-          className="bg-[#121214] border border-[#3F3F46] text-[#EDEDED] text-xs rounded-lg px-2 py-1.5 outline-none focus:border-gold cursor-pointer"
+          className="flex-1 min-w-0 bg-[#121214] border border-[#3F3F46] text-[#EDEDED] text-xs rounded-lg px-2.5 py-1.5 outline-none focus:border-gold cursor-pointer truncate"
         >
           <option value="AVAILABLE">Trống (Sẵn sàng)</option>
           <option value="OCCUPIED">Có Khách</option>
           <option value="CLEANING">Dọn Dẹp</option>
         </select>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           {/* Nút Khóa / Mở Order */}
           <button
             onClick={() => onToggleLock(table.id)}
-            className={`p-1.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-colors ${
+            className={`p-1.5 rounded-lg border text-xs font-medium flex items-center justify-center transition-colors ${
               table.isOrderLocked
                 ? 'border-rose-500/50 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'
                 : 'border-[#3F3F46] hover:bg-[#27272A] text-[#8E8E93] hover:text-[#EDEDED]'
@@ -221,23 +221,10 @@ export default function TableCardQr({
             {table.isOrderLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
           </button>
 
-          {/* Nút Debug Mở Link Quét Khách Hàng */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              window.open(qrUrl, '_blank');
-            }}
-            className="px-2 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-xs font-medium text-blue-300 hover:text-blue-200 flex items-center gap-1 transition-all shadow-sm group/btn"
-            title={`Mở link debug quét vào bàn này: ${qrUrl}`}
-          >
-            <ExternalLink className="w-3.5 h-3.5 text-blue-400 group-hover/btn:scale-110 transition-transform" />
-            <span>Debug Link</span>
-          </button>
-
           {/* Nút In Tem QR */}
           <button
             onClick={() => onOpenPrintModal(table)}
-            className="px-2 py-1.5 rounded-lg bg-surface-hover hover:bg-surface-elevated border border-surface-border hover:border-gold/40 text-xs font-medium text-[#EDEDED] flex items-center gap-1 transition-all"
+            className="px-2.5 py-1.5 rounded-lg bg-[#27272A] hover:bg-[#323238] border border-[#3F3F46] hover:border-gold/40 text-xs font-medium text-[#EDEDED] flex items-center gap-1.5 transition-all whitespace-nowrap flex-shrink-0"
             title="In tem QR để bàn"
           >
             <Printer className="w-3.5 h-3.5 text-gold" />
