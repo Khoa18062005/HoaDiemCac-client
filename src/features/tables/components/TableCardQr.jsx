@@ -149,11 +149,11 @@ export default function TableCardQr({
 
           {/* Mã PIN 4 số của bàn */}
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] text-[#A0A0A5] uppercase tracking-wider font-medium flex items-center gap-1">
+            <p className="text-[10px] text-[#A0A0A5] uppercase tracking-wider font-medium flex items-center gap-1 whitespace-nowrap">
               <Sparkles className="w-3 h-3 text-gold" />
               Mật khẩu PIN vào bàn
             </p>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1.5">
               <div className="px-3 py-1.5 rounded-lg bg-[#1C1616] border border-crimson-border/60 flex items-center gap-2 shadow-inner">
                 <span className="font-mono text-lg font-black tracking-widest text-gold selection:bg-gold selection:text-black">
                   {table.currentPasscode || '----'}
@@ -179,31 +179,43 @@ export default function TableCardQr({
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
             </div>
-
-            {/* Chỉ số thiết bị đang kết nối (Click để quản lý thiết bị và quyền Chủ Bàn) */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (onOpenDevices) onOpenDevices(table);
-              }}
-              className="flex items-center justify-between w-full mt-2 py-1.5 px-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/60 hover:border-gold/50 text-[11px] text-[#8E8E93] hover:text-zinc-200 transition-all cursor-pointer group/dev select-none"
-              title="Xem danh sách thiết bị đang kết nối, quyền Chủ Bàn và thao tác đá thiết bị"
-            >
-              <div className="flex items-center gap-1.5">
-                <Smartphone className="w-3.5 h-3.5 text-zinc-400 group-hover/dev:text-gold transition-colors" />
-                <span>Thiết bị:</span>
-                <strong className="text-[#EDEDED] font-mono">
-                  {table.activeDeviceCount || 0}
-                </strong>
-                <span>/ {table.maxActiveDevices || 6}</span>
-              </div>
-              <span className="text-[10px] text-gold/80 font-medium group-hover/dev:text-gold group-hover/dev:underline">
-                Chi tiết →
-              </span>
-            </button>
           </div>
         </div>
+
+        {/* Chỉ số thiết bị đang kết nối (Full-width pill, click để quản lý thiết bị và quyền Chủ Bàn) */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onOpenDevices) onOpenDevices(table);
+          }}
+          className="w-full py-1.5 px-2.5 rounded-xl bg-[#141417] hover:bg-[#1A1A1E] border border-[#27272A] hover:border-gold/50 flex items-center justify-between text-xs text-zinc-400 hover:text-zinc-200 transition-all cursor-pointer group/dev select-none mb-1 shadow-xs"
+          title="Xem danh sách thiết bị đang kết nối, quyền Chủ Bàn và thao tác đá thiết bị"
+        >
+          <div className="flex items-center gap-1.5 min-w-0 whitespace-nowrap">
+            <span className="relative flex h-2 w-2 flex-shrink-0">
+              {table.activeDeviceCount > 0 && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              )}
+              <span
+                className={`relative inline-flex rounded-full h-2 w-2 ${
+                  table.activeDeviceCount > 0 ? 'bg-emerald-400' : 'bg-zinc-600'
+                }`}
+              ></span>
+            </span>
+            <Smartphone className="w-3.5 h-3.5 text-zinc-400 group-hover/dev:text-gold transition-colors flex-shrink-0" />
+            <span className="text-[11px] text-zinc-400">Thiết bị:</span>
+            <strong className="text-zinc-200 font-mono text-xs">
+              {table.activeDeviceCount || 0}
+            </strong>
+            <span className="text-zinc-500 font-mono text-xs">/ {table.maxActiveDevices || 6}</span>
+          </div>
+
+          <div className="flex items-center gap-1 text-[10.5px] text-gold/80 group-hover/dev:text-gold font-medium whitespace-nowrap flex-shrink-0">
+            <span>Chi tiết</span>
+            <span className="group-hover/dev:translate-x-0.5 transition-transform">→</span>
+          </div>
+        </button>
       </div>
 
       {/* 3. Footer Action Controls */}
