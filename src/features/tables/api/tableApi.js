@@ -105,21 +105,30 @@ export const tableApi = {
   },
 
   // Khách hàng xác thực mã PIN 4 số
-  verifyPasscode: async (identifier, passcode, deviceFingerprint = 'web-client') => {
+  verifyPasscode: async (identifier, passcode, deviceFingerprint = 'web-client', deviceName = '') => {
     try {
       return await apiClient.post(`/customer/tables/${identifier}/verify-passcode`, {
         passcode,
         deviceFingerprint,
+        deviceName,
       });
     } catch (err) {
       // Giả lập xác thực mã PIN nếu backend offline
       if (passcode === '1234' || /^\d{4}$/.test(passcode)) {
+        const stored = getStoredTableSession();
+        // Nếu đã có session cùng bàn và đang là Host thì giữ quyền Host
+        const isHost = stored?.tableNumber === identifier.toUpperCase() ? Boolean(stored.isHost) : true;
+        const deviceToken = stored?.deviceToken || `device-${Math.random().toString(36).substring(2, 10)}`;
+
         return {
           tableId: 1,
           tableNumber: identifier.toUpperCase(),
           tableName: identifier.toUpperCase().startsWith('VIP') ? `Phòng ${identifier}` : `Bàn ${identifier}`,
-          sessionToken: `session-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-          deviceToken: `device-${Math.random().toString(36).substring(2, 8)}`,
+          sessionToken: stored?.sessionToken || `session-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+          deviceToken,
+          deviceName: deviceName || (isHost ? 'Chủ Bàn (Thiết bị 1)' : 'Thành Viên (Khách 2)'),
+          isHost,
+          activeDeviceCount: 2,
           status: 'OCCUPIED',
           isOrderLocked: false,
           message: 'Xác thực thành công',
@@ -136,6 +145,122 @@ export const tableApi = {
     } catch {
       const session = getStoredTableSession();
       return Boolean(session && session.sessionToken);
+    }
+  },
+
+  // Lấy danh sách thiết bị đang kết nối vào bàn (Dành cho Khách Hàng)
+  getDevices: async (identifier) => {
+    try {
+      return await apiClient.get(`/customer/tables/${identifier}/devices`);
+    } catch (err) {
+      console.warn('Lỗi gọi API getDevices, sử dụng dữ liệu giả lập:', err.message);
+      const session = getStoredTableSession();
+      const currentToken = session?.deviceToken || 'my-device-token';
+      const isCurrentHost = session?.isHost ?? true;
+
+      return [
+        {
+          deviceToken: currentToken,
+          deviceName: isCurrentHost ? 'Chủ Bàn (Thiết bị của bạn)' : 'Thành Viên (Thiết bị của bạn)',
+          isHost: isCurrentHost,
+          isActive: true,
+          connectedAt: new Date(Date.now() - 15 * 60000).toISOString(),
+          isCurrentDevice: true,
+        },
+        {
+          deviceToken: 'member-device-2',
+          deviceName: isCurrentHost ? 'Thành Viên (iPhone 14)' : 'Chủ Bàn (Galaxy S24)',
+          isHost: !isCurrentHost,
+          isActive: true,
+          connectedAt: new Date(Date.now() - 10 * 60000).toISOString(),
+          isCurrentDevice: false,
+        },
+        {
+          deviceToken: 'member-device-3',
+          deviceName: 'Thành Viên (Xiaomi Note)',
+          isHost: false,
+          isActive: true,
+          connectedAt: new Date(Date.now() - 5 * 60000).toISOString(),
+          isCurrentDevice: false,
+        },
+      ];
+    }
+  },
+
+  // Chủ Bàn đá một thiết bị ra khỏi bàn ăn
+  kickDevice: async (identifier, targetDeviceToken) => {
+    try {
+      return await apiClient.post(`/customer/tables/${identifier}/kick-device`, {
+        targetDeviceToken,
+      });
+    } catch (err) {
+      console.warn('Fallback đá thiết bị giả lập:', err.message);
+      return { success: true, message: 'Đã đá thiết bị thành công' };
+    }
+  },
+
+  // Chủ Bàn chuyển quyền Chủ Bàn cho người khác
+  transferHost: async (identifier, newHostDeviceToken) => {
+    try {
+      return await apiClient.post(`/customer/tables/${identifier}/transfer-host`, {
+        newHostDeviceToken,
+      });
+    } catch (err) {
+      console.warn('Fallback chuyển quyền chủ bàn giả lập:', err.message);
+      const session = getStoredTableSession();
+      if (session) {
+        saveTableSession({ ...session, isHost: false });
+      }
+      return { success: true, message: 'Đã chuyển quyền Chủ Bàn thành công' };
+    }
+  },
+
+  // Xem danh sách thiết bị đang kết nối vào bàn (Dành cho Quản Trị Viên)
+  getAdminDevices: async (tableId) => {
+    try {
+      return await apiClient.get(`/admin/tables/${tableId}/devices`);
+    } catch (err) {
+      console.warn('Fallback danh sách thiết bị admin:', err.message);
+      return [
+        {
+          deviceToken: 'device-host-1',
+          deviceName: 'Chủ Bàn (Thiết bị 1)',
+          isHost: true,
+          isActive: true,
+          connectedAt: new Date(Date.now() - 20 * 60000).toISOString(),
+          isCurrentDevice: false,
+        },
+        {
+          deviceToken: 'device-member-2',
+          deviceName: 'Thành Viên (Khách 2)',
+          isHost: false,
+          isActive: true,
+          connectedAt: new Date(Date.now() - 12 * 60000).toISOString(),
+          isCurrentDevice: false,
+        },
+      ];
+    }
+  },
+
+  // Đặt lại quyền Chủ Bàn (Admin)
+  adminResetHost: async (tableId) => {
+    try {
+      return await apiClient.post(`/admin/tables/${tableId}/reset-host`);
+    } catch (err) {
+      console.warn('Fallback reset host admin:', err.message);
+      return { success: true };
+    }
+  },
+
+  // Đá thiết bị (Admin)
+  adminKickDevice: async (tableId, targetDeviceToken) => {
+    try {
+      return await apiClient.post(`/admin/tables/${tableId}/kick-device`, {
+        targetDeviceToken,
+      });
+    } catch (err) {
+      console.warn('Fallback admin kick device:', err.message);
+      return { success: true };
     }
   },
 };

@@ -31,13 +31,18 @@ apiClient.interceptors.request.use(
       }
     }
 
-    // 2. Gắn Session Token bàn ăn cho khách hàng tại bàn (UC01)
+    // 2. Gắn Session Token & Device Token bàn ăn cho khách hàng tại bàn
     const tableData = localStorage.getItem('hoadiemcat_table_session');
     if (tableData) {
       try {
-        const { state } = JSON.parse(tableData);
-        if (state?.sessionToken) {
-          config.headers[TABLE_SESSION_HEADER] = state.sessionToken;
+        const parsed = JSON.parse(tableData);
+        const sessionToken = parsed?.sessionToken || parsed?.state?.sessionToken;
+        const deviceToken = parsed?.deviceToken || parsed?.state?.deviceToken;
+        if (sessionToken) {
+          config.headers[TABLE_SESSION_HEADER] = sessionToken;
+        }
+        if (deviceToken) {
+          config.headers['X-Device-Token'] = deviceToken;
         }
       } catch (e) {
         // Parse error ignored

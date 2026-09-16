@@ -99,12 +99,14 @@ export default function TableEntryPage() {
 
       const res = await tableApi.verifyPasscode(normalizedTableCode, code);
 
-      // Lưu thông tin phiên hợp lệ vào localStorage
+      // Lưu thông tin phiên hợp lệ vào localStorage (kèm vai trò Chủ Bàn / Thành Viên)
       saveTableSession({
         tableNumber: res.tableNumber || normalizedTableCode,
         tableName: res.tableName || `Bàn ${normalizedTableCode}`,
         sessionToken: res.sessionToken,
         deviceToken: res.deviceToken,
+        deviceName: res.deviceName,
+        isHost: res.isHost ?? true,
         verifiedAt: new Date().toISOString(),
       });
 
