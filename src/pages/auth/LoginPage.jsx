@@ -47,7 +47,13 @@ export default function LoginPage() {
       const { accessToken, user } = response;
       // Lưu thông tin phiên đăng nhập vào Zustand Auth Store
       login(user, accessToken);
-      navigate('/admin');
+      
+      const rawRole = (user?.role || '').replace(/^ROLE_/, '');
+      if (rawRole === 'KITCHEN') {
+        navigate('/kitchen');
+      } else {
+        navigate('/admin');
+      }
     } catch (err) {
       setError(err.message || 'Đăng nhập thất bại, vui lòng kiểm tra lại!');
     } finally {
@@ -99,7 +105,7 @@ export default function LoginPage() {
             </span>
           </div>
 
-          <h2 className="font-serif text-2xl xl:text-3xl font-bold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)] leading-snug">
+          <h2 className="font-sans text-2xl xl:text-3xl font-bold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)] leading-snug">
             36 Vị Thảo Mộc Cung Đình <br />
             <span className="bg-gradient-to-r from-[#FFD54F] via-[#FFE088] to-[#D4AF37] bg-clip-text text-transparent">
               Sôi Sùng Sục Nồng Say Đậm Vị
@@ -111,7 +117,7 @@ export default function LoginPage() {
           </p>
 
           {/* Dòng chữ Hán triện cổ */}
-          <div className="pt-1.5 flex items-center gap-2 text-gold/80 text-xs font-serif tracking-widest opacity-90">
+          <div className="pt-1.5 flex items-center gap-2 text-gold/80 text-xs font-sans tracking-widest opacity-90">
             <span>「 禦 膳 火 鍋 • 登 峰 造 極 」</span>
           </div>
         </div>
@@ -152,7 +158,7 @@ export default function LoginPage() {
                 />
               </div>
 
-              <h1 className="font-serif text-2xl sm:text-[26px] font-bold bg-gradient-to-r from-[#FFF0C2] via-[#FFD54F] to-[#D4AF37] bg-clip-text text-transparent">
+              <h1 className="font-sans text-2xl sm:text-[26px] font-bold bg-gradient-to-r from-[#FFF0C2] via-[#FFD54F] to-[#D4AF37] bg-clip-text text-transparent">
                 ĐĂNG NHẬP HỆ THỐNG
               </h1>
               <p className="mt-1.5 text-xs text-[#9E9EA6] font-medium">

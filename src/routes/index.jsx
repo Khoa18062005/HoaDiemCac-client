@@ -6,27 +6,37 @@ import MenuManagePage from '@/pages/admin/MenuManagePage';
 import AdminEmployeeManagePage from '@/pages/admin/AdminEmployeeManagePage';
 import AdminProfilePage from '@/pages/admin/AdminProfilePage';
 import CustomerLayout from '@/layouts/CustomerLayout';
+import KitchenLayout from '@/layouts/KitchenLayout';
 import MenuPage from '@/pages/customer/MenuPage';
+import KitchenKdsPage from '@/pages/kitchen/KitchenKdsPage';
+import WaiterDisplayPage from '@/pages/waiter/WaiterDisplayPage';
 import LoginPage from '@/pages/auth/LoginPage';
 
 import useAuthStore from '@/stores/useAuthStore';
 
 function PermissionRoute({ permission, adminOnly = false, children }) {
   const user = useAuthStore((state) => state.user);
-  const rawRole = (user?.role || 'STAFF').replace(/^ROLE_/, '');
+  const rawRole = (user?.role || 'KITCHEN').replace(/^ROLE_/, '');
   const isAdmin = rawRole === 'ADMIN';
 
   if (isAdmin) return children;
-  if (adminOnly) return <Navigate to="/admin" replace />;
+  const fallbackRedirect = rawRole === 'KITCHEN' ? '/kitchen' : '/admin';
+
+  if (adminOnly) return <Navigate to={fallbackRedirect} replace />;
 
   const permissions = user?.permissions || (
-    rawRole === 'MANAGER' ? ['TABLES', 'MENU'] :
-    rawRole === 'KITCHEN' ? ['MENU'] :
-    ['TABLES']
+    rawRole === 'MANAGER' ? ['TABLES', 'MENU', 'KITCHEN', 'WAITER'] :
+    rawRole === 'KITCHEN' ? ['KITCHEN', 'MENU'] :
+    ['TABLES', 'KITCHEN', 'WAITER']
   );
 
+  // Trạm Bếp KDS và Màn hình Phục Vụ cho phép truy cập trực tiếp
+  if (permission === 'KITCHEN' || permission === 'WAITER') {
+    return children;
+  }
+
   if (permission && !permissions.includes(permission)) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to={fallbackRedirect} replace />;
   }
 
   return children;
@@ -119,7 +129,7 @@ export const router = createBrowserRouter([
         path: 'tables-qr',
         element: (
           <PermissionRoute adminOnly>
-            <div className="p-8 text-center text-gold font-serif text-lg">
+            <div className="p-8 text-center text-gold font-sans text-lg">
               Trang Quản Lý Bàn & QR (Đang xây dựng)
             </div>
           </PermissionRoute>
@@ -129,7 +139,7 @@ export const router = createBrowserRouter([
         path: 'invoices',
         element: (
           <PermissionRoute adminOnly>
-            <div className="p-8 text-center text-gold font-serif text-lg">
+            <div className="p-8 text-center text-gold font-sans text-lg">
               Trang Lịch Sử Hóa Đơn (Đang xây dựng)
             </div>
           </PermissionRoute>
@@ -139,11 +149,47 @@ export const router = createBrowserRouter([
         path: 'dashboard',
         element: (
           <PermissionRoute adminOnly>
-            <div className="p-8 text-center text-gold font-serif text-lg">
+            <div className="p-8 text-center text-gold font-sans text-lg">
               Trang Báo Cáo Doanh Thu (Đang xây dựng)
             </div>
           </PermissionRoute>
         ),
+      },
+      {
+        path: 'kitchen',
+        element: <Navigate to="/kitchen" replace />,
+      },
+      {
+        path: 'waiter',
+        element: <Navigate to="/waiter" replace />,
+      },
+    ],
+  },
+  {
+    path: '/kitchen',
+    element: (
+      <PermissionRoute permission="KITCHEN">
+        <KitchenLayout />
+      </PermissionRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <KitchenKdsPage />,
+      },
+    ],
+  },
+  {
+    path: '/waiter',
+    element: (
+      <PermissionRoute permission="WAITER">
+        <KitchenLayout />
+      </PermissionRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <WaiterDisplayPage />,
       },
     ],
   },

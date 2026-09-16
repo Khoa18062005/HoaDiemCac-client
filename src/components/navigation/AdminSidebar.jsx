@@ -26,9 +26,9 @@ export default function AdminSidebar() {
 
   // Lấy danh sách quyền hạn
   const permissions = effectiveUser?.permissions || (
-    isAdmin ? ['TABLES', 'MENU', 'EMPLOYEES', 'PROFILE', 'TABLES_QR', 'INVOICES', 'DASHBOARD'] :
-    rawRole === 'MANAGER' ? ['TABLES', 'MENU'] :
-    rawRole === 'KITCHEN' ? ['MENU'] :
+    isAdmin ? ['TABLES', 'MENU', 'EMPLOYEES', 'PROFILE', 'TABLES_QR', 'INVOICES', 'DASHBOARD', 'KITCHEN'] :
+    rawRole === 'MANAGER' ? ['TABLES', 'MENU', 'KITCHEN'] :
+    rawRole === 'KITCHEN' ? ['KITCHEN', 'MENU'] :
     ['TABLES']
   );
 
@@ -64,6 +64,27 @@ export default function AdminSidebar() {
           <rect height="7" rx="1.5" width="7" x="14" y="3"></rect>
           <rect height="7" rx="1.5" width="7" x="14" y="14"></rect>
           <rect height="7" rx="1.5" width="7" x="3" y="14"></rect>
+        </svg>
+      ),
+    },
+    {
+      to: '/kitchen',
+      label: 'Điều Phối Bếp (KDS)',
+      permission: 'KITCHEN',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+          <path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"></path>
+          <line x1="6" y1="17" x2="18" y2="17"></line>
+        </svg>
+      ),
+    },
+    {
+      to: '/waiter',
+      label: 'Màn Hình Phục Vụ',
+      permission: 'TABLES',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
         </svg>
       ),
     },

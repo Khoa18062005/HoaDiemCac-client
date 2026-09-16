@@ -38,13 +38,15 @@ export default {
         }
       },
       fontFamily: {
-        serif: ['"Noto Serif"', 'serif'],
-        display: ['"Cinzel"', '"Noto Serif"', 'serif'],
-        sans: ['"Plus Jakarta Sans"', 'sans-serif']
+        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+        serif: ['"Plus Jakarta Sans"', 'sans-serif'],
+        display: ['"Plus Jakarta Sans"', 'sans-serif'],
       },
       animation: {
         'bell-shake': 'bell-shake 0.8s ease-in-out infinite',
         'badge-shake': 'badge-shake 0.8s ease-in-out infinite',
+        'border-pulse-crimson': 'border-pulse-crimson 1.8s ease-in-out infinite',
+        'dish-glow-ready': 'dish-glow-ready 1.6s ease-in-out infinite',
       },
       keyframes: {
         'bell-shake': {
@@ -56,6 +58,26 @@ export default {
           '0%, 100%': { transform: 'rotate(0deg) scale(1)' },
           '20%, 60%': { transform: 'rotate(-5deg) scale(1.05)' },
           '40%, 80%': { transform: 'rotate(5deg) scale(1.05)' },
+        },
+        'border-pulse-crimson': {
+          '0%, 100%': {
+            borderColor: '#C41E3A',
+            boxShadow: '0 0 16px rgba(196, 30, 58, 0.55), inset 0 0 0 1px rgba(196, 30, 58, 0.35)',
+          },
+          '50%': {
+            borderColor: 'rgba(196, 30, 58, 0.25)',
+            boxShadow: '0 0 4px rgba(196, 30, 58, 0.1), inset 0 0 0 1px rgba(196, 30, 58, 0.05)',
+          },
+        },
+        'dish-glow-ready': {
+          '0%, 100%': {
+            borderColor: '#34A853',
+            boxShadow: '0 0 16px rgba(52, 168, 83, 0.6), inset 0 0 8px rgba(52, 168, 83, 0.25)',
+          },
+          '50%': {
+            borderColor: 'rgba(52, 168, 83, 0.45)',
+            boxShadow: '0 0 6px rgba(52, 168, 83, 0.2), inset 0 0 2px rgba(52, 168, 83, 0.08)',
+          },
         },
       }
     },

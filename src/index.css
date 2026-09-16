@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  html, body, button, input, select, textarea {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+}
+
 /* Vô hiệu hóa viền trắng focus mặc định của trình duyệt trên toàn ứng dụng */
 *:focus, *:focus-visible {
   outline: none !important;
@@ -103,3 +109,38 @@ input:-webkit-autofill:active {
   animation: badge-shake 0.8s ease-in-out infinite;
   transform-origin: center center;
 }
+
+/* Hiệu ứng nhấp nháy chỉ riêng viền khung đơn trễ hạn KDS (không ảnh hưởng chữ và nội dung bên trong) */
+@keyframes border-pulse-crimson {
+  0%, 100% {
+    border-color: #C41E3A;
+    box-shadow: 0 0 16px rgba(196, 30, 58, 0.55), inset 0 0 0 1px rgba(196, 30, 58, 0.35);
+  }
+  50% {
+    border-color: rgba(196, 30, 58, 0.25);
+    box-shadow: 0 0 4px rgba(196, 30, 58, 0.1), inset 0 0 0 1px rgba(196, 30, 58, 0.05);
+  }
+}
+
+.animate-border-pulse-crimson {
+  animation: border-pulse-crimson 1.8s ease-in-out infinite;
+}
+
+/* Hiệu ứng món sáng đèn rực rỡ khi Bếp đã nấu xong (chờ nhân viên phục vụ bưng) */
+@keyframes dish-glow-ready {
+  0%, 100% {
+    border-color: #34A853;
+    box-shadow: 0 0 16px rgba(52, 168, 83, 0.6), inset 0 0 8px rgba(52, 168, 83, 0.25);
+    background-color: rgba(46, 125, 50, 0.22);
+  }
+  50% {
+    border-color: rgba(52, 168, 83, 0.5);
+    box-shadow: 0 0 6px rgba(52, 168, 83, 0.25), inset 0 0 2px rgba(52, 168, 83, 0.1);
+    background-color: rgba(46, 125, 50, 0.12);
+  }
+}
+
+.animate-dish-glow-ready {
+  animation: dish-glow-ready 1.6s ease-in-out infinite;
+}
+
