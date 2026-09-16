@@ -175,18 +175,18 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* 2 Khối Đồ Thị & Cơ Cấu Thanh Toán */}
-        <div className="grid grid-cols-3 gap-6">
-          {/* Biểu Đồ Doanh Thu Theo Giờ (SVG Bar Chart) */}
-          <div className="col-span-2 p-6 rounded-2xl bg-surface-card border border-surface-border shadow-lg flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-6">
+        {/* 2 Khối Đồ Thị & Cơ Cấu Thanh Toán - Căn chỉnh chuẩn 4 cột khớp chính xác với 4 ô KPI phía trên */}
+        <div className="grid grid-cols-4 gap-4">
+          {/* Biểu Đồ Doanh Thu Theo Giờ (SVG Bar Chart) - Chiếm 3 cột bằng đúng 3 ô KPI phía trên */}
+          <div className="col-span-3 p-6 rounded-2xl bg-surface-card border border-surface-border shadow-lg flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="font-semibold text-sm text-[#EDEDED] flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-gold" />
                   Doanh Thu Theo Khung Giờ Cao Điểm
                 </h3>
                 <p className="text-[11px] text-[#8E8E93] mt-0.5">
-                  Phân bổ doanh thu các ca trưa và ca tối tại nhà hàng
+                  Phân bổ doanh thu các ca trưa và ca tối tại nhà hàng (Khớp với 3 chỉ số tài chính phía trên)
                 </p>
               </div>
               <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-gold/10 text-gold border border-gold/30">
@@ -195,9 +195,9 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* SVG Visual Bars */}
-            <div className="h-56 flex items-end justify-between gap-4 pt-4 px-2 border-b border-[#27272A] relative">
+            <div className="h-56 flex items-end justify-between gap-6 pt-4 px-4 border-b border-[#27272A] relative">
               {(data?.revenueChart || []).map((point, index) => {
-                const heightPercent = Math.max(Math.round((Number(point.revenue) / maxChartRevenue) * 100), 12);
+                const heightPercent = Math.max(Math.round((Number(point.revenue) / maxChartRevenue) * 100), 18);
                 const isHovered = hoveredPoint === index;
 
                 return (
@@ -215,14 +215,19 @@ export default function AdminDashboardPage() {
                       </div>
                     )}
 
-                    {/* Bar Column */}
-                    <div className="w-full max-w-[48px] bg-[#1C1C22] rounded-t-xl overflow-hidden flex flex-col justify-end p-1 transition-all">
+                    {/* Doanh thu hiển thị trên đầu cột */}
+                    <span className="text-[10px] font-mono text-gold/80 mb-1.5 font-medium group-hover:text-gold transition-colors">
+                      {formatVND(point.revenue).replace('₫', '').trim()}
+                    </span>
+
+                    {/* Bar Column Track với chiều cao cố định để % tính chuẩn xác */}
+                    <div className="w-full max-w-[64px] h-36 bg-[#16161A] border border-surface-border/60 rounded-t-xl overflow-hidden flex flex-col justify-end p-1.5 transition-all group-hover:border-gold/40">
                       <div
                         style={{ height: `${heightPercent}%` }}
-                        className={`w-full rounded-t-lg transition-all duration-500 ${
+                        className={`w-full rounded-t-lg transition-all duration-500 shadow-md ${
                           isHovered
-                            ? 'bg-gradient-to-t from-crimson to-gold shadow-lg shadow-gold/20'
-                            : 'bg-gradient-to-t from-[#781414] to-[#D4AF37]'
+                            ? 'bg-gradient-to-t from-crimson via-[#B91C1C] to-gold shadow-gold/30'
+                            : 'bg-gradient-to-t from-[#8B1D1D] to-[#E5C158]'
                         }`}
                       />
                     </div>
@@ -236,8 +241,8 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* Cơ Cấu Thanh Toán (VietQR vs Tiền Mặt) */}
-          <div className="p-6 rounded-2xl bg-surface-card border border-surface-border shadow-lg flex flex-col justify-between">
+          {/* Cơ Cấu Thanh Toán (VietQR vs Tiền Mặt) - Chiếm 1 cột khớp ô Tỷ Lệ Lấp Đầy */}
+          <div className="col-span-1 p-6 rounded-2xl bg-surface-card border border-surface-border shadow-lg flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-semibold text-sm text-[#EDEDED] flex items-center gap-2">
