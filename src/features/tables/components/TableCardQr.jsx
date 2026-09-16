@@ -10,7 +10,8 @@ import {
   Smartphone,
   ShieldAlert,
   Eye,
-  Sparkles
+  Sparkles,
+  ExternalLink
 } from 'lucide-react';
 import logoImg from '@/assets/images/logo.png';
 
@@ -114,28 +115,44 @@ export default function TableCardQr({
 
         {/* 2. Body: QR Code & Mã PIN 4 Số Nổi Bật */}
         <div className="flex items-center gap-4 my-3 p-3 rounded-xl bg-[#121214] border border-[#27272A]/80">
-          {/* QR Code thumbnail (Click để xem to / in) */}
-          <div
-            onClick={() => onOpenPrintModal(table)}
-            className="relative p-2 bg-white rounded-lg cursor-pointer hover:scale-105 transition-transform shadow-md group/qr flex-shrink-0"
-            title="Click để phóng to hoặc in tem QR để bàn"
-          >
-            <QRCodeSVG
-              value={qrUrl}
-              size={64}
-              level="M"
-              imageSettings={{
-                src: logoImg,
-                x: undefined,
-                y: undefined,
-                height: 14,
-                width: 14,
-                excavate: true,
-              }}
-            />
-            <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover/qr:opacity-100 flex items-center justify-center transition-opacity text-white">
-              <Eye className="w-4 h-4 text-gold" />
+          {/* QR Code thumbnail (Click để xem to / in) & Link Quét Thử */}
+          <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+            <div
+              onClick={() => onOpenPrintModal(table)}
+              className="relative p-2 bg-white rounded-lg cursor-pointer hover:scale-105 transition-transform shadow-md group/qr"
+              title="Click để phóng to hoặc in tem QR để bàn"
+            >
+              <QRCodeSVG
+                value={qrUrl}
+                size={64}
+                level="M"
+                imageSettings={{
+                  src: logoImg,
+                  x: undefined,
+                  y: undefined,
+                  height: 14,
+                  width: 14,
+                  excavate: true,
+                }}
+              />
+              <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover/qr:opacity-100 flex items-center justify-center transition-opacity text-white">
+                <Eye className="w-4 h-4 text-gold" />
+              </div>
             </div>
+
+            {/* Quick click to test link directly */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(qrUrl, '_blank');
+              }}
+              className="text-[10px] text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-0.5 cursor-pointer"
+              title={`Mở link khách quét bàn ${table.tableNumber}: ${qrUrl}`}
+            >
+              <ExternalLink className="w-2.5 h-2.5" />
+              <span>Quét thử</span>
+            </button>
           </div>
 
           {/* Mã PIN 4 số của bàn */}
@@ -192,7 +209,7 @@ export default function TableCardQr({
         <select
           value={table.status}
           onChange={(e) => onUpdateStatus(table.id, e.target.value)}
-          className="bg-[#121214] border border-[#3F3F46] text-[#EDEDED] text-xs rounded-lg px-2.5 py-1.5 outline-none focus:border-gold cursor-pointer"
+          className="bg-[#121214] border border-[#3F3F46] text-[#EDEDED] text-xs rounded-lg px-2 py-1.5 outline-none focus:border-gold cursor-pointer"
         >
           <option value="AVAILABLE">Trống (Sẵn sàng)</option>
           <option value="OCCUPIED">Có Khách</option>
@@ -213,10 +230,23 @@ export default function TableCardQr({
             {table.isOrderLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
           </button>
 
+          {/* Nút Debug Mở Link Quét Khách Hàng */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(qrUrl, '_blank');
+            }}
+            className="px-2 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-xs font-medium text-blue-300 hover:text-blue-200 flex items-center gap-1 transition-all shadow-sm group/btn"
+            title={`Mở link debug quét vào bàn này: ${qrUrl}`}
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-blue-400 group-hover/btn:scale-110 transition-transform" />
+            <span>Debug Link</span>
+          </button>
+
           {/* Nút In Tem QR */}
           <button
             onClick={() => onOpenPrintModal(table)}
-            className="px-2.5 py-1.5 rounded-lg bg-surface-hover hover:bg-surface-elevated border border-surface-border hover:border-gold/40 text-xs font-medium text-[#EDEDED] flex items-center gap-1.5 transition-all"
+            className="px-2 py-1.5 rounded-lg bg-surface-hover hover:bg-surface-elevated border border-surface-border hover:border-gold/40 text-xs font-medium text-[#EDEDED] flex items-center gap-1 transition-all"
             title="In tem QR để bàn"
           >
             <Printer className="w-3.5 h-3.5 text-gold" />
