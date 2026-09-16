@@ -19,12 +19,32 @@ import {
   saveEmployeesToStorage,
   generateEmployeePassword,
 } from '@/features/employee';
+import { apiClient } from '@/lib/axios';
 
 export default function AdminEmployeeManagePage() {
-  const [employees, setEmployees] = useState(loadEmployeesFromStorage);
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedRole, setSelectedRole] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'locked'
+
+  const fetchEmployees = async () => {
+    try {
+      setLoading(true);
+      const data = await apiClient.get('/employees');
+      if (Array.isArray(data)) {
+        setEmployees(data);
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải danh sách nhân viên:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
 
   // Modal State
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
@@ -44,10 +64,7 @@ export default function AdminEmployeeManagePage() {
     }, 3200);
   };
 
-  // Tự động lưu vào localStorage mỗi khi danh sách thay đổi
-  useEffect(() => {
-    saveEmployeesToStorage(employees);
-  }, [employees]);
+
 
   // Thống kê tổng quan cho AdminEmployeeHeader
   const stats = useMemo(() => {
@@ -109,24 +126,10 @@ export default function AdminEmployeeManagePage() {
 
   // Lưu tài khoản (Tạo mới hoặc Sửa)
   const handleSaveAccount = (accountData) => {
+    fetchEmployees();
     if (editingEmployee) {
-      // Cập nhật
-      setEmployees((prev) =>
-        prev.map((item) => (item.id === editingEmployee.id ? { ...item, ...accountData } : item))
-      );
       showToast(`Đã cập nhật thông tin tài khoản ${accountData.fullName}!`);
     } else {
-      // Tạo mới
-      const newId = `emp-${Date.now().toString().slice(-4)}`;
-      const newCode = `NV-${(employees.length + 1).toString().padStart(2, '0')}`;
-      const newEmp = {
-        id: newId,
-        code: newCode,
-        createdAt: new Date().toISOString(),
-        lastLoginAt: null,
-        ...accountData,
-      };
-      setEmployees((prev) => [newEmp, ...prev]);
       showToast(`Đã tạo tài khoản nhân viên ${accountData.fullName} thành công!`);
     }
   };

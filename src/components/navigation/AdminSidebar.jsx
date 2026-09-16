@@ -2,56 +2,62 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import logoImg from '../../assets/images/logo.png';
 import DbConnectionCheckButton from '../feedback/DbConnectionCheckButton';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 const LOGO_URL = logoImg;
 
 export default function AdminSidebar() {
   const navigate = useNavigate();
-  const [currentUser, setCurrentUser] = useState({
-    fullName: 'Trần Gia Hưng',
-    roleName: 'Quản lý ca tối',
-    initials: 'TH',
-  });
+  const authUser = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
 
-  useEffect(() => {
-    const loadUser = () => {
-      try {
-        const stored = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          const nameParts = (parsed.fullName || parsed.username || 'Admin').trim().split(' ');
-          const initials = nameParts.length >= 2 
-            ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
-            : (parsed.username || 'AD').substring(0, 2).toUpperCase();
+  // Fallback if authUser not yet loaded from store
+  const effectiveUser = authUser || (() => {
+    try {
+      const stored = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  })();
 
-          setCurrentUser({
-            fullName: parsed.fullName || parsed.username,
-            roleName: parsed.roleName || parsed.role || 'Quản trị viên',
-            initials,
-          });
-        }
-      } catch {
-        // Ignore
-      }
-    };
+  const rawRole = (effectiveUser?.role || 'STAFF').replace(/^ROLE_/, '');
+  const isAdmin = rawRole === 'ADMIN';
 
-    loadUser();
-    window.addEventListener('currentUserUpdated', loadUser);
-    return () => window.removeEventListener('currentUserUpdated', loadUser);
-  }, []);
+  // Lấy danh sách quyền hạn
+  const permissions = effectiveUser?.permissions || (
+    isAdmin ? ['TABLES', 'MENU', 'EMPLOYEES', 'PROFILE', 'TABLES_QR', 'INVOICES', 'DASHBOARD'] :
+    rawRole === 'MANAGER' ? ['TABLES', 'MENU'] :
+    rawRole === 'KITCHEN' ? ['MENU'] :
+    ['TABLES']
+  );
+
+  const fullName = effectiveUser?.fullName || effectiveUser?.username || 'Nhân Viên';
+  const nameParts = fullName.trim().split(' ');
+  const initials = nameParts.length >= 2
+    ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+    : (effectiveUser?.username || 'NV').substring(0, 2).toUpperCase();
+
+  const roleName = isAdmin ? 'Quản Trị Viên' :
+    rawRole === 'MANAGER' ? 'Quản Lý Ca' :
+    rawRole === 'KITCHEN' ? 'Bếp / Pha Chế' :
+    rawRole === 'STAFF' ? 'Phục Vụ Bàn' : (effectiveUser?.role || 'Nhân Viên');
 
   const handleLogout = () => {
+    logout();
     try {
-      sessionStorage.removeItem('currentUser');
-    } catch {
-      // Ignore
-    }
+      sessionStorage.clear();
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('hoadiemcat_auth');
+    } catch {}
     navigate('/login');
   };
-  const navItems = [
+
+  const allNavItems = [
     {
       to: '/admin',
       label: 'Sơ Đồ Bàn Ăn',
+      permission: 'TABLES',
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <rect height="7" rx="1.5" width="7" x="3" y="3"></rect>
@@ -64,6 +70,7 @@ export default function AdminSidebar() {
     {
       to: '/admin/menu',
       label: 'Quản Lý Thực Đơn',
+      permission: 'MENU',
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"></path>
@@ -75,6 +82,8 @@ export default function AdminSidebar() {
     {
       to: '/admin/employees',
       label: 'Quản Lý Nhân Viên',
+      permission: 'EMPLOYEES',
+      adminOnly: true,
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
@@ -87,6 +96,8 @@ export default function AdminSidebar() {
     {
       to: '/admin/profile',
       label: 'Hồ Sơ Cá Nhân',
+      permission: 'PROFILE',
+      adminOnly: true,
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
@@ -97,6 +108,8 @@ export default function AdminSidebar() {
     {
       to: '/admin/tables-qr',
       label: 'Quản Lý Bàn & QR',
+      permission: 'TABLES_QR',
+      adminOnly: true,
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <rect height="5" rx="1" width="5" x="3" y="3"></rect>
@@ -117,6 +130,8 @@ export default function AdminSidebar() {
     {
       to: '/admin/invoices',
       label: 'Lịch Sử Hóa Đơn',
+      permission: 'INVOICES',
+      adminOnly: true,
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path>
@@ -129,6 +144,8 @@ export default function AdminSidebar() {
     {
       to: '/admin/dashboard',
       label: 'Báo Cáo Doanh Thu',
+      permission: 'DASHBOARD',
+      adminOnly: true,
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <line x1="12" x2="12" y1="20" y2="10"></line>
@@ -138,6 +155,12 @@ export default function AdminSidebar() {
       ),
     },
   ];
+
+  const navItems = allNavItems.filter((item) => {
+    if (isAdmin) return true;
+    if (item.adminOnly) return false;
+    return permissions.includes(item.permission);
+  });
 
   return (
     <aside className="w-[220px] flex-shrink-0 bg-[#121214] border-r border-surface-border flex flex-col justify-between z-20 h-screen select-none">
@@ -191,11 +214,11 @@ export default function AdminSidebar() {
         >
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="w-7 h-7 rounded-full bg-gold/20 border border-gold/40 flex items-center justify-center text-gold font-bold text-xs flex-shrink-0 group-hover:scale-105 transition-transform">
-              {currentUser.initials}
+              {initials}
             </div>
             <div className="overflow-hidden">
-              <p className="text-xs font-medium text-[#EDEDED] group-hover:text-gold transition-colors truncate">{currentUser.fullName}</p>
-              <p className="text-[10px] text-[#8E8E93] truncate">{currentUser.roleName}</p>
+              <p className="text-xs font-medium text-[#EDEDED] group-hover:text-gold transition-colors truncate">{fullName}</p>
+              <p className="text-[10px] text-[#8E8E93] truncate">{roleName}</p>
             </div>
           </div>
           <button

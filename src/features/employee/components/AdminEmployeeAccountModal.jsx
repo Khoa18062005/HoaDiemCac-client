@@ -27,6 +27,8 @@ import {
   ROLE_PERMISSION_PRESETS,
   generateEmployeePassword
 } from '../data/mockEmployees';
+import { apiClient } from '@/lib/axios';
+import { Loader2 } from 'lucide-react';
 
 const ICON_MAP = {
   LayoutGrid: LayoutGrid,
@@ -47,13 +49,14 @@ export default function AdminEmployeeAccountModal({
   const isEditing = Boolean(initialData);
 
   // Form State
+  const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('Phục Vụ Bàn');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState('ACTIVE');
-  const [selectedPermissions, setSelectedPermissions] = useState(['TABLES', 'KDS_ORDERS']);
+  const [selectedPermissions, setSelectedPermissions] = useState(['TABLES']);
 
   // UI state
   const [showPassword, setShowPassword] = useState(true);
@@ -81,7 +84,7 @@ export default function AdminEmployeeAccountModal({
         setRole('Phục Vụ Bàn');
         setPassword(autoPass);
         setStatus('ACTIVE');
-        setSelectedPermissions(['TABLES', 'KDS_ORDERS']);
+        setSelectedPermissions(['TABLES']);
       }
       setCopied(false);
       setPasswordGenSuccess(false);
@@ -90,6 +93,28 @@ export default function AdminEmployeeAccountModal({
   }, [isOpen, initialData]);
 
   if (!isOpen) return null;
+
+  // Tính toán sức mạnh mật khẩu
+  const has8Chars = password.length >= 8;
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+  const hasLetter = /[a-zA-Z]/.test(password);
+
+  const pwdCriteria = [
+    { id: '8_chars', label: 'Ít nhất 8 ký tự', met: has8Chars },
+    { id: 'letter', label: 'chữ cái', met: hasLetter },
+    { id: 'number', label: 'chữ số', met: hasNumber },
+    { id: 'uppercase', label: 'ký tự hoa', met: hasUpperCase },
+    { id: 'special', label: 'ký tự đặc biệt', met: hasSpecialChar },
+  ];
+
+  const strengthScore = pwdCriteria.filter((c) => c.met).length;
+  const strengthPercent = (strengthScore / pwdCriteria.length) * 100;
+  
+  let strengthColor = 'bg-red-500';
+  if (strengthScore >= 3) strengthColor = 'bg-yellow-500';
+  if (strengthScore === 5) strengthColor = 'bg-green-500';
 
   // Xử lý sinh mật khẩu tự động 6 ký tự
   const handleGeneratePassword = () => {
@@ -140,7 +165,7 @@ export default function AdminEmployeeAccountModal({
   };
 
   // Submit form tạo / sửa tài khoản
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -183,8 +208,19 @@ export default function AdminEmployeeAccountModal({
       updatedAt: new Date().toISOString(),
     };
 
-    onSave(payload);
-    onClose();
+    setIsLoading(true);
+    setErrorMessage('');
+
+    try {
+      const result = await apiClient.post('/employees', payload);
+      onSave(payload);
+      onClose();
+    } catch (error) {
+      console.error('Lỗi khi tạo nhân viên:', error);
+      setErrorMessage(error.message || 'Đã xảy ra lỗi khi tạo nhân viên. Vui lòng thử lại sau.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -192,17 +228,14 @@ export default function AdminEmployeeAccountModal({
       <div className="relative bg-[#131317] border border-gold/30 rounded-2xl w-full max-w-6xl shadow-[0_25px_70px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col my-auto max-h-[95vh]">
         
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-surface-border bg-[#18181D] flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-crimson/20 border border-crimson/40 flex items-center justify-center text-crimson-glow shadow-sm">
-              <ShieldCheck className="w-5 h-5" />
+        <div className="px-6 py-3 border-b border-surface-border bg-[#18181D] flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-crimson/20 border border-crimson/40 flex items-center justify-center text-crimson-glow shadow-sm">
+              <ShieldCheck className="w-4 h-4" />
             </div>
             <div>
               <h3 className="text-base font-bold text-white font-sans tracking-wide flex items-center gap-2">
-                {isEditing ? 'Chỉnh Sửa Tài Khoản Nhân Viên' : 'Bảng Tạo Tài Khoản Nhân Viên'}
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-gold/15 text-gold border border-gold/30 font-sans font-medium">
-                  {isEditing ? 'Cập nhật' : 'Tạo mới'}
-                </span>
+                {isEditing ? 'Chỉnh sửa tài khoản nhân viên' : 'Tạo tài khoản nhân viên'}
               </h3>
             </div>
           </div>
@@ -225,13 +258,13 @@ export default function AdminEmployeeAccountModal({
         )}
 
         {/* Modal Body: 2 Cột Rõ Ràng */}
-        <div className="p-5 sm:p-6 overflow-y-auto flex-1 custom-scrollbar">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="p-4 sm:p-5 overflow-y-auto flex-1 custom-scrollbar">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
 
             {/* ========================================================================= */}
             {/* CỘT BÊN TRÁI: DANH SÁCH CÁC CHỨC NĂNG ĐỂ ADMIN PHÂN QUYỀN CHO NHÂN VIÊN  */}
             {/* ========================================================================= */}
-            <div className="lg:col-span-7 bg-[#16161B] border border-surface-border rounded-xl p-4 sm:p-5 flex flex-col space-y-4">
+            <div className="lg:col-span-7 bg-[#16161B] border border-surface-border rounded-xl p-4 sm:p-5 flex flex-col space-y-4 h-full">
               
               {/* Tiêu đề cột trái */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-surface-border">
@@ -240,9 +273,6 @@ export default function AdminEmployeeAccountModal({
                     <Shield className="w-4 h-4 text-gold" />
                     Phân Quyền Chức Năng Hệ Thống
                   </h4>
-                  <p className="text-[11px] text-[#8E8E93] mt-0.5">
-                    Tích chọn các tính năng nhân viên được phép xem và thao tác
-                  </p>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -283,7 +313,7 @@ export default function AdminEmployeeAccountModal({
               </div>
 
               {/* Danh sách các chức năng (Permissions Checkboxes) */}
-              <div className="space-y-2 pt-1 max-h-[360px] overflow-y-auto pr-4 custom-scrollbar">
+              <div className="space-y-2 pt-1 overflow-y-auto pr-4 custom-scrollbar flex-1">
                 {SYSTEM_PERMISSIONS.map((perm) => {
                   const isChecked = selectedPermissions.includes(perm.id);
                   const IconComp = ICON_MAP[perm.icon] || ShieldCheck;
@@ -292,14 +322,14 @@ export default function AdminEmployeeAccountModal({
                     <div
                       key={perm.id}
                       onClick={() => togglePermission(perm.id)}
-                      className={`group p-3 rounded-xl border transition-all cursor-pointer select-none flex items-start gap-3.5 ${
+                      className={`group p-3 rounded-xl border transition-all cursor-pointer select-none flex items-center gap-3.5 ${
                         isChecked
                           ? 'bg-[#1C1A17] border-gold/40 shadow-[0_0_12px_rgba(212,175,55,0.08)]'
                           : 'bg-[#141418] border-surface-border hover:border-[#3A3A42] opacity-75 hover:opacity-100'
                       }`}
                     >
                       {/* Checkbox vuông phong cách hoàng gia */}
-                      <div className="pt-0.5 flex-shrink-0">
+                      <div className="flex-shrink-0">
                         <div
                           className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
                             isChecked
@@ -332,9 +362,6 @@ export default function AdminEmployeeAccountModal({
                           >
                             {perm.label}
                           </span>
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-black/40 text-[#8E8E93] border border-surface-border">
-                            {perm.category}
-                          </span>
                         </div>
                         <p className="text-[11px] text-[#8E8E93] leading-relaxed line-clamp-2">
                           {perm.description}
@@ -346,7 +373,7 @@ export default function AdminEmployeeAccountModal({
               </div>
 
               {/* Chân cột trái: Tổng số quyền đã cấp */}
-              <div className="pt-2 border-t border-surface-border flex items-center justify-between text-xs text-[#8E8E93]">
+              <div className="pt-4 border-t border-surface-border flex items-center justify-between text-xs text-[#8E8E93]">
                 <span>Tổng quyền hệ thống:</span>
                 <span className="font-bold text-gold">
                   Đã cấp {selectedPermissions.length} / {SYSTEM_PERMISSIONS.length} chức năng
@@ -357,26 +384,22 @@ export default function AdminEmployeeAccountModal({
             {/* ========================================================================= */}
             {/* CỘT BÊN PHẢI: FORM THÔNG TIN TÀI KHOẢN, MẬT KHẨU TỰ ĐỘNG, NÚT TẠO        */}
             {/* ========================================================================= */}
-            <div className="lg:col-span-5 bg-[#16161B] border border-surface-border rounded-xl p-4 sm:p-5 flex flex-col space-y-4">
+            <div className="lg:col-span-5 bg-[#16161B] border border-surface-border rounded-xl p-4 sm:p-5 flex flex-col space-y-4 h-full">
               
-              <div className="pb-2 border-b border-surface-border">
-                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                  <User className="w-4 h-4 text-crimson-glow" />
-                  Thông Tin Tài Khoản Nhân Viên
-                </h4>
-                <p className="text-[11px] text-[#8E8E93] mt-0.5">
-                  Tài khoản được ban quản lý cấp phát để đăng nhập hệ thống
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-surface-border">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <User className="w-4 h-4 text-crimson-glow" />
+                    Thông Tin Tài Khoản Nhân Viên
+                  </h4>
+                </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4 flex flex-col flex-1">
                 {/* 1. Email nhân viên (Yêu cầu bắt buộc) */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#D1D1D6] mb-1.5 flex items-center justify-between">
-                    <span>
-                      Email nhân viên <span className="text-crimson-glow">*</span>
-                    </span>
-                    <span className="text-[10px] text-[#8E8E93] font-normal">Dùng làm tài khoản đăng nhập</span>
+                  <label className="block text-xs font-semibold text-[#D1D1D6] mb-1.5">
+                    Email nhân viên <span className="text-crimson-glow">*</span>
                   </label>
                   <div className="relative group">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#7A7A84] group-focus-within:text-gold transition-colors">
@@ -386,7 +409,7 @@ export default function AdminEmployeeAccountModal({
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="ví dụ: hung.tran@hoadiemcac.vn"
+                      placeholder="hung.tran@hoadiemcac.vn"
                       className="input-imperial w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#0D0D11] border border-surface-border text-xs text-[#EDEDED] placeholder-[#5A5A62] outline-none"
                       required
                     />
@@ -406,7 +429,7 @@ export default function AdminEmployeeAccountModal({
                       type="text"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Nhập họ và tên đầy đủ..."
+                      placeholder="Tiếng Việt có dấu và khoảng cách"
                       className="input-imperial w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#0D0D11] border border-surface-border text-xs text-[#EDEDED] placeholder-[#5A5A62] outline-none"
                       required
                     />
@@ -426,9 +449,9 @@ export default function AdminEmployeeAccountModal({
                       <input
                         type="text"
                         value={role}
-                        onChange={(e) => setRole(e.target.value)}
+                        readOnly
                         placeholder="VD: Phục Vụ Bàn"
-                        className="input-imperial w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#0D0D11] border border-surface-border text-xs text-[#EDEDED] placeholder-[#5A5A62] outline-none"
+                        className="input-imperial w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#0D0D11] border border-surface-border text-xs text-[#EDEDED] placeholder-[#5A5A62] outline-none cursor-not-allowed opacity-80"
                       />
                     </div>
                   </div>
@@ -460,13 +483,8 @@ export default function AdminEmployeeAccountModal({
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-xs font-semibold text-gold flex items-center gap-1.5">
                       <KeyRound className="w-3.5 h-3.5" />
-                      Mật khẩu tự động <span className="text-crimson-glow">*</span>
+                      Tạo mật khẩu <span className="text-crimson-glow">*</span>
                     </label>
-
-                    {/* Badge quy chuẩn mật khẩu */}
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gold/15 text-gold border border-gold/30">
-                      Đúng 6 ký tự
-                    </span>
                   </div>
 
                   {/* Input mật khẩu kèm nút Sao chép & Xem/Ẩn */}
@@ -475,7 +493,7 @@ export default function AdminEmployeeAccountModal({
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Mật khẩu tạo tự động..."
+                      placeholder="tối thiểu 8 ký tự"
                       className="w-full pl-3 pr-20 py-2 rounded-lg bg-[#08080B] border border-gold/40 text-sm font-mono tracking-wider text-white font-bold outline-none focus:border-gold focus:ring-1 focus:ring-gold"
                     />
 
@@ -512,21 +530,31 @@ export default function AdminEmployeeAccountModal({
                     onClick={handleGeneratePassword}
                     className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-gold/20 via-gold/30 to-gold/20 hover:from-gold/30 hover:to-gold/40 border border-gold/50 text-gold hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.99]"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-gold animate-pulse" />
-                    <span>Tạo Mật Khẩu Tự Động (6 ký tự ngẫu nhiên)</span>
+                    <span>Tạo Mật Khẩu Tự Động</span>
                   </button>
 
-                  {/* Chú thích định dạng mật khẩu */}
-                  <div className="mt-2 text-[10px] text-[#8E8E93] flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3 h-3 text-jade flex-shrink-0" />
-                    <span>Gồm chữ hoa đầu, chữ thường, chữ số &amp; ký tự đặc biệt (!@#$%)</span>
+                  {/* Thanh sức mạnh mật khẩu */}
+                  <div className="mt-3">
+                    <div className="h-1 w-full bg-[#1A1A24] rounded-full overflow-hidden mb-2">
+                      <div 
+                        className={`h-full transition-all duration-300 ${strengthColor}`} 
+                        style={{ width: `${strengthPercent}%` }}
+                      ></div>
+                    </div>
+                    
+                    <div className="flex flex-wrap justify-between gap-y-1.5 text-[10px]">
+                      {pwdCriteria.map((crit) => (
+                        <div key={crit.id} className={`flex items-center gap-1 ${crit.met ? 'text-jade' : 'text-[#5A5A62]'}`}>
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span className="font-medium">
+                            {crit.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
-                  {passwordGenSuccess && (
-                    <div className="mt-1.5 text-[10px] text-jade font-medium animate-fadeIn">
-                      ✓ Đã tạo mới mật khẩu 6 ký tự đạt chuẩn!
-                    </div>
-                  )}
+
 
                   {copied && (
                     <div className="mt-1.5 text-[10px] text-jade font-medium animate-fadeIn">
@@ -535,30 +563,10 @@ export default function AdminEmployeeAccountModal({
                   )}
                 </div>
 
-                {/* 5. Trạng thái tài khoản */}
-                <div className="flex items-center justify-between p-3 rounded-xl bg-[#111116] border border-surface-border">
-                  <div>
-                    <span className="text-xs font-semibold text-white block">Trạng thái tài khoản</span>
-                    <span className="text-[11px] text-[#8E8E93]">Cho phép nhân viên đăng nhập hệ thống</span>
-                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setStatus((prev) => (prev === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      status === 'ACTIVE' ? 'bg-jade' : 'bg-[#2A2A32]'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        status === 'ACTIVE' ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
 
                 {/* Nút hành động */}
-                <div className="pt-2 flex items-center gap-3">
+                <div className="pt-4 flex items-center gap-3 mt-auto">
                   <button
                     type="button"
                     onClick={onClose}
@@ -570,10 +578,20 @@ export default function AdminEmployeeAccountModal({
                   {/* NÚT TẠO TÀI KHOẢN */}
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#990000] via-[#C41E3A] to-[#B22222] hover:brightness-110 text-white text-xs font-bold uppercase tracking-wider shadow-[0_4px_15px_rgba(196,30,58,0.4)] transition-all active:scale-[0.98] border border-gold/30 flex items-center justify-center gap-1.5"
+                    disabled={isLoading}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#990000] via-[#C41E3A] to-[#B22222] hover:brightness-110 text-white text-xs font-bold uppercase tracking-wider shadow-[0_4px_15px_rgba(196,30,58,0.4)] transition-all active:scale-[0.98] border border-gold/30 flex items-center justify-center gap-1.5 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>{isEditing ? 'Lưu Thông Tin' : 'Tạo Tài Khoản'}</span>
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Đang xử lý...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>{isEditing ? 'Lưu Thông Tin' : 'Tạo Tài Khoản'}</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

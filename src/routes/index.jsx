@@ -9,6 +9,29 @@ import CustomerLayout from '@/layouts/CustomerLayout';
 import MenuPage from '@/pages/customer/MenuPage';
 import LoginPage from '@/pages/auth/LoginPage';
 
+import useAuthStore from '@/stores/useAuthStore';
+
+function PermissionRoute({ permission, adminOnly = false, children }) {
+  const user = useAuthStore((state) => state.user);
+  const rawRole = (user?.role || 'STAFF').replace(/^ROLE_/, '');
+  const isAdmin = rawRole === 'ADMIN';
+
+  if (isAdmin) return children;
+  if (adminOnly) return <Navigate to="/admin" replace />;
+
+  const permissions = user?.permissions || (
+    rawRole === 'MANAGER' ? ['TABLES', 'MENU'] :
+    rawRole === 'KITCHEN' ? ['MENU'] :
+    ['TABLES']
+  );
+
+  if (permission && !permissions.includes(permission)) {
+    return <Navigate to="/admin" replace />;
+  }
+
+  return children;
+}
+
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -62,15 +85,27 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <TableManagePage />,
+        element: (
+          <PermissionRoute permission="TABLES">
+            <TableManagePage />
+          </PermissionRoute>
+        ),
       },
       {
         path: 'menu',
-        element: <MenuManagePage />,
+        element: (
+          <PermissionRoute permission="MENU">
+            <MenuManagePage />
+          </PermissionRoute>
+        ),
       },
       {
         path: 'employees',
-        element: <AdminEmployeeManagePage />,
+        element: (
+          <PermissionRoute adminOnly>
+            <AdminEmployeeManagePage />
+          </PermissionRoute>
+        ),
       },
       {
         path: 'profile',
@@ -83,25 +118,31 @@ export const router = createBrowserRouter([
       {
         path: 'tables-qr',
         element: (
-          <div className="p-8 text-center text-gold font-serif text-lg">
-            Trang Quản Lý Bàn & QR (Đang xây dựng)
-          </div>
+          <PermissionRoute adminOnly>
+            <div className="p-8 text-center text-gold font-serif text-lg">
+              Trang Quản Lý Bàn & QR (Đang xây dựng)
+            </div>
+          </PermissionRoute>
         ),
       },
       {
         path: 'invoices',
         element: (
-          <div className="p-8 text-center text-gold font-serif text-lg">
-            Trang Lịch Sử Hóa Đơn (Đang xây dựng)
-          </div>
+          <PermissionRoute adminOnly>
+            <div className="p-8 text-center text-gold font-serif text-lg">
+              Trang Lịch Sử Hóa Đơn (Đang xây dựng)
+            </div>
+          </PermissionRoute>
         ),
       },
       {
         path: 'dashboard',
         element: (
-          <div className="p-8 text-center text-gold font-serif text-lg">
-            Trang Báo Cáo Doanh Thu (Đang xây dựng)
-          </div>
+          <PermissionRoute adminOnly>
+            <div className="p-8 text-center text-gold font-serif text-lg">
+              Trang Báo Cáo Doanh Thu (Đang xây dựng)
+            </div>
+          </PermissionRoute>
         ),
       },
     ],
