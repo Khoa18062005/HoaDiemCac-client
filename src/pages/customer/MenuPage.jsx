@@ -496,10 +496,17 @@ export default function MenuPage() {
     );
   };
 
+  // Ref chống gửi trùng lặp đơn hàng (Double submit guard)
+  const isSubmittingOrder = useRef(false);
+
   // Xác nhận gửi bếp: Đẩy đơn vào Trạm Bếp KDS và đổi trạng thái món thành 'Đang chế biến'
   const handleSubmitOrder = async (orderData) => {
+    if (isSubmittingOrder.current) return;
+
     const itemsToSubmit = (orderData && orderData.items) ? orderData.items : cartItems;
     if (itemsToSubmit.length === 0) return;
+
+    isSubmittingOrder.current = true;
 
     // Chuẩn bị payload gửi lên Spring Boot / MySQL
     const payload = {
@@ -529,7 +536,6 @@ export default function MenuPage() {
 
       // 3. Làm rỗng giỏ hàng nháp
       setCartItems([]);
-      showToast(`🔔 Đã gửi ${itemsToSubmit.length} món vào bếp thành công! Bếp đang chế biến.`, 'success');
     } catch (err) {
       console.warn('Lỗi khi gửi order lên server, chuyển sang chế độ dự phòng cục bộ:', err);
       // Fallback: Nếu mạng gián đoạn, vẫn lưu cục bộ để không gián đoạn trải nghiệm
@@ -539,7 +545,10 @@ export default function MenuPage() {
         totalAmount: (orderData && orderData.totalAmount) || totalAmount,
       });
       setCartItems([]);
-      showToast(`🔔 Đã gửi ${itemsToSubmit.length} món vào bếp!`, 'success');
+    } finally {
+      setTimeout(() => {
+        isSubmittingOrder.current = false;
+      }, 1000);
     }
   };
 

@@ -61,7 +61,7 @@ export default function CustomerCartDrawer({
   };
 
   const handleConfirmSubmit = () => {
-    if (cartItems.length === 0) return;
+    if (cartItems.length === 0 || isSuccess) return;
     setIsSuccess(true);
 
     setTimeout(() => {
