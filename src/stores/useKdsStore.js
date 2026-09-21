@@ -573,6 +573,87 @@ export const useKdsStore = create((set, get) => ({
     return get().addNewOrder(newOrder);
   },
 
+  // 6.1 Nhận cập nhật trạng thái món từ WebSocket Server (Đa máy tính / Realtime)
+  applyRemoteItemStatusUpdate: ({ orderId, itemId, nextStatus, affectedTableCode }) => {
+    const currentOrders = get().orders;
+    let found = false;
+
+    const nextOrders = currentOrders.map((order) => {
+      const matchOrder =
+        (orderId && String(order.id) === String(orderId)) ||
+        (order.items && order.items.some((i) => String(i.id) === String(itemId))) ||
+        (affectedTableCode && normalizeTableCode(order.tableCode) === normalizeTableCode(affectedTableCode));
+
+      if (!matchOrder) return order;
+
+      const updatedItems = order.items.map((item) => {
+        if (String(item.id) === String(itemId)) {
+          found = true;
+          return {
+            ...item,
+            status: nextStatus,
+            servedAt: nextStatus === 'SERVED' ? (item.servedAt || new Date().toISOString()) : item.servedAt,
+            deliveredAt: nextStatus === 'DELIVERED' ? (item.deliveredAt || new Date().toISOString()) : item.deliveredAt,
+          };
+        }
+        return item;
+      });
+
+      return {
+        ...order,
+        items: updatedItems,
+      };
+    });
+
+    if (found) {
+      set({ orders: nextOrders });
+      saveOrdersToStorage(nextOrders);
+    }
+  },
+
+  // 6.2 Đồng bộ các đơn của một bàn cụ thể từ Server MySQL
+  syncTableOrders: (tableCode, serverOrders) => {
+    const norm = normalizeTableCode(tableCode);
+    const currentOrders = get().orders;
+    const otherOrders = currentOrders.filter((o) => normalizeTableCode(o.tableCode) !== norm);
+
+    const mappedServerOrders = (serverOrders || []).map((o) => {
+      const isVip = norm.startsWith('VIP');
+      return {
+        id: o.id,
+        orderCode: o.orderCode || `OD-${o.id}`,
+        tableCode: norm,
+        tableId: norm.toLowerCase().replace(/\s+/g, ''),
+        area: o.area || (isVip ? 'VIP' : 'COMMON'),
+        orderRound: o.roundNumber || o.orderRound || 1,
+        createdAt: o.createdAt || new Date().toISOString(),
+        status: o.status || 'COOKING',
+        priority: o.priority || 'NORMAL',
+        note: o.note || '',
+        totalAmount: o.totalAmount || 0,
+        items: (o.items || []).map((i) => ({
+          id: i.id,
+          menuItemId: i.menuItemId,
+          name: i.name,
+          price: i.price || 0,
+          quantity: i.quantity || 1,
+          note: i.note || '',
+          image: i.image || i.imageUrl || '',
+          status: i.status || 'COOKING',
+          orderedAt: o.createdAt
+            ? new Date(o.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+            : '',
+          servedAt: i.servedAt,
+          deliveredAt: i.deliveredAt,
+        })),
+      };
+    });
+
+    const nextOrders = [...otherOrders, ...mappedServerOrders];
+    set({ orders: nextOrders });
+    saveOrdersToStorage(nextOrders);
+  },
+
   // 7. Cập nhật danh sách orders từ bên ngoài (ví dụ API backend)
   setOrders: (orders) => {
     const validOrders = Array.isArray(orders) ? orders : [];

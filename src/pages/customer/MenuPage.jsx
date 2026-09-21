@@ -22,6 +22,7 @@ import {
 import { menuApi } from '@/features/menu';
 import { orderApi } from '@/features/customer/api/orderApi';
 import useKdsStore, { normalizeTableCode, playChimeSound } from '@/stores/useKdsStore';
+import { wsManager } from '@/lib/websocket';
 
 /**
  * MenuPage (Customer Responsive với ScrollSpy 2 chiều)
@@ -254,6 +255,47 @@ export default function MenuPage() {
 
   const currentNormTable = useMemo(() => normalizeTableCode(tableNumber), [tableNumber]);
 
+  // Đồng bộ đơn hàng từ Server MySQL & Lắng nghe WebSocket thời gian thực (Hỗ trợ đa máy tính)
+  useEffect(() => {
+    let isMounted = true;
+
+    // 1. Tải danh sách đơn từ Server MySQL
+    const syncTableOrders = async () => {
+      try {
+        const serverOrders = await orderApi.getTableOrders(currentNormTable);
+        if (isMounted && Array.isArray(serverOrders)) {
+          useKdsStore.getState().syncTableOrders(currentNormTable, serverOrders);
+        }
+      } catch (err) {
+        console.warn('Lỗi khi tải đơn hàng của bàn từ server:', err);
+      }
+    };
+
+    syncTableOrders();
+
+    // 2. Lắng nghe WebSocket qua kênh /topic/table/{tableNumber}/status
+    const dest = `/topic/table/${currentNormTable}/status`;
+    const unsubscribe = wsManager.subscribe(dest, (payload) => {
+      if (!payload) return;
+
+      if (payload.type === 'KITCHEN_ITEM_STATUS_TOGGLED' || payload.type === 'WAITER_ITEM_DELIVERED') {
+        useKdsStore.getState().applyRemoteItemStatusUpdate(payload);
+      } else if (payload.type === 'WAITER_ALL_ITEMS_DELIVERED') {
+        useKdsStore.getState().deliverAllReadyItems(payload.orderId);
+      } else {
+        syncTableOrders();
+      }
+    });
+
+    // 3. Polling dự phòng mỗi 4 giây (đảm bảo đồng bộ ngay cả khi WebSocket chập chờn trên mạng đa máy tính)
+    const interval = setInterval(syncTableOrders, 4000);
+
+    return () => {
+      isMounted = false;
+      if (unsubscribe) unsubscribe();
+      clearInterval(interval);
+    };
+  }, [currentNormTable]);
 
   // Danh sách toàn bộ các món đã gửi bếp của bàn (đồng bộ thời gian thực từ useKdsStore)
   const orderedItems = useMemo(() => {

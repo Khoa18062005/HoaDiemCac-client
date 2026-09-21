@@ -5,6 +5,7 @@ import {
 } from '@/features/waiter';
 import { waiterApi } from '@/features/waiter/api/waiterApi';
 import useKdsStore, { playChimeSound } from '@/stores/useKdsStore';
+import { wsManager } from '@/lib/websocket';
 import {
   CheckCircle,
 } from 'lucide-react';
@@ -17,18 +18,41 @@ export default function WaiterDisplayPage() {
   const simulateNewOrder = useKdsStore((state) => state.simulateNewOrder);
   const lastBroadcastEvent = useKdsStore((state) => state.lastBroadcastEvent);
 
-  // Luôn đồng bộ danh sách đơn hàng thực tế từ Backend khi mở màn hình phục vụ
+  // Luôn đồng bộ danh sách đơn hàng thực tế từ Backend khi mở màn hình phục vụ & lắng nghe WebSocket
   useEffect(() => {
-    waiterApi
-      .getWaiterOrders()
-      .then((queue) => {
-        if (Array.isArray(queue)) {
-          setOrders(queue);
-        }
-      })
-      .catch((err) => {
-        console.warn('Lỗi khi tải danh sách phục vụ từ backend:', err);
-      });
+    let isMounted = true;
+    const loadQueue = () => {
+      waiterApi
+        .getWaiterOrders()
+        .then((queue) => {
+          if (isMounted && Array.isArray(queue)) {
+            setOrders(queue);
+          }
+        })
+        .catch((err) => {
+          console.warn('Lỗi khi tải danh sách phục vụ từ backend:', err);
+        });
+    };
+
+    loadQueue();
+
+    // Lắng nghe WebSocket đa máy tính
+    const unsub = wsManager.subscribe('/topic/waiter/orders', (payload) => {
+      if (!payload) return;
+      if (payload.type === 'KITCHEN_ITEM_STATUS_TOGGLED' || payload.type === 'WAITER_ITEM_DELIVERED') {
+        useKdsStore.getState().applyRemoteItemStatusUpdate(payload);
+      } else {
+        loadQueue();
+      }
+    });
+
+    const interval = setInterval(loadQueue, 4000);
+
+    return () => {
+      isMounted = false;
+      if (unsub) unsub();
+      clearInterval(interval);
+    };
   }, [setOrders]);
 
   // Bộ lọc khu vực

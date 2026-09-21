@@ -19,18 +19,29 @@ export default function KitchenKdsPage() {
   const addNewOrder = useKdsStore((state) => state.addNewOrder);
   const simulateNewOrderStore = useKdsStore((state) => state.simulateNewOrder);
 
-  // Luôn đồng bộ hàng đợi thực tế từ Backend khi mở màn hình bếp
+  // Luôn đồng bộ hàng đợi thực tế từ Backend khi mở màn hình bếp & polling định kỳ
   useEffect(() => {
-    kitchenApi
-      .getKitchenQueue()
-      .then((queue) => {
-        if (Array.isArray(queue)) {
-          setOrders(queue);
-        }
-      })
-      .catch((err) => {
-        console.warn('Lỗi khi tải hàng đợi bếp từ backend:', err);
-      });
+    let isMounted = true;
+    const loadQueue = () => {
+      kitchenApi
+        .getKitchenQueue()
+        .then((queue) => {
+          if (isMounted && Array.isArray(queue)) {
+            setOrders(queue);
+          }
+        })
+        .catch((err) => {
+          console.warn('Lỗi khi tải hàng đợi bếp từ backend:', err);
+        });
+    };
+
+    loadQueue();
+    const interval = setInterval(loadQueue, 4000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [setOrders]);
 
   // 2. Quản lý bộ lọc & Chế độ xem
