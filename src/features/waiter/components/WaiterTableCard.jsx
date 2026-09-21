@@ -76,6 +76,10 @@ export default function WaiterTableCard({
   if (isAllDelivered) {
     cardBorderColor = 'border-jade/40 opacity-70';
     headerBgColor = 'bg-jade/10';
+  } else if (readyItemsCount > 0) {
+    cardBorderColor = 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.35)]';
+    headerBgColor = 'bg-emerald-950/40';
+    badgeColor = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50';
   } else if (isOverdue) {
     cardBorderColor = 'border-crimson animate-border-pulse-crimson';
     headerBgColor = 'bg-crimson/20';
@@ -105,6 +109,13 @@ export default function WaiterTableCard({
           >
             {order.tableCode}
           </span>
+
+          {/* Huy hiệu sáng đèn khi Bếp vừa xong món */}
+          {readyItemsCount > 0 && !isAllDelivered && (
+            <span className="bg-emerald-500 text-black text-[9.5px] font-black px-2 py-0.5 rounded-full animate-bounce shadow-sm">
+              ⚡ CHỜ BƯNG ({readyItemsCount})
+            </span>
+          )}
         </div>
 
         {/* Bộ đếm thời gian trôi qua (Elapsed Timer) */}

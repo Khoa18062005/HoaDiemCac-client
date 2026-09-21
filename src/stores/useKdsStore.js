@@ -10,6 +10,21 @@ const syncChannel = typeof window !== 'undefined' && 'BroadcastChannel' in windo
   : null;
 
 /**
+ * Chuẩn hóa mã bàn thành định dạng thống nhất: 'BÀN 08', 'VIP 12'
+ */
+export function normalizeTableCode(raw) {
+  if (!raw) return 'BÀN 01';
+  const str = String(raw).trim().toUpperCase();
+  if (str.startsWith('VIP')) {
+    const num = str.replace(/^VIP\s*/i, '');
+    return `VIP ${num}`;
+  }
+  const clean = str.replace(/^BÀN\s*/i, '').replace(/^B/i, '');
+  const num = clean.padStart(2, '0');
+  return `BÀN ${num}`;
+}
+
+/**
  * Âm thanh chuông báo Ting-ting hoàng gia nhẹ nhàng khi Bếp ra món
  */
 export function playChimeSound() {
@@ -272,12 +287,18 @@ export const useKdsStore = create((set, get) => ({
     return eventData;
   },
 
-  // 5. Thêm order mới
+  // 5. Thêm order mới (chuẩn hóa tableCode)
   addNewOrder: (newOrder) => {
     const currentOrders = get().orders;
+    const normTableCode = normalizeTableCode(newOrder.tableCode);
     const existingIndex = currentOrders.findIndex(
-      (o) => o.tableCode === newOrder.tableCode && o.status !== 'DELIVERED'
+      (o) => normalizeTableCode(o.tableCode) === normTableCode && o.status !== 'DELIVERED'
     );
+
+    const safeOrder = {
+      ...newOrder,
+      tableCode: normTableCode,
+    };
 
     let nextOrders;
     if (existingIndex !== -1) {
@@ -285,23 +306,126 @@ export const useKdsStore = create((set, get) => ({
       const existing = nextOrders[existingIndex];
       nextOrders[existingIndex] = {
         ...existing,
-        items: [...existing.items, ...newOrder.items],
+        items: [...existing.items, ...safeOrder.items],
         status: 'COOKING',
       };
     } else {
-      nextOrders = [...currentOrders, newOrder];
+      nextOrders = [...currentOrders, safeOrder];
     }
 
     const eventData = {
       type: 'NEW_ORDER_RECEIVED',
-      order: newOrder,
-      message: `🔔 Đơn mới từ ${newOrder.tableCode}!`,
+      order: safeOrder,
+      tableCode: normTableCode,
+      message: `🔔 ĐƠN MỚI TỪ ${normTableCode}!`,
     };
 
     set({ orders: nextOrders, lastBroadcastEvent: eventData });
     broadcastUpdate(nextOrders, eventData);
 
     return eventData;
+  },
+
+  // 5.1 Khách hàng tại bàn gửi order vào bếp (UC05)
+  submitCustomerOrder: ({ tableCode, items, note = '', totalAmount = 0 }) => {
+    const normTableCode = normalizeTableCode(tableCode);
+    const isVip = normTableCode.startsWith('VIP');
+    const tableId = normTableCode.toLowerCase().replace(/\s+/g, '');
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    const orderItems = items.map((item, idx) => ({
+      id: `oi-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+      menuItemId: item.id || item.menuItemId || `m-${idx}`,
+      name: item.name,
+      price: item.price || 0,
+      quantity: item.quantity || 1,
+      image: item.image || '',
+      note: item.note || '',
+      status: 'COOKING', // Trạng thái ban đầu: Đang chế biến
+      orderedAt: timeStr,
+      servedAt: null,
+      deliveredAt: null,
+    }));
+
+    const currentOrders = get().orders;
+    const existingIndex = currentOrders.findIndex(
+      (o) => normalizeTableCode(o.tableCode) === normTableCode && o.status !== 'DELIVERED'
+    );
+
+    let nextOrders;
+    let targetOrderId = '';
+    let orderRound = 1;
+
+    if (existingIndex !== -1) {
+      nextOrders = [...currentOrders];
+      const existing = nextOrders[existingIndex];
+      targetOrderId = existing.id;
+      orderRound = (existing.orderRound || 1) + 1;
+      nextOrders[existingIndex] = {
+        ...existing,
+        orderRound,
+        items: [...existing.items, ...orderItems],
+        status: 'COOKING',
+        totalAmount: (existing.totalAmount || 0) + totalAmount,
+      };
+    } else {
+      targetOrderId = `ord-${Date.now()}`;
+      const newOrder = {
+        id: targetOrderId,
+        orderCode: `OD-${Math.floor(10000 + Math.random() * 90000)}`,
+        tableCode: normTableCode,
+        tableId,
+        area: isVip ? 'VIP' : 'COMMON',
+        orderRound: 1,
+        createdAt: now.toISOString(),
+        status: 'COOKING',
+        priority: 'NORMAL',
+        note,
+        totalAmount,
+        items: orderItems,
+      };
+      nextOrders = [...currentOrders, newOrder];
+    }
+
+    const eventData = {
+      type: 'NEW_ORDER_RECEIVED',
+      orderId: targetOrderId,
+      tableCode: normTableCode,
+      itemCount: orderItems.length,
+      items: orderItems,
+      message: `🔔 ĐƠN MỚI TỪ ${normTableCode}! (${orderItems.length} món)`,
+    };
+
+    set({ orders: nextOrders, lastBroadcastEvent: eventData });
+    broadcastUpdate(nextOrders, eventData);
+
+    return { orderId: targetOrderId, items: orderItems, eventData };
+  },
+
+  // 5.2 Lấy toàn bộ món đã đặt của một bàn cụ thể
+  getTableOrderedItems: (rawTableCode) => {
+    const norm = normalizeTableCode(rawTableCode);
+    const tableOrders = get().orders.filter(
+      (o) => normalizeTableCode(o.tableCode) === norm
+    );
+    const allItems = [];
+    tableOrders.forEach((order) => {
+      if (Array.isArray(order.items)) {
+        order.items.forEach((item) => {
+          allItems.push({
+            ...item,
+            entryId: item.id,
+            dishId: item.menuItemId || item.id,
+            orderId: order.id,
+            orderCode: order.orderCode,
+            tableCode: order.tableCode,
+            orderedAt: item.orderedAt || (order.createdAt ? new Date(order.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''),
+          });
+        });
+      }
+    });
+    return allItems;
   },
 
   // 6. Giả lập đơn mới

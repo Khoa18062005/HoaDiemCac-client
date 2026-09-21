@@ -373,15 +373,15 @@ export default function CustomerCartDrawer({
                           </div>
 
                           {/* Status Badge */}
-                          {item.status === 'served' ? (
-                            <span className="bg-[#0A2E1D] text-[#59DE9B] border border-[#007448]/60 px-1.5 py-0.2 rounded-full font-bold text-[9px] flex items-center gap-1">
+                          {item.status === 'served' || item.status === 'SERVED' || item.status === 'DELIVERED' || item.status === 'delivered' ? (
+                            <span className="bg-[#0A2E1D] text-[#59DE9B] border border-[#007448]/60 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#59DE9B]" />
-                              Đã lên bàn
+                              Đã phục vụ
                             </span>
                           ) : (
-                            <span className="bg-[#2A1508] text-[#FFB74D] border border-[#FF9800]/40 px-1.5 py-0.2 rounded-full font-bold text-[9px] flex items-center gap-1">
+                            <span className="bg-[#2A1508] text-[#FFB74D] border border-[#FF9800]/50 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#FFB74D] animate-pulse" />
-                              Bếp đang nấu
+                              Đang chế biến
                             </span>
                           )}
                         </div>
