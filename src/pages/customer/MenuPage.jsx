@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Loader2, Utensils } from 'lucide-react';
+import { Loader2, Utensils, ChefHat, CheckCircle2 } from 'lucide-react';
 import {
   CustomerHeader,
   CollaborativeBanner,
@@ -22,6 +22,7 @@ import {
   tableApi,
 } from '@/features/tables/api/tableApi';
 import { menuApi } from '@/features/menu';
+import useKdsStore, { normalizeTableCode, playChimeSound } from '@/stores/useKdsStore';
 
 /**
  * MenuPage (Customer Responsive với ScrollSpy 2 chiều)
@@ -252,31 +253,75 @@ export default function MenuPage() {
     },
   ]);
 
-  // Danh sách toàn bộ các món đã gửi bếp của bàn (tách biệt từng lần gọi món)
-  const [orderedItems, setOrderedItems] = useState([
-    {
-      entryId: 'ord_init_1',
-      dishId: 'c01',
-      name: 'Lẩu Cay Tứ Xuyên 9 Ngăn',
-      price: 289000,
-      quantity: 1,
-      note: 'Ít cay',
-      image: mockCustomerDishes[0]?.image || '',
-      orderedAt: '12:15',
-      status: 'served', // 'served' (Đã lên bàn) | 'cooking' (Bếp đang nấu)
-    },
-    {
-      entryId: 'ord_init_2',
-      dishId: 'c07',
-      name: 'Mẹt Rau Nấm Tổng Hợp Thần Nông',
-      price: 95000,
-      quantity: 1,
-      note: '',
-      image: mockCustomerDishes[6]?.image || '',
-      orderedAt: '12:18',
-      status: 'served',
-    },
-  ]);
+  // Quản lý đơn món thời gian thực từ KDS Store
+  const allOrders = useKdsStore((state) => state.orders);
+  const submitCustomerOrder = useKdsStore((state) => state.submitCustomerOrder);
+  const lastBroadcastEvent = useKdsStore((state) => state.lastBroadcastEvent);
+
+  const currentNormTable = useMemo(() => normalizeTableCode(tableNumber), [tableNumber]);
+
+  // Toast thông báo tiến độ món ăn cho khách hàng
+  const [toastMessage, setToastMessage] = useState(null);
+  const [toastType, setToastType] = useState('info'); // 'info' | 'success' | 'served'
+
+  const showToast = useCallback((msg, type = 'info') => {
+    setToastMessage(msg);
+    setToastType(type);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4500);
+  }, []);
+
+  // Lắng nghe sự kiện từ Bếp để thông báo trạng thái cho thực khách theo thời gian thực (UC06, UC18)
+  useEffect(() => {
+    if (!lastBroadcastEvent) return;
+
+    if (
+      lastBroadcastEvent.type === 'KITCHEN_ITEM_STATUS_TOGGLED' &&
+      lastBroadcastEvent.nextStatus === 'SERVED' &&
+      normalizeTableCode(lastBroadcastEvent.affectedTableCode) === currentNormTable
+    ) {
+      showToast(`🍲 Món "${lastBroadcastEvent.affectedItemName}" của quý khách đã được chế biến xong và sẵn sàng phục vụ!`, 'served');
+      playChimeSound();
+    } else if (
+      lastBroadcastEvent.type === 'KITCHEN_ALL_ITEMS_COMPLETED' &&
+      normalizeTableCode(lastBroadcastEvent.affectedTable) === currentNormTable
+    ) {
+      showToast(`🎉 Bếp đã hoàn thành chế biến toàn bộ món cho bàn của quý khách!`, 'served');
+      playChimeSound();
+    } else if (
+      lastBroadcastEvent.type === 'WAITER_ITEM_DELIVERED' &&
+      normalizeTableCode(lastBroadcastEvent.affectedTableCode) === currentNormTable
+    ) {
+      showToast(`✅ Món "${lastBroadcastEvent.affectedItemName}" đã được nhân viên phục vụ lên bàn. Chúc quý khách ngon miệng!`, 'success');
+    }
+  }, [lastBroadcastEvent, currentNormTable, showToast]);
+
+  // Danh sách toàn bộ các món đã gửi bếp của bàn (đồng bộ thời gian thực từ useKdsStore)
+  const orderedItems = useMemo(() => {
+    const tableOrders = allOrders.filter(
+      (o) => normalizeTableCode(o.tableCode) === currentNormTable
+    );
+
+    const list = [];
+    tableOrders.forEach((order) => {
+      if (Array.isArray(order.items)) {
+        order.items.forEach((item) => {
+          list.push({
+            ...item,
+            entryId: item.id,
+            dishId: item.menuItemId || item.id,
+            orderId: order.id,
+            orderCode: order.orderCode,
+            tableCode: order.tableCode,
+            orderedAt: item.orderedAt || (order.createdAt ? new Date(order.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''),
+          });
+        });
+      }
+    });
+
+    return list;
+  }, [allOrders, currentNormTable]);
 
   // Chuẩn bị các section danh mục liên tục phục vụ trải nghiệm cuộn liền mạch (Continuous Scroll)
   const categorySections = useMemo(() => {
@@ -449,28 +494,21 @@ export default function MenuPage() {
     );
   };
 
-  // Xác nhận gửi bếp: Tạo các bản ghi món riêng biệt cho lần gọi này (không gộp vào lần trước)
+  // Xác nhận gửi bếp: Đẩy đơn vào Trạm Bếp KDS và đổi trạng thái món thành 'Đang chế biến'
   const handleSubmitOrder = (orderData) => {
     const itemsToSubmit = (orderData && orderData.items) ? orderData.items : cartItems;
     if (itemsToSubmit.length === 0) return;
 
-    const now = new Date();
-    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    // 1. Đẩy vào useKdsStore để Bếp và Phục vụ nhận ngay lập tức qua BroadcastChannel
+    submitCustomerOrder({
+      tableCode: currentNormTable,
+      items: itemsToSubmit,
+      totalAmount: (orderData && orderData.totalAmount) || totalAmount,
+    });
 
-    const newEntries = itemsToSubmit.map((item, idx) => ({
-      entryId: `ord_${Date.now()}_${idx}`,
-      dishId: item.id,
-      name: item.name,
-      price: item.price,
-      quantity: item.quantity,
-      note: item.note || '',
-      image: item.image,
-      orderedAt: timeStr,
-      status: 'cooking', // Bếp đang nấu
-    }));
-
-    setOrderedItems((prev) => [...prev, ...newEntries]);
+    // 2. Làm rỗng giỏ hàng nháp
     setCartItems([]);
+    showToast(`🔔 Đã gửi ${itemsToSubmit.length} món vào bếp thành công! Bếp đang chế biến.`, 'success');
   };
 
   return (
@@ -589,6 +627,8 @@ export default function MenuPage() {
       <CustomerBottomCartBar
         totalCount={totalCount}
         totalAmount={totalAmount}
+        orderedCount={orderedItems.length}
+        activeCookingCount={orderedItems.filter((i) => i.status === 'COOKING' || i.status === 'cooking').length}
         isHost={isHost}
         onOpenCart={() => setIsCartOpen(true)}
       />
@@ -629,6 +669,32 @@ export default function MenuPage() {
         isCurrentHost={isHost}
         onHostTransferred={handleHostTransferred}
       />
+
+      {/* 8. Toast Thông Báo Tiến Độ Món Ăn Cho Khách Hàng Thời Gian Thực */}
+      {toastMessage && (
+        <div className="fixed top-16 right-4 z-50 animate-bounce max-w-sm">
+          <div
+            className={`px-4 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 backdrop-blur-md ${
+              toastType === 'served'
+                ? 'bg-[#0A2E1D]/95 border-emerald-500/70 text-white shadow-emerald-950/60'
+                : toastType === 'success'
+                ? 'bg-[#18181C]/95 border-amber-500/60 text-[#FFE088] shadow-black/80'
+                : 'bg-[#18181C]/95 border-white/20 text-white shadow-black/80'
+            }`}
+          >
+            <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
+              {toastType === 'served' ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 animate-pulse" />
+              ) : (
+                <ChefHat className="w-5 h-5 text-[#FFD54F]" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold leading-tight">{toastMessage}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
