@@ -121,7 +121,10 @@ export default function MenuManagePage() {
     const counts = { all: menuItems.length };
     ribbonCategories.forEach((c) => {
       if (c.id !== 'all') {
-        counts[c.id] = menuItems.filter((m) => m.categoryId === c.id).length;
+        counts[c.id] = menuItems.filter((m) => {
+          const cat = m.categoryId || (m.categories && m.categories[0]?.slug) || '';
+          return cat === c.id || String(m.categoryId) === String(c.id);
+        }).length;
       }
     });
     return counts;
@@ -130,8 +133,11 @@ export default function MenuManagePage() {
   // Bộ lọc danh sách món ăn
   const filteredItems = useMemo(() => {
     return menuItems.filter((item) => {
-      if (selectedCategory !== 'all' && item.categoryId !== selectedCategory) {
-        return false;
+      if (selectedCategory !== 'all') {
+        const itemCat = item.categoryId || (item.categories && item.categories[0]?.slug) || '';
+        if (itemCat !== selectedCategory && String(item.categoryId) !== String(selectedCategory)) {
+          return false;
+        }
       }
       if (statusFilter === 'active' && !item.isAvailable) return false;
       if (statusFilter === 'locked' && item.isAvailable) return false;

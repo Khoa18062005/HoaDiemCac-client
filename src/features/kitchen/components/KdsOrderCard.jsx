@@ -53,15 +53,17 @@ export default function KdsOrderCard({
   const isWarning = minutes >= 15 && minutes < 20;
 
   const totalItems = order.items.length;
-  const completedItemsCount = order.items.filter((i) => i.status === 'SERVED').length;
+  const completedItemsCount = order.items.filter(
+    (i) => i.status === 'SERVED' || i.status === 'DELIVERED'
+  ).length;
   const isAllServed = totalItems > 0 && completedItemsCount === totalItems;
 
-  // Sắp xếp các món: Món chưa chế biến (COOKING) đưa lên trên, món đã hoàn thành (SERVED) trôi xuống dưới
+  // Sắp xếp các món: Món chưa chế biến (COOKING) đưa lên trên, món đã hoàn thành (SERVED hoặc DELIVERED) trôi xuống dưới
   const sortedItems = [...order.items].sort((a, b) => {
-    const aServed = a.status === 'SERVED';
-    const bServed = b.status === 'SERVED';
-    if (aServed && !bServed) return 1;
-    if (!aServed && bServed) return -1;
+    const aDone = a.status === 'SERVED' || a.status === 'DELIVERED';
+    const bDone = b.status === 'SERVED' || b.status === 'DELIVERED';
+    if (aDone && !bDone) return 1;
+    if (!aDone && bDone) return -1;
     return 0;
   });
 
@@ -118,24 +120,35 @@ export default function KdsOrderCard({
       <div className="p-3 divide-y divide-surface-border/50 flex-1 space-y-1 max-h-[285px] overflow-y-auto pr-1">
         {sortedItems.map((item) => {
           const isServed = item.status === 'SERVED';
+          const isDelivered = item.status === 'DELIVERED';
+          const isDone = isServed || isDelivered;
 
           return (
             <div
               key={item.id}
-              onClick={() => onToggleItemStatus(order.id, item.id)}
+              onClick={() => {
+                if (isDelivered) return; // Món đã bưng cho khách thì không hoàn tác về COOKING
+                onToggleItemStatus(order.id, item.id);
+              }}
               className={`py-2 px-2 rounded-lg cursor-pointer transition-all duration-150 flex items-start justify-between gap-3 group select-none ${
-                isServed
+                isDone
                   ? 'bg-surface/40 text-[#8E8E93] line-through'
                   : 'hover:bg-surface-elevated/70 text-white'
               }`}
-              title={isServed ? 'Nhấn để hoàn tác (COOKING)' : 'Nhấn một chạm để ĐÁNH DẤU HOÀN THÀNH'}
+              title={
+                isDelivered
+                  ? 'Món đã được phục vụ bưng lên bàn cho khách'
+                  : isServed
+                  ? 'Bếp đã nấu xong (Chờ phục vụ bưng). Nhấn để hoàn tác (COOKING)'
+                  : 'Nhấn một chạm để ĐÁNH DẤU HOÀN THÀNH'
+              }
             >
               {/* Bên trái: Số lượng & Tên món */}
               <div className="flex items-start gap-2.5 flex-1 min-w-0">
                 {/* Số lượng */}
                 <span
                   className={`flex-shrink-0 font-mono text-xs font-bold px-2 py-0.5 rounded border transition-colors ${
-                    isServed
+                    isDone
                       ? 'bg-gray-800 text-gray-500 border-gray-700'
                       : 'bg-gold/15 text-gold border-gold/40 group-hover:bg-gold group-hover:text-black'
                   }`}
@@ -145,13 +158,13 @@ export default function KdsOrderCard({
 
                 {/* Tên món & Ghi chú */}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs sm:text-sm font-medium leading-tight ${isServed ? 'text-[#707075]' : 'text-[#EDEDED]'}`}>
+                  <p className={`text-xs sm:text-sm font-medium leading-tight ${isDone ? 'text-[#707075]' : 'text-[#EDEDED]'}`}>
                     {item.name}
                   </p>
 
                   {/* Ghi chú bếp (dạng chữ thuần, không khung, không icon) */}
                   {item.note && (
-                    <p className={`text-[11px] mt-0.5 leading-tight break-words font-medium ${isServed ? 'text-[#707075]' : 'text-amber-300'}`}>
+                    <p className={`text-[11px] mt-0.5 leading-tight break-words font-medium ${isDone ? 'text-[#707075]' : 'text-amber-300'}`}>
                       {item.note}
                     </p>
                   )}
@@ -163,16 +176,31 @@ export default function KdsOrderCard({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (isDelivered) return;
                   onToggleItemStatus(order.id, item.id);
                 }}
                 className={`p-1.5 rounded-lg border transition-all flex items-center justify-center flex-shrink-0 ${
-                  isServed
+                  isDelivered
+                    ? 'bg-jade/25 border-jade/50 text-jade-bright cursor-default'
+                    : isServed
                     ? 'bg-jade/20 border-jade/40 text-jade-bright hover:bg-jade/30'
                     : 'bg-surface-card border-surface-border text-[#8E8E93] hover:border-gold hover:text-gold hover:bg-surface-elevated'
                 }`}
-                title={isServed ? 'Đã xong. Bấm để hoàn tác' : 'Bấm để đánh dấu đã chế biến xong'}
+                title={
+                  isDelivered
+                    ? 'Đã bưng lên bàn'
+                    : isServed
+                    ? 'Đã nấu xong. Bấm để hoàn tác'
+                    : 'Bấm để đánh dấu đã chế biến xong'
+                }
               >
-                {isServed ? <Check className="w-4 h-4 stroke-[2.5]" /> : <Check className="w-4 h-4" />}
+                {isDelivered ? (
+                  <CheckCheck className="w-4 h-4 text-emerald-400 stroke-[2.5]" />
+                ) : isServed ? (
+                  <Check className="w-4 h-4 stroke-[2.5]" />
+                ) : (
+                  <Check className="w-4 h-4" />
+                )}
               </button>
             </div>
           );

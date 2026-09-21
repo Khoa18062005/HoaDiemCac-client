@@ -31,8 +31,15 @@ export default function CustomerCartDrawer({
   onClearCart,
   onSubmitOrder,
   onUpdateNote,
+  activeTab: controlledActiveTab,
+  onTabChange,
 }) {
-  const [activeTab, setActiveTab] = useState('draft'); // 'draft' ('Chọn món') | 'all' ('Tất cả')
+  const [internalTab, setInternalTab] = useState('draft');
+  const activeTab = controlledActiveTab !== undefined ? controlledActiveTab : internalTab;
+  const setActiveTab = (tab) => {
+    if (onTabChange) onTabChange(tab);
+    setInternalTab(tab);
+  };
   const [isSuccess, setIsSuccess] = useState(false);
 
   if (!isOpen) return null;
@@ -89,9 +96,6 @@ export default function CustomerCartDrawer({
             <h2 className="font-serif text-base font-bold text-[#FFE699]">
               Giỏ Hàng Bàn {tableNumber}
             </h2>
-            <span className="text-[10px] bg-[#2A1014] text-[#FFB4AB] border border-[#C41E3A]/40 px-2 py-0.5 rounded-full font-bold">
-              {activeTab === 'draft' ? `${draftCount} món` : `${totalOrderedCount} món`}
-            </span>
           </div>
 
           <button
@@ -195,7 +199,7 @@ export default function CustomerCartDrawer({
                   >
                     <div className="flex gap-2.5 items-center">
                       <img
-                        src={item.image}
+                        src={item.image || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80'}
                         alt={item.name}
                         className="w-14 h-14 rounded-lg object-cover flex-shrink-0 bg-[#2A2A2E]"
                         onError={(e) => {
@@ -340,7 +344,7 @@ export default function CustomerCartDrawer({
                   >
                     <div className="flex gap-2.5 items-center">
                       <img
-                        src={item.image}
+                        src={item.image || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80'}
                         alt={item.name}
                         className="w-14 h-14 rounded-lg object-cover flex-shrink-0 bg-[#2A2A2E]"
                         onError={(e) => {
@@ -372,11 +376,16 @@ export default function CustomerCartDrawer({
                             )}
                           </div>
 
-                          {/* Status Badge */}
-                          {item.status === 'served' || item.status === 'SERVED' || item.status === 'DELIVERED' || item.status === 'delivered' ? (
+                          {/* Status Badge: 3 Trạng thái (Đang chế biến -> Chờ phục vụ -> Đã phục vụ) */}
+                          {item.status === 'DELIVERED' || item.status === 'delivered' ? (
                             <span className="bg-[#0A2E1D] text-[#59DE9B] border border-[#007448]/60 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#59DE9B]" />
                               Đã phục vụ
+                            </span>
+                          ) : item.status === 'SERVED' || item.status === 'served' || item.status === 'READY' || item.status === 'ready' ? (
+                            <span className="bg-[#0C233A] text-[#38BDF8] border border-[#0284C7]/60 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse" />
+                              Chờ phục vụ
                             </span>
                           ) : (
                             <span className="bg-[#2A1508] text-[#FFB74D] border border-[#FF9800]/50 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">

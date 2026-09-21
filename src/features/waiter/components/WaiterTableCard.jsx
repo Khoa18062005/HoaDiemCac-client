@@ -109,13 +109,6 @@ export default function WaiterTableCard({
           >
             {order.tableCode}
           </span>
-
-          {/* Huy hiệu sáng đèn khi Bếp vừa xong món */}
-          {readyItemsCount > 0 && !isAllDelivered && (
-            <span className="bg-emerald-500 text-black text-[9.5px] font-black px-2 py-0.5 rounded-full animate-bounce shadow-sm">
-              ⚡ CHỜ BƯNG ({readyItemsCount})
-            </span>
-          )}
         </div>
 
         {/* Bộ đếm thời gian trôi qua (Elapsed Timer) */}

@@ -1,22 +1,35 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   WaiterHeader,
   WaiterTableCard,
 } from '@/features/waiter';
+import { waiterApi } from '@/features/waiter/api/waiterApi';
 import useKdsStore, { playChimeSound } from '@/stores/useKdsStore';
 import {
-  Sparkles,
-  BellRing,
-  X,
   CheckCircle,
 } from 'lucide-react';
 
 export default function WaiterDisplayPage() {
   const orders = useKdsStore((state) => state.orders);
+  const setOrders = useKdsStore((state) => state.setOrders);
   const deliverItem = useKdsStore((state) => state.deliverItem);
   const deliverAllReadyItems = useKdsStore((state) => state.deliverAllReadyItems);
   const simulateNewOrder = useKdsStore((state) => state.simulateNewOrder);
   const lastBroadcastEvent = useKdsStore((state) => state.lastBroadcastEvent);
+
+  // Luôn đồng bộ danh sách đơn hàng thực tế từ Backend khi mở màn hình phục vụ
+  useEffect(() => {
+    waiterApi
+      .getWaiterOrders()
+      .then((queue) => {
+        if (Array.isArray(queue)) {
+          setOrders(queue);
+        }
+      })
+      .catch((err) => {
+        console.warn('Lỗi khi tải danh sách phục vụ từ backend:', err);
+      });
+  }, [setOrders]);
 
   // Bộ lọc khu vực
   const [areaFilter, setAreaFilter] = useState('all'); // 'all' | 'COMMON' | 'VIP'
@@ -34,19 +47,7 @@ export default function WaiterDisplayPage() {
     });
   }, []);
 
-  // Toast thông báo
-  const [toastMessage, setToastMessage] = useState(null);
-  const [toastType, setToastType] = useState('info'); // 'info' | 'success' | 'ready'
-
-  const showToast = useCallback((msg, type = 'info') => {
-    setToastMessage(msg);
-    setToastType(type);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 4000);
-  }, []);
-
-  // Lắng nghe sự kiện từ Bếp để phát chuông & báo toast
+  // Lắng nghe sự kiện từ Bếp để phát chuông
   useEffect(() => {
     if (!lastBroadcastEvent) return;
 
@@ -54,19 +55,15 @@ export default function WaiterDisplayPage() {
       lastBroadcastEvent.type === 'KITCHEN_ITEM_STATUS_TOGGLED' &&
       lastBroadcastEvent.nextStatus === 'SERVED'
     ) {
-      showToast(lastBroadcastEvent.message, 'ready');
       if (!isAudioMuted) {
         playChimeSound();
       }
     } else if (lastBroadcastEvent.type === 'KITCHEN_ALL_ITEMS_COMPLETED') {
-      showToast(lastBroadcastEvent.message, 'ready');
       if (!isAudioMuted) {
         playChimeSound();
       }
-    } else if (lastBroadcastEvent.type === 'NEW_ORDER_RECEIVED') {
-      showToast(lastBroadcastEvent.message, 'info');
     }
-  }, [lastBroadcastEvent, isAudioMuted, showToast]);
+  }, [lastBroadcastEvent, isAudioMuted]);
 
   // Đếm tổng số món đang chờ bưng (Bếp đã xong)
   const totalReadyDishes = useMemo(() => {
@@ -81,26 +78,84 @@ export default function WaiterDisplayPage() {
   // Thao tác bưng 1 món
   const handleDeliverItem = useCallback(
     (orderId, itemId) => {
-      const res = deliverItem(orderId, itemId);
-      showToast(res.message, 'success');
+      deliverItem(orderId, itemId);
     },
-    [deliverItem, showToast]
+    [deliverItem]
   );
 
   // Thao tác bưng toàn bộ món sẵn sàng của bàn
   const handleDeliverAllReady = useCallback(
     (orderId) => {
-      const res = deliverAllReadyItems(orderId);
-      showToast(res.message, 'success');
+      deliverAllReadyItems(orderId);
     },
-    [deliverAllReadyItems, showToast]
+    [deliverAllReadyItems]
   );
 
   // Giả lập đơn mới
   const handleSimulate = useCallback(() => {
-    const res = simulateNewOrder();
-    showToast(res.message, 'info');
-  }, [simulateNewOrder, showToast]);
+    simulateNewOrder();
+  }, [simulateNewOrder]);
+
+  // Quản lý danh sách ID đơn hàng đã giao xong và hết 10 giây đệm để ẩn
+  const [hiddenOrderIds, setHiddenOrderIds] = useState(() => new Set());
+  const completedTimersRef = useRef({});
+
+  // Đếm ngược 10 giây sau khi bàn hoàn thành bưng tất cả các món rồi mới ẩn
+  useEffect(() => {
+    orders.forEach((order) => {
+      const isAllDelivered =
+        Array.isArray(order.items) &&
+        order.items.length > 0 &&
+        order.items.every(
+          (i) => i.status === 'DELIVERED' || i.status === 'CANCELLED'
+        );
+
+      if (isAllDelivered) {
+        if (hiddenOrderIds.has(order.id)) return;
+
+        // Nếu chưa có timer đếm ngược cho đơn này
+        if (!completedTimersRef.current[order.id]) {
+          // Tính thời gian đã trôi qua kể từ khi món cuối cùng được phục vụ
+          const latestDeliveredTime = order.items.reduce((max, item) => {
+            const t = item.deliveredAt
+              ? new Date(item.deliveredAt).getTime()
+              : item.servedAt
+              ? new Date(item.servedAt).getTime()
+              : 0;
+            return Math.max(max, t);
+          }, 0);
+
+          const now = Date.now();
+          const elapsed = latestDeliveredTime > 0 ? now - latestDeliveredTime : 0;
+
+          if (elapsed >= 10000) {
+            // Đã hoàn thành hơn 10s trước -> ẩn ngay
+            setHiddenOrderIds((prev) => new Set(prev).add(order.id));
+          } else {
+            // Chưa đủ 10s (hoặc vừa bấm bưng xong) -> đếm ngược khoảng thời gian còn lại (tối đa 10s)
+            const remaining = Math.max(1000, 10000 - elapsed);
+            completedTimersRef.current[order.id] = setTimeout(() => {
+              setHiddenOrderIds((prev) => new Set(prev).add(order.id));
+              delete completedTimersRef.current[order.id];
+            }, remaining);
+          }
+        }
+      } else {
+        // Nếu đơn chưa hoàn thành (hoặc có món mới)
+        if (completedTimersRef.current[order.id]) {
+          clearTimeout(completedTimersRef.current[order.id]);
+          delete completedTimersRef.current[order.id];
+        }
+        if (hiddenOrderIds.has(order.id)) {
+          setHiddenOrderIds((prev) => {
+            const next = new Set(prev);
+            next.delete(order.id);
+            return next;
+          });
+        }
+      }
+    });
+  }, [orders, hiddenOrderIds]);
 
   // Lọc và sắp xếp các bàn
   const filteredOrders = useMemo(() => {
@@ -108,6 +163,10 @@ export default function WaiterDisplayPage() {
       .filter((order) => {
         // Lọc khu vực
         if (areaFilter !== 'all' && order.area !== areaFilter) {
+          return false;
+        }
+        // Ẩn đơn hàng sau khi toàn bộ món đã được bưng xong và đã hết 10 giây delay
+        if (hiddenOrderIds.has(order.id)) {
           return false;
         }
         return true;
@@ -122,7 +181,7 @@ export default function WaiterDisplayPage() {
         // Sau đó sắp xếp theo thời gian gọi
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       });
-  }, [orders, areaFilter]);
+  }, [orders, areaFilter, hiddenOrderIds]);
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0C0C0F]">
@@ -162,34 +221,6 @@ export default function WaiterDisplayPage() {
           </div>
         )}
       </main>
-
-      {/* 3. Toast thông báo thời gian thực */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 animate-bounce">
-          <div
-            className={`px-4 py-3 rounded-xl shadow-2xl border flex items-center gap-3 backdrop-blur-md ${
-              toastType === 'ready'
-                ? 'bg-emerald-950/95 border-emerald-400 text-emerald-200 shadow-emerald-950/70'
-                : toastType === 'success'
-                ? 'bg-jade/95 border-emerald-500 text-white shadow-emerald-950/50'
-                : 'bg-surface-elevated/95 border-gold/50 text-gold shadow-black/80'
-            }`}
-          >
-            {toastType === 'ready' ? (
-              <Sparkles className="w-4 h-4 text-emerald-300 animate-spin" />
-            ) : (
-              <BellRing className="w-4 h-4 flex-shrink-0" />
-            )}
-            <span className="text-xs sm:text-sm font-semibold">{toastMessage}</span>
-            <button
-              onClick={() => setToastMessage(null)}
-              className="ml-2 p-1 rounded hover:bg-white/10 text-white/80"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

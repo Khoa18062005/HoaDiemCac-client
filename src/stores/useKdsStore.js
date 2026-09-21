@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { kitchenApi } from '@/features/kitchen/api/kitchenApi';
+import { waiterApi } from '@/features/waiter/api/waiterApi';
 
 // Unique Tab ID để phân biệt các tab/cửa sổ khác nhau
 const tabId = typeof window !== 'undefined' ? `tab_${Math.random().toString(36).substring(2, 9)}` : 'server';
@@ -64,13 +66,21 @@ export function playChimeSound() {
 function loadInitialOrders() {
   if (typeof window === 'undefined') return [];
   try {
-    const saved = localStorage.getItem('hoadiemcat_kds_orders_v2');
+    // Xóa triệt để các key cũ chứa mock data 'ord-101'...'ord-105'
+    localStorage.removeItem('hoadiemcat_kds_orders_v2');
+    localStorage.removeItem('hoadiemcat_kds_orders');
+    const saved = localStorage.getItem('hoadiemcat_kds_orders_v3');
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Lọc bỏ các ID mẫu như 'ord-101', 'ord-102', 'ord-103', 'ord-104'
+        // Lọc bỏ các ID mẫu như 'ord-101'..'ord-105' hoặc đơn mẫu
         const filtered = parsed.filter(
-          (o) => o && o.id && !['ord-101', 'ord-102', 'ord-103', 'ord-104'].includes(o.id)
+          (o) =>
+            o &&
+            o.id &&
+            !String(o.id).startsWith('ord-10') &&
+            o.tableCode !== 'BÀN 08' &&
+            o.tableCode !== 'BÀN 06'
         );
         return filtered;
       }
@@ -84,7 +94,7 @@ function loadInitialOrders() {
 function saveOrdersToStorage(orders) {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem('hoadiemcat_kds_orders_v2', JSON.stringify(orders));
+    localStorage.setItem('hoadiemcat_kds_orders_v3', JSON.stringify(orders));
   } catch (err) {
     console.error('Error saving KDS orders:', err);
   }
@@ -125,7 +135,14 @@ export const useKdsStore = create((set, get) => ({
       const updatedItems = order.items.map((item) => {
         if (item.id !== itemId) return item;
         affectedItemName = item.name;
-        const isDone = item.status === 'SERVED' || item.status === 'DELIVERED';
+
+        // Nếu món đã bưng lên bàn cho khách (DELIVERED), giữ nguyên không hoàn tác về COOKING
+        if (item.status === 'DELIVERED') {
+          nextStatus = 'DELIVERED';
+          return item;
+        }
+
+        const isDone = item.status === 'SERVED';
         nextStatus = isDone ? 'COOKING' : 'SERVED';
 
         return {
@@ -161,6 +178,13 @@ export const useKdsStore = create((set, get) => ({
 
     set({ orders: nextOrders, lastBroadcastEvent: eventData });
     broadcastUpdate(nextOrders, eventData);
+
+    // Đồng bộ trạng thái xuống Server MySQL
+    if (typeof itemId === 'number' || (!String(itemId).startsWith('oi-') && !isNaN(Number(itemId)))) {
+      kitchenApi.updateOrderItemStatus(itemId, nextStatus).catch((err) => {
+        console.warn('Lỗi khi đồng bộ trạng thái món lên server:', err);
+      });
+    }
 
     return eventData;
   },
@@ -198,6 +222,13 @@ export const useKdsStore = create((set, get) => ({
 
     set({ orders: nextOrders, lastBroadcastEvent: eventData });
     broadcastUpdate(nextOrders, eventData);
+
+    // Đồng bộ trạng thái hoàn thành đợt gọi xuống Server
+    if (typeof orderId === 'number' || (!String(orderId).startsWith('ord-') && !isNaN(Number(orderId)))) {
+      kitchenApi.updateOrderStatus(orderId, 'COMPLETED').catch((err) => {
+        console.warn('Lỗi khi đồng bộ hoàn thành order lên server:', err);
+      });
+    }
 
     return eventData;
   },
@@ -243,6 +274,13 @@ export const useKdsStore = create((set, get) => ({
     set({ orders: nextOrders, lastBroadcastEvent: eventData });
     broadcastUpdate(nextOrders, eventData);
 
+    // Đồng bộ phục vụ món xuống Server MySQL
+    if (typeof itemId === 'number' || (!String(itemId).startsWith('oi-') && !isNaN(Number(itemId)))) {
+      waiterApi.deliverItem(itemId).catch((err) => {
+        console.warn('Lỗi khi xác nhận phục vụ món lên server:', err);
+      });
+    }
+
     return eventData;
   },
 
@@ -287,6 +325,13 @@ export const useKdsStore = create((set, get) => ({
     set({ orders: nextOrders, lastBroadcastEvent: eventData });
     broadcastUpdate(nextOrders, eventData);
 
+    // Đồng bộ phục vụ toàn bộ món xuống Server MySQL
+    if (typeof orderId === 'number' || (!String(orderId).startsWith('ord-') && !isNaN(Number(orderId)))) {
+      waiterApi.deliverAllItems(orderId).catch((err) => {
+        console.warn('Lỗi khi xác nhận phục vụ toàn bộ món lên server:', err);
+      });
+    }
+
     return eventData;
   },
 
@@ -330,26 +375,32 @@ export const useKdsStore = create((set, get) => ({
   },
 
   // 5.1 Khách hàng tại bàn gửi order vào bếp (UC05)
-  submitCustomerOrder: ({ tableCode, items, note = '', totalAmount = 0 }) => {
+  submitCustomerOrder: ({ tableCode, items, note = '', totalAmount = 0, serverOrder = null }) => {
     const normTableCode = normalizeTableCode(tableCode);
     const isVip = normTableCode.startsWith('VIP');
     const tableId = normTableCode.toLowerCase().replace(/\s+/g, '');
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-    const orderItems = items.map((item, idx) => ({
-      id: `oi-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
-      menuItemId: item.id || item.menuItemId || `m-${idx}`,
-      name: item.name,
-      price: item.price || 0,
-      quantity: item.quantity || 1,
-      image: item.image || '',
-      note: item.note || '',
-      status: 'COOKING', // Trạng thái ban đầu: Đang chế biến
-      orderedAt: timeStr,
-      servedAt: null,
-      deliveredAt: null,
-    }));
+    const orderItems = items.map((item, idx) => {
+      const serverItem = serverOrder?.items?.find(
+        (si) => (si.menuItemId && (si.menuItemId === item.id || si.menuItemId === item.numericId)) || si.name === item.name
+      ) || serverOrder?.items?.[idx];
+
+      return {
+        id: serverItem?.id || `oi-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+        menuItemId: serverItem?.menuItemId || item.id || item.menuItemId || `m-${idx}`,
+        name: item.name,
+        price: item.price || 0,
+        quantity: item.quantity || 1,
+        image: item.image || '',
+        note: item.note || '',
+        status: serverItem?.status || 'COOKING', // Trạng thái ban đầu: Đang chế biến
+        orderedAt: timeStr,
+        servedAt: serverItem?.servedAt || null,
+        deliveredAt: serverItem?.deliveredAt || null,
+      };
+    });
 
     const currentOrders = get().orders;
     const existingIndex = currentOrders.findIndex(
@@ -357,32 +408,33 @@ export const useKdsStore = create((set, get) => ({
     );
 
     let nextOrders;
-    let targetOrderId = '';
-    let orderRound = 1;
+    let targetOrderId = serverOrder?.id ? serverOrder.id : '';
+    let orderRound = serverOrder?.roundNumber || 1;
 
     if (existingIndex !== -1) {
       nextOrders = [...currentOrders];
       const existing = nextOrders[existingIndex];
-      targetOrderId = existing.id;
-      orderRound = (existing.orderRound || 1) + 1;
+      targetOrderId = serverOrder?.id || existing.id;
+      orderRound = serverOrder?.roundNumber || (existing.orderRound || 1) + 1;
       nextOrders[existingIndex] = {
         ...existing,
+        id: targetOrderId,
         orderRound,
         items: [...existing.items, ...orderItems],
         status: 'COOKING',
         totalAmount: (existing.totalAmount || 0) + totalAmount,
       };
     } else {
-      targetOrderId = `ord-${Date.now()}`;
+      targetOrderId = serverOrder?.id || `ord-${Date.now()}`;
       const newOrder = {
         id: targetOrderId,
-        orderCode: `OD-${Math.floor(10000 + Math.random() * 90000)}`,
+        orderCode: serverOrder ? `OD-${serverOrder.id}` : `OD-${Math.floor(10000 + Math.random() * 90000)}`,
         tableCode: normTableCode,
         tableId,
         area: isVip ? 'VIP' : 'COMMON',
-        orderRound: 1,
-        createdAt: now.toISOString(),
-        status: 'COOKING',
+        orderRound,
+        createdAt: serverOrder?.createdAt || now.toISOString(),
+        status: serverOrder?.status || 'COOKING',
         priority: 'NORMAL',
         note,
         totalAmount,
@@ -404,6 +456,51 @@ export const useKdsStore = create((set, get) => ({
     broadcastUpdate(nextOrders, eventData);
 
     return { orderId: targetOrderId, items: orderItems, eventData };
+  },
+
+  // 5.2 Đồng bộ dữ liệu đơn hàng từ Server MySQL (KDS Queue)
+  syncOrdersFromServer: async () => {
+    try {
+      const serverOrders = await kitchenApi.getKitchenQueue();
+      if (Array.isArray(serverOrders) && serverOrders.length > 0) {
+        const mapped = serverOrders.map((o) => {
+          const normTable = normalizeTableCode(o.tableCode || o.tableName || '');
+          const isVip = normTable.startsWith('VIP');
+          return {
+            id: o.id,
+            orderCode: `OD-${o.id}`,
+            tableCode: normTable,
+            tableId: normTable.toLowerCase().replace(/\s+/g, ''),
+            area: isVip ? 'VIP' : 'COMMON',
+            orderRound: o.roundNumber || 1,
+            createdAt: o.createdAt || new Date().toISOString(),
+            status: o.status || 'COOKING',
+            priority: 'NORMAL',
+            note: o.note || '',
+            totalAmount: o.totalAmount || 0,
+            items: (o.items || []).map((i) => ({
+              id: i.id,
+              menuItemId: i.menuItemId,
+              name: i.name,
+              price: i.price || 0,
+              quantity: i.quantity || 1,
+              note: i.note || '',
+              image: i.image || i.imageUrl || '',
+              status: i.status || 'COOKING',
+              orderedAt: o.createdAt
+                ? new Date(o.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                : '',
+              servedAt: i.servedAt,
+              deliveredAt: i.deliveredAt,
+            })),
+          };
+        });
+        set({ orders: mapped });
+        broadcastUpdate(mapped);
+      }
+    } catch (err) {
+      console.warn('Lỗi khi đồng bộ orders từ server:', err);
+    }
   },
 
   // 5.2 Lấy toàn bộ món đã đặt của một bàn cụ thể
@@ -479,13 +576,46 @@ export const useKdsStore = create((set, get) => ({
   // 7. Cập nhật danh sách orders từ bên ngoài (ví dụ API backend)
   setOrders: (orders) => {
     const validOrders = Array.isArray(orders) ? orders : [];
-    set({ orders: validOrders });
-    saveOrdersToStorage(validOrders);
+    const mapped = validOrders.map((o) => {
+      const normTable = normalizeTableCode(o.tableCode || o.tableName || '');
+      const isVip = normTable.startsWith('VIP');
+      return {
+        id: o.id,
+        orderCode: o.orderCode || `OD-${o.id}`,
+        tableCode: normTable,
+        tableId: normTable.toLowerCase().replace(/\s+/g, ''),
+        area: o.area || (isVip ? 'VIP' : 'COMMON'),
+        orderRound: o.roundNumber || o.orderRound || 1,
+        createdAt: o.createdAt || new Date().toISOString(),
+        status: o.status || 'COOKING',
+        priority: o.priority || 'NORMAL',
+        note: o.note || '',
+        totalAmount: o.totalAmount || 0,
+        items: (o.items || []).map((i) => ({
+          id: i.id,
+          menuItemId: i.menuItemId,
+          name: i.name,
+          price: i.price || 0,
+          quantity: i.quantity || 1,
+          note: i.note || '',
+          image: i.image || i.imageUrl || '',
+          status: i.status || 'COOKING',
+          orderedAt: o.createdAt
+            ? new Date(o.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+            : '',
+          servedAt: i.servedAt,
+          deliveredAt: i.deliveredAt,
+        })),
+      };
+    });
+    set({ orders: mapped });
+    saveOrdersToStorage(mapped);
   },
 
   // 8. Khôi phục dữ liệu gốc (xóa sạch về mảng rỗng)
   resetToDefault: () => {
     localStorage.removeItem('hoadiemcat_kds_orders_v2');
+    localStorage.removeItem('hoadiemcat_kds_orders_v3');
     set({ orders: [], lastBroadcastEvent: null });
     broadcastUpdate([], { type: 'RESET_ORDERS', message: 'Đã thiết lập lại dữ liệu' });
   },
@@ -517,7 +647,7 @@ if (syncChannel) {
 // Hỗ trợ dự phòng qua sự kiện storage
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (event) => {
-    if (event.key === 'hoadiemcat_kds_orders_v2' && event.newValue) {
+    if (event.key === 'hoadiemcat_kds_orders_v3' && event.newValue) {
       try {
         const parsed = JSON.parse(event.newValue);
         if (Array.isArray(parsed)) {

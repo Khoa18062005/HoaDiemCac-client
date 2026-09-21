@@ -38,6 +38,10 @@ export default function MenuItemRow({
               alt={name}
               className="w-full h-full object-cover transition-all"
               loading="lazy"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80';
+              }}
             />
           ) : (
             <Utensils className="w-6 h-6 text-gold/60" />

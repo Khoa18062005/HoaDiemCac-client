@@ -202,7 +202,7 @@ export default function MenuItemModal({
     }
   };
 
-  const availableCategories = Array.isArray(categories) && categories.length > 0 ? categories : MENU_CATEGORIES;
+  const availableCategories = Array.isArray(categories) ? categories : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-obsidian/80 backdrop-blur-sm p-4 font-sans animate-fadeIn">

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Loader2, Utensils, ChefHat, CheckCircle2 } from 'lucide-react';
+import { Loader2, Utensils } from 'lucide-react';
 import {
   CustomerHeader,
   CollaborativeBanner,
@@ -20,6 +20,7 @@ import {
   tableApi,
 } from '@/features/tables/api/tableApi';
 import { menuApi } from '@/features/menu';
+import { orderApi } from '@/features/customer/api/orderApi';
 import useKdsStore, { normalizeTableCode, playChimeSound } from '@/stores/useKdsStore';
 
 /**
@@ -148,15 +149,15 @@ export default function MenuPage() {
           menuApi.getCategories().catch(() => []),
         ]);
         if (isMounted) {
-          if (Array.isArray(items) && items.length > 0) {
+          if (Array.isArray(items)) {
             setDbItems(items);
           }
-          if (Array.isArray(cats) && cats.length > 0) {
+          if (Array.isArray(cats)) {
             setDbCategories(cats);
           }
         }
       } catch (err) {
-        console.warn('Lỗi khi tải thực đơn từ Database, dùng dữ liệu mẫu dự phòng:', err);
+        console.warn('Lỗi khi tải thực đơn từ Database:', err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -243,6 +244,9 @@ export default function MenuPage() {
   // Khởi tạo giỏ hàng rỗng ban đầu cho khách hàng
   const [cartItems, setCartItems] = useState([]);
 
+  // Quản lý tab giỏ hàng đang kích hoạt ('draft': Chọn món | 'all': Tất cả)
+  const [cartTab, setCartTab] = useState('draft');
+
   // Quản lý đơn món thời gian thực từ KDS Store
   const allOrders = useKdsStore((state) => state.orders);
   const submitCustomerOrder = useKdsStore((state) => state.submitCustomerOrder);
@@ -250,42 +254,6 @@ export default function MenuPage() {
 
   const currentNormTable = useMemo(() => normalizeTableCode(tableNumber), [tableNumber]);
 
-  // Toast thông báo tiến độ món ăn cho khách hàng
-  const [toastMessage, setToastMessage] = useState(null);
-  const [toastType, setToastType] = useState('info'); // 'info' | 'success' | 'served'
-
-  const showToast = useCallback((msg, type = 'info') => {
-    setToastMessage(msg);
-    setToastType(type);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 4500);
-  }, []);
-
-  // Lắng nghe sự kiện từ Bếp để thông báo trạng thái cho thực khách theo thời gian thực (UC06, UC18)
-  useEffect(() => {
-    if (!lastBroadcastEvent) return;
-
-    if (
-      lastBroadcastEvent.type === 'KITCHEN_ITEM_STATUS_TOGGLED' &&
-      lastBroadcastEvent.nextStatus === 'SERVED' &&
-      normalizeTableCode(lastBroadcastEvent.affectedTableCode) === currentNormTable
-    ) {
-      showToast(`🍲 Món "${lastBroadcastEvent.affectedItemName}" của quý khách đã được chế biến xong và sẵn sàng phục vụ!`, 'served');
-      playChimeSound();
-    } else if (
-      lastBroadcastEvent.type === 'KITCHEN_ALL_ITEMS_COMPLETED' &&
-      normalizeTableCode(lastBroadcastEvent.affectedTable) === currentNormTable
-    ) {
-      showToast(`🎉 Bếp đã hoàn thành chế biến toàn bộ món cho bàn của quý khách!`, 'served');
-      playChimeSound();
-    } else if (
-      lastBroadcastEvent.type === 'WAITER_ITEM_DELIVERED' &&
-      normalizeTableCode(lastBroadcastEvent.affectedTableCode) === currentNormTable
-    ) {
-      showToast(`✅ Món "${lastBroadcastEvent.affectedItemName}" đã được nhân viên phục vụ lên bàn. Chúc quý khách ngon miệng!`, 'success');
-    }
-  }, [lastBroadcastEvent, currentNormTable, showToast]);
 
   // Danh sách toàn bộ các món đã gửi bếp của bàn (đồng bộ thời gian thực từ useKdsStore)
   const orderedItems = useMemo(() => {
@@ -297,10 +265,15 @@ export default function MenuPage() {
     tableOrders.forEach((order) => {
       if (Array.isArray(order.items)) {
         order.items.forEach((item) => {
+          const dishMatch = dishesList.find(
+            (d) => String(d.id) === String(item.menuItemId) || d.name === item.name
+          );
+
           list.push({
             ...item,
             entryId: item.id,
-            dishId: item.menuItemId || item.id,
+            dishId: item.menuItemId || dishMatch?.id || item.id,
+            image: item.image || item.imageUrl || dishMatch?.image || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80',
             orderId: order.id,
             orderCode: order.orderCode,
             tableCode: order.tableCode,
@@ -310,8 +283,43 @@ export default function MenuPage() {
       }
     });
 
-    return list;
-  }, [allOrders, currentNormTable]);
+    // Gom nhóm các món ở trạng thái "Đã phục vụ" (DELIVERED) cùng loại với nhau
+    const result = [];
+    const deliveredMap = new Map(); // groupKey -> index trong result
+
+    list.forEach((item) => {
+      const isDelivered = item.status === 'DELIVERED' || item.status === 'delivered';
+      if (!isDelivered) {
+        // Món đang chế biến hoặc chờ phục vụ: hiển thị riêng lẻ theo từng đợt gọi
+        result.push({ ...item });
+      } else {
+        // Món đã phục vụ: gom nhóm theo món
+        const groupKey = String(item.dishId || item.menuItemId || item.name).trim().toLowerCase();
+        if (deliveredMap.has(groupKey)) {
+          const existingIndex = deliveredMap.get(groupKey);
+          const existing = result[existingIndex];
+          existing.quantity = (existing.quantity || 1) + (item.quantity || 1);
+          if (item.note && !existing.notes?.includes(item.note)) {
+            existing.notes = existing.notes ? [...existing.notes, item.note] : [existing.note, item.note].filter(Boolean);
+            existing.note = existing.notes.join(', ');
+          }
+          if (item.orderedAt) {
+            existing.orderedAt = item.orderedAt;
+          }
+        } else {
+          const groupedItem = {
+            ...item,
+            entryId: `grouped-delivered-${item.dishId || item.id}`,
+            notes: item.note ? [item.note] : [],
+          };
+          deliveredMap.set(groupKey, result.length);
+          result.push(groupedItem);
+        }
+      }
+    });
+
+    return result;
+  }, [allOrders, currentNormTable, dishesList]);
 
   // Chuẩn bị các section danh mục liên tục phục vụ trải nghiệm cuộn liền mạch (Continuous Scroll)
   const categorySections = useMemo(() => {
@@ -428,8 +436,9 @@ export default function MenuPage() {
     return found ? found.quantity : 0;
   };
 
-  // Thêm món vào giỏ
+  // Thêm món vào giỏ (Tự động chuyển từ tab 'Tất cả' về 'Chọn món')
   const handleAddToCart = (dish, price) => {
+    setCartTab('draft');
     setCartItems((prev) => {
       const existingIndex = prev.findIndex((item) => item.id === dish.id);
       if (existingIndex > -1) {
@@ -454,8 +463,11 @@ export default function MenuPage() {
     });
   };
 
-  // Cập nhật số lượng món
+  // Cập nhật số lượng món (Nếu tăng thêm món -> tự động nhảy về tab 'Chọn món')
   const handleUpdateQuantity = (dishId, newQuantity) => {
+    if (newQuantity > 0) {
+      setCartTab('draft');
+    }
     if (newQuantity <= 0) {
       handleRemoveItem(dishId);
       return;
@@ -485,20 +497,50 @@ export default function MenuPage() {
   };
 
   // Xác nhận gửi bếp: Đẩy đơn vào Trạm Bếp KDS và đổi trạng thái món thành 'Đang chế biến'
-  const handleSubmitOrder = (orderData) => {
+  const handleSubmitOrder = async (orderData) => {
     const itemsToSubmit = (orderData && orderData.items) ? orderData.items : cartItems;
     if (itemsToSubmit.length === 0) return;
 
-    // 1. Đẩy vào useKdsStore để Bếp và Phục vụ nhận ngay lập tức qua BroadcastChannel
-    submitCustomerOrder({
-      tableCode: currentNormTable,
-      items: itemsToSubmit,
+    // Chuẩn bị payload gửi lên Spring Boot / MySQL
+    const payload = {
+      tableNumber: tableNumber || currentNormTable,
+      note: (orderData && orderData.note) || '',
       totalAmount: (orderData && orderData.totalAmount) || totalAmount,
-    });
+      items: itemsToSubmit.map((item) => ({
+        menuItemId: typeof item.id === 'number' ? item.id : (item.numericId || null),
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity || 1,
+        note: item.note || '',
+      })),
+    };
 
-    // 2. Làm rỗng giỏ hàng nháp
-    setCartItems([]);
-    showToast(`🔔 Đã gửi ${itemsToSubmit.length} món vào bếp thành công! Bếp đang chế biến.`, 'success');
+    try {
+      // 1. Gửi đơn lên Server Spring Boot để lưu vào MySQL
+      const serverResponse = await orderApi.createOrder(payload);
+
+      // 2. Đẩy vào useKdsStore để Bếp và Phục vụ nhận ngay lập tức qua BroadcastChannel với ID DB thực
+      submitCustomerOrder({
+        tableCode: currentNormTable,
+        items: itemsToSubmit,
+        totalAmount: (orderData && orderData.totalAmount) || totalAmount,
+        serverOrder: serverResponse,
+      });
+
+      // 3. Làm rỗng giỏ hàng nháp
+      setCartItems([]);
+      showToast(`🔔 Đã gửi ${itemsToSubmit.length} món vào bếp thành công! Bếp đang chế biến.`, 'success');
+    } catch (err) {
+      console.warn('Lỗi khi gửi order lên server, chuyển sang chế độ dự phòng cục bộ:', err);
+      // Fallback: Nếu mạng gián đoạn, vẫn lưu cục bộ để không gián đoạn trải nghiệm
+      submitCustomerOrder({
+        tableCode: currentNormTable,
+        items: itemsToSubmit,
+        totalAmount: (orderData && orderData.totalAmount) || totalAmount,
+      });
+      setCartItems([]);
+      showToast(`🔔 Đã gửi ${itemsToSubmit.length} món vào bếp!`, 'success');
+    }
   };
 
   return (
@@ -605,6 +647,8 @@ export default function MenuPage() {
           cartItems={cartItems}
           orderedItems={orderedItems}
           isHost={isHost}
+          activeTab={cartTab}
+          onTabChange={setCartTab}
           onUpdateQuantity={handleUpdateQuantity}
           onRemoveItem={handleRemoveItem}
           onClearCart={handleClearCart}
@@ -617,8 +661,10 @@ export default function MenuPage() {
       <CustomerBottomCartBar
         totalCount={totalCount}
         totalAmount={totalAmount}
-        orderedCount={orderedItems.length}
-        activeCookingCount={orderedItems.filter((i) => i.status === 'COOKING' || i.status === 'cooking').length}
+        orderedCount={orderedItems.reduce((sum, i) => sum + (i.quantity || 1), 0)}
+        activeCookingCount={orderedItems.filter((i) => i.status === 'COOKING' || i.status === 'cooking').reduce((sum, i) => sum + (i.quantity || 1), 0)}
+        waitingServeCount={orderedItems.filter((i) => i.status === 'SERVED' || i.status === 'served' || i.status === 'READY' || i.status === 'ready').reduce((sum, i) => sum + (i.quantity || 1), 0)}
+        deliveredCount={orderedItems.filter((i) => i.status === 'DELIVERED' || i.status === 'delivered').reduce((sum, i) => sum + (i.quantity || 1), 0)}
         isHost={isHost}
         onOpenCart={() => setIsCartOpen(true)}
       />
@@ -631,6 +677,8 @@ export default function MenuPage() {
         orderedItems={orderedItems}
         tableNumber={tableNumber}
         isHost={isHost}
+        activeTab={cartTab}
+        onTabChange={setCartTab}
         onUpdateQuantity={handleUpdateQuantity}
         onRemoveItem={handleRemoveItem}
         onClearCart={handleClearCart}
@@ -659,32 +707,6 @@ export default function MenuPage() {
         isCurrentHost={isHost}
         onHostTransferred={handleHostTransferred}
       />
-
-      {/* 8. Toast Thông Báo Tiến Độ Món Ăn Cho Khách Hàng Thời Gian Thực */}
-      {toastMessage && (
-        <div className="fixed top-16 right-4 z-50 animate-bounce max-w-sm">
-          <div
-            className={`px-4 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 backdrop-blur-md ${
-              toastType === 'served'
-                ? 'bg-[#0A2E1D]/95 border-emerald-500/70 text-white shadow-emerald-950/60'
-                : toastType === 'success'
-                ? 'bg-[#18181C]/95 border-amber-500/60 text-[#FFE088] shadow-black/80'
-                : 'bg-[#18181C]/95 border-white/20 text-white shadow-black/80'
-            }`}
-          >
-            <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
-              {toastType === 'served' ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 animate-pulse" />
-              ) : (
-                <ChefHat className="w-5 h-5 text-[#FFD54F]" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold leading-tight">{toastMessage}</p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
