@@ -1,8 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Loader2, RefreshCw, AlertCircle, Database } from 'lucide-react';
 import {
-  MENU_CATEGORIES,
-  initialMenuItems,
   menuApi,
   AdminMenuHeader,
   MenuSummaryControlBar,
@@ -78,7 +76,7 @@ export default function MenuManagePage() {
     } catch (err) {
       console.error('Lỗi khi tải dữ liệu thực đơn từ Database:', err);
       setError(err.message || 'Không thể kết nối đến cơ sở dữ liệu');
-      setMenuItems((prev) => (prev.length > 0 ? prev : initialMenuItems));
+      setMenuItems((prev) => prev);
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -112,10 +110,10 @@ export default function MenuManagePage() {
     if (categoryList.length > 0) {
       return [
         { id: 'all', label: 'Tất Cả' },
-        ...categoryList.map((c) => ({ id: c.slug, label: c.name })),
+        ...categoryList.map((c) => ({ id: c.slug || String(c.id), label: c.name })),
       ];
     }
-    return MENU_CATEGORIES;
+    return [{ id: 'all', label: 'Tất Cả' }];
   }, [categoryList]);
 
   // Đếm số lượng món ăn theo từng danh mục

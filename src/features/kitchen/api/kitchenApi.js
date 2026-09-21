@@ -1,9 +1,7 @@
 import { apiClient } from '@/lib/axios';
-import { initialKitchenOrders } from '../data/mockKitchenOrders';
 
 /**
  * Service API giao tiếp phân hệ Bếp KDS (Kitchen Display System).
- * Tự động fallback dữ liệu mock mượt mà nếu Backend chưa mở endpoint.
  */
 export const kitchenApi = {
   /**
@@ -12,10 +10,9 @@ export const kitchenApi = {
   getKitchenQueue: async () => {
     try {
       const response = await apiClient.get('/kitchen/queue');
-      return response.data?.result || response.data || initialKitchenOrders;
+      return response.data?.result || response.data || [];
     } catch (err) {
-      // Fallback dữ liệu mock local để giao diện hoạt động độc lập
-      return initialKitchenOrders;
+      return [];
     }
   },
 

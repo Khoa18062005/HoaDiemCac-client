@@ -1,5 +1,4 @@
 export { kitchenApi } from './api/kitchenApi';
-export { initialKitchenOrders } from './data/mockKitchenOrders';
 export { useKitchenSocket } from './hooks/useKitchenSocket';
 export { default as KdsOrderCard } from './components/KdsOrderCard';
 export { default as KdsAggregatedView } from './components/KdsAggregatedView';

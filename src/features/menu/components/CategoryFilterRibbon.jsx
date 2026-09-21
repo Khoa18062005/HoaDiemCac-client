@@ -1,11 +1,10 @@
 import React from 'react';
-import { MENU_CATEGORIES } from '../data/mockMenuItems';
 
 export default function CategoryFilterRibbon({
   selectedCategory = 'all',
   onSelectCategory,
   categoryCounts = {},
-  categories = MENU_CATEGORIES,
+  categories = [{ id: 'all', label: 'Tất Cả' }],
 }) {
   return (
     <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-surface-border font-sans no-scrollbar">

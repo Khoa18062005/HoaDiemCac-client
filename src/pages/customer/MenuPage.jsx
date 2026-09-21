@@ -9,9 +9,7 @@ import {
   CustomerBottomCartBar,
   CustomerCartDrawer,
   CustomerCartSidebar,
-  CUSTOMER_CATEGORIES,
   CATEGORY_ICONS,
-  mockCustomerDishes,
 } from '@/features/customer';
 import TablePasscodeModal from '@/features/tables/components/TablePasscodeModal';
 import TableDevicesModal from '@/features/customer/components/TableDevicesModal';
@@ -204,7 +202,14 @@ export default function MenuPage() {
         ...mapped,
       ];
     }
-    return CUSTOMER_CATEGORIES;
+    return [
+      {
+        id: 'ban-chay',
+        name: 'Bán Chạy',
+        icon: 'flame',
+        highlight: true,
+      },
+    ];
   }, [dbCategories]);
 
   // Danh sách món ăn chuẩn hóa từ Database
@@ -232,26 +237,11 @@ export default function MenuPage() {
         };
       });
     }
-    return mockCustomerDishes;
+    return [];
   }, [dbItems]);
 
-  // Khởi tạo giỏ hàng sẵn món theo thiết kế hoàng triều
-  const [cartItems, setCartItems] = useState([
-    {
-      id: 'c02',
-      name: 'Ba Chỉ Bò Mỹ Thượng Hạng',
-      price: 220000,
-      quantity: 1,
-      image: mockCustomerDishes[1]?.image || '',
-    },
-    {
-      id: 'c04',
-      name: 'Bò Wagyu A5 Xếp Cánh Sen',
-      price: 399000,
-      quantity: 1,
-      image: mockCustomerDishes[3]?.image || '',
-    },
-  ]);
+  // Khởi tạo giỏ hàng rỗng ban đầu cho khách hàng
+  const [cartItems, setCartItems] = useState([]);
 
   // Quản lý đơn món thời gian thực từ KDS Store
   const allOrders = useKdsStore((state) => state.orders);

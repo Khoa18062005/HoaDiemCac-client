@@ -11,7 +11,6 @@ import {
   Globe,
   HardDrive
 } from 'lucide-react';
-import { MENU_CATEGORIES } from '../data/mockMenuItems';
 import { uploadImageToCDN } from '@/lib/uploadService';
 
 export default function MenuItemModal({
@@ -19,14 +18,15 @@ export default function MenuItemModal({
   onClose,
   onSave,
   initialData = null,
-  categories = MENU_CATEGORIES,
+  categories = [],
 }) {
   const isEditing = Boolean(initialData);
   const fileInputRef = useRef(null);
+  const defaultCategory = categories[0]?.slug || String(categories[0]?.id || '');
 
   const [formData, setFormData] = useState({
     name: '',
-    categoryId: 'nuoc-lau',
+    categoryId: defaultCategory,
     price: '',
     unit: '',
     description: '',
@@ -44,10 +44,11 @@ export default function MenuItemModal({
   const [isDragOver, setIsDragOver] = useState(false);
 
   useEffect(() => {
+    const fallbackCat = categories[0]?.slug || String(categories[0]?.id || '');
     if (initialData) {
       setFormData({
         name: initialData.name || '',
-        categoryId: initialData.categoryId || 'nuoc-lau',
+        categoryId: initialData.categoryId || fallbackCat,
         price: initialData.price || '',
         unit: initialData.unit || '',
         description: initialData.description || '',
@@ -59,7 +60,7 @@ export default function MenuItemModal({
     } else {
       setFormData({
         name: '',
-        categoryId: 'nuoc-lau',
+        categoryId: fallbackCat,
         price: '',
         unit: '',
         description: '',
@@ -175,7 +176,7 @@ export default function MenuItemModal({
         finalImageUrl = uploadResult.url;
       }
 
-      const availableCategories = Array.isArray(categories) && categories.length > 0 ? categories : MENU_CATEGORIES;
+      const availableCategories = Array.isArray(categories) ? categories : [];
       const catObj = availableCategories.find((c) => (c.id || c.slug) === formData.categoryId);
 
       await onSave({

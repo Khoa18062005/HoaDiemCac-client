@@ -1,23 +1,55 @@
-import React, { useState, useMemo } from 'react';
-import { X, Search, AlertTriangle, CheckCircle, PackageX, RefreshCw } from 'lucide-react';
-import { initialMenuItems, MENU_CATEGORIES } from '@/features/menu';
+import React, { useState, useMemo, useEffect } from 'react';
+import { X, Search, AlertTriangle, CheckCircle, PackageX, RefreshCw, Loader2 } from 'lucide-react';
+import { menuApi } from '@/features/menu';
 import { kitchenApi } from '../api/kitchenApi';
 
 export default function OutOfStockModal({ isOpen, onClose, onShowToast }) {
-  const [items, setItems] = useState(initialMenuItems);
+  const [items, setItems] = useState([]);
+  const [categories, setCategories] = useState([{ id: 'all', label: 'Tất Cả' }]);
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loadingItemId, setLoadingItemId] = useState(null);
 
+  // Tải danh sách món ăn và danh mục từ Database khi mở modal
+  useEffect(() => {
+    if (!isOpen) return;
+    let isMounted = true;
+    setLoading(true);
+
+    Promise.all([
+      menuApi.getMenuItems().catch(() => []),
+      menuApi.getCategories().catch(() => []),
+    ]).then(([itemsData, catsData]) => {
+      if (!isMounted) return;
+      if (Array.isArray(itemsData)) {
+        setItems(itemsData);
+      }
+      if (Array.isArray(catsData) && catsData.length > 0) {
+        setCategories([
+          { id: 'all', label: 'Tất Cả' },
+          ...catsData.map((c) => ({ id: c.slug || String(c.id), label: c.name })),
+        ]);
+      }
+    }).finally(() => {
+      if (isMounted) setLoading(false);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
   // Lọc danh sách món ăn
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
-      if (selectedCategory !== 'all' && item.categoryId !== selectedCategory) {
+      const catId = item.categoryId || (item.categories && item.categories[0]?.slug) || '';
+      if (selectedCategory !== 'all' && catId !== selectedCategory) {
         return false;
       }
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
-        return item.name.toLowerCase().includes(query) || item.categoryName?.toLowerCase().includes(query);
+        return item.name.toLowerCase().includes(query) || (item.categoryName && item.categoryName.toLowerCase().includes(query));
       }
       return true;
     });
@@ -99,7 +131,7 @@ export default function OutOfStockModal({ isOpen, onClose, onShowToast }) {
 
           {/* Danh mục tab cuộn ngang */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar text-xs">
-            {MENU_CATEGORIES.map((cat) => (
+            {categories.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
@@ -117,7 +149,17 @@ export default function OutOfStockModal({ isOpen, onClose, onShowToast }) {
 
         {/* Danh sách món ăn với công tắc Còn / Hết hàng */}
         <div className="p-4 overflow-y-auto flex-1 divide-y divide-surface-border/60 custom-scrollbar space-y-2">
-          {filteredItems.map((item) => {
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12 text-[#8E8E93]">
+              <Loader2 className="w-6 h-6 animate-spin mb-2 text-gold" />
+              <span className="text-xs">Đang tải danh sách món ăn từ cơ sở dữ liệu...</span>
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="text-center py-12 text-xs text-[#8E8E93] italic">
+              Không tìm thấy món ăn nào phù hợp
+            </div>
+          ) : (
+            filteredItems.map((item) => {
             const isAvailable = item.isAvailable;
             const isLoading = loadingItemId === item.id;
 
@@ -173,7 +215,7 @@ export default function OutOfStockModal({ isOpen, onClose, onShowToast }) {
                 </button>
               </div>
             );
-          })}
+          }))}
         </div>
 
         {/* Footer */}

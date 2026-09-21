@@ -4,7 +4,6 @@ import {
   KdsOrderCard,
   KdsAggregatedView,
   OutOfStockModal,
-  initialKitchenOrders,
   kitchenApi,
   useKitchenSocket,
 } from '@/features/kitchen';
@@ -14,10 +13,22 @@ import useKdsStore from '@/stores/useKdsStore';
 export default function KitchenKdsPage() {
   // 1. Quản lý trạng thái danh sách order hàng đợi từ Store đồng bộ KDS - Waiter
   const orders = useKdsStore((state) => state.orders);
+  const setOrders = useKdsStore((state) => state.setOrders);
   const toggleKitchenItemStatus = useKdsStore((state) => state.toggleKitchenItemStatus);
   const completeAllKitchenItems = useKdsStore((state) => state.completeAllKitchenItems);
   const addNewOrder = useKdsStore((state) => state.addNewOrder);
   const simulateNewOrderStore = useKdsStore((state) => state.simulateNewOrder);
+
+  // Tải hàng đợi thực tế từ Backend nếu store đang trống
+  useEffect(() => {
+    if (orders.length === 0) {
+      kitchenApi.getKitchenQueue().then((queue) => {
+        if (Array.isArray(queue) && queue.length > 0) {
+          setOrders(queue);
+        }
+      }).catch(() => {});
+    }
+  }, []);
 
   // 2. Quản lý bộ lọc & Chế độ xem
   const [viewMode, setViewMode] = useState('tickets'); // 'tickets' | 'aggregated'

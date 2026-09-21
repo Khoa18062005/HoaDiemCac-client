@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { initialKitchenOrders } from '@/features/kitchen/data/mockKitchenOrders';
 
 // Unique Tab ID để phân biệt các tab/cửa sổ khác nhau
 const tabId = typeof window !== 'undefined' ? `tab_${Math.random().toString(36).substring(2, 9)}` : 'server';
@@ -61,21 +60,25 @@ export function playChimeSound() {
   }
 }
 
-// Khôi phục orders từ localStorage nếu có
+// Khôi phục orders từ localStorage nếu có (lọc bỏ mock data cũ)
 function loadInitialOrders() {
-  if (typeof window === 'undefined') return initialKitchenOrders;
+  if (typeof window === 'undefined') return [];
   try {
     const saved = localStorage.getItem('hoadiemcat_kds_orders_v2');
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        // Lọc bỏ các ID mẫu như 'ord-101', 'ord-102', 'ord-103', 'ord-104'
+        const filtered = parsed.filter(
+          (o) => o && o.id && !['ord-101', 'ord-102', 'ord-103', 'ord-104'].includes(o.id)
+        );
+        return filtered;
       }
     }
   } catch (err) {
     console.error('Error loading saved KDS orders:', err);
   }
-  return initialKitchenOrders;
+  return [];
 }
 
 function saveOrdersToStorage(orders) {
@@ -473,11 +476,18 @@ export const useKdsStore = create((set, get) => ({
     return get().addNewOrder(newOrder);
   },
 
-  // 7. Khôi phục dữ liệu gốc
+  // 7. Cập nhật danh sách orders từ bên ngoài (ví dụ API backend)
+  setOrders: (orders) => {
+    const validOrders = Array.isArray(orders) ? orders : [];
+    set({ orders: validOrders });
+    saveOrdersToStorage(validOrders);
+  },
+
+  // 8. Khôi phục dữ liệu gốc (xóa sạch về mảng rỗng)
   resetToDefault: () => {
     localStorage.removeItem('hoadiemcat_kds_orders_v2');
-    set({ orders: initialKitchenOrders, lastBroadcastEvent: null });
-    broadcastUpdate(initialKitchenOrders, { type: 'RESET_ORDERS', message: 'Đã thiết lập lại dữ liệu' });
+    set({ orders: [], lastBroadcastEvent: null });
+    broadcastUpdate([], { type: 'RESET_ORDERS', message: 'Đã thiết lập lại dữ liệu' });
   },
 }));
 
