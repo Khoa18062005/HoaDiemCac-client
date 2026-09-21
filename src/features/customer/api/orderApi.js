@@ -29,7 +29,7 @@ export const orderApi = {
    */
   getTableOrders: async (tableNumber) => {
     try {
-      const response = await apiClient.get(`/customer/orders/${tableNumber}`);
+      const response = await apiClient.get(`/customer/orders/${encodeURIComponent(tableNumber)}`);
       return Array.isArray(response) ? response : [];
     } catch (err) {
       console.warn('Lỗi khi lấy danh sách order của bàn:', err);

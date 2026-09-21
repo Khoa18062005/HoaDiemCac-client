@@ -73,14 +73,12 @@ function loadInitialOrders() {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Lọc bỏ các ID mẫu như 'ord-101'..'ord-105' hoặc đơn mẫu
+        // Lọc bỏ các ID mẫu như 'ord-101'..'ord-105'
         const filtered = parsed.filter(
           (o) =>
             o &&
             o.id &&
-            !String(o.id).startsWith('ord-10') &&
-            o.tableCode !== 'BÀN 08' &&
-            o.tableCode !== 'BÀN 06'
+            !String(o.id).startsWith('ord-10')
         );
         return filtered;
       }
@@ -613,11 +611,19 @@ export const useKdsStore = create((set, get) => ({
 
   // 6.2 Đồng bộ các đơn của một bàn cụ thể từ Server MySQL
   syncTableOrders: (tableCode, serverOrders) => {
+    if (!Array.isArray(serverOrders)) return;
     const norm = normalizeTableCode(tableCode);
     const currentOrders = get().orders;
     const otherOrders = currentOrders.filter((o) => normalizeTableCode(o.tableCode) !== norm);
+    const existingTableOrders = currentOrders.filter((o) => normalizeTableCode(o.tableCode) === norm);
 
-    const mappedServerOrders = (serverOrders || []).map((o) => {
+    // Nếu server trả về rỗng nhưng máy khách đang có đơn hàng cục bộ vừa đặt (trong phiên làm việc)
+    // thì KHÔNG xóa sạch đơn của khách để tránh mất món trong giỏ hàng
+    if (serverOrders.length === 0 && existingTableOrders.length > 0) {
+      return;
+    }
+
+    const mappedServerOrders = serverOrders.map((o) => {
       const isVip = norm.startsWith('VIP');
       return {
         id: o.id,
@@ -651,7 +657,7 @@ export const useKdsStore = create((set, get) => ({
 
     const nextOrders = [...otherOrders, ...mappedServerOrders];
     set({ orders: nextOrders });
-    saveOrdersToStorage(nextOrders);
+    // Không ghi đè localStorage của toàn bộ nhà hàng khi chỉ đồng bộ 1 bàn đơn lẻ của khách
   },
 
   // 7. Cập nhật danh sách orders từ bên ngoài (ví dụ API backend)

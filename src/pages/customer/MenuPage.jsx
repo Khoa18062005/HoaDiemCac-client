@@ -262,7 +262,10 @@ export default function MenuPage() {
     // 1. Tải danh sách đơn từ Server MySQL
     const syncTableOrders = async () => {
       try {
-        const serverOrders = await orderApi.getTableOrders(currentNormTable);
+        let serverOrders = await orderApi.getTableOrders(tableNumber);
+        if ((!serverOrders || serverOrders.length === 0) && currentNormTable !== tableNumber) {
+          serverOrders = await orderApi.getTableOrders(currentNormTable);
+        }
         if (isMounted && Array.isArray(serverOrders)) {
           useKdsStore.getState().syncTableOrders(currentNormTable, serverOrders);
         }
@@ -274,8 +277,7 @@ export default function MenuPage() {
     syncTableOrders();
 
     // 2. Lắng nghe WebSocket qua kênh /topic/table/{tableNumber}/status
-    const dest = `/topic/table/${currentNormTable}/status`;
-    const unsubscribe = wsManager.subscribe(dest, (payload) => {
+    const handleRemoteUpdate = (payload) => {
       if (!payload) return;
 
       if (payload.type === 'KITCHEN_ITEM_STATUS_TOGGLED' || payload.type === 'WAITER_ITEM_DELIVERED') {
@@ -285,17 +287,23 @@ export default function MenuPage() {
       } else {
         syncTableOrders();
       }
-    });
+    };
+
+    const unsub1 = wsManager.subscribe(`/topic/table/${tableNumber}/status`, handleRemoteUpdate);
+    const unsub2 = (tableNumber !== currentNormTable)
+      ? wsManager.subscribe(`/topic/table/${currentNormTable}/status`, handleRemoteUpdate)
+      : null;
 
     // 3. Polling dự phòng mỗi 4 giây (đảm bảo đồng bộ ngay cả khi WebSocket chập chờn trên mạng đa máy tính)
     const interval = setInterval(syncTableOrders, 4000);
 
     return () => {
       isMounted = false;
-      if (unsubscribe) unsubscribe();
+      if (unsub1) unsub1();
+      if (unsub2) unsub2();
       clearInterval(interval);
     };
-  }, [currentNormTable]);
+  }, [tableNumber, currentNormTable]);
 
   // Danh sách toàn bộ các món đã gửi bếp của bàn (đồng bộ thời gian thực từ useKdsStore)
   const orderedItems = useMemo(() => {

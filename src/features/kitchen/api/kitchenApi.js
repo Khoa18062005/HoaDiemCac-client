@@ -10,8 +10,9 @@ export const kitchenApi = {
   getKitchenQueue: async () => {
     try {
       const response = await apiClient.get('/kitchen/queue');
-      return response.data?.result || response.data || [];
+      return Array.isArray(response) ? response : (response?.data?.result || response?.data || response?.result || []);
     } catch (err) {
+      console.warn('Lỗi khi tải hàng đợi bếp từ server:', err);
       return [];
     }
   },
@@ -24,7 +25,7 @@ export const kitchenApi = {
   updateOrderItemStatus: async (orderItemId, status) => {
     try {
       const response = await apiClient.patch(`/kitchen/items/${orderItemId}/status`, { status });
-      return response.data;
+      return response;
     } catch (err) {
       return { success: true, orderItemId, status };
     }
@@ -38,7 +39,7 @@ export const kitchenApi = {
   updateOrderStatus: async (orderId, status) => {
     try {
       const response = await apiClient.patch(`/kitchen/orders/${orderId}/status`, { status });
-      return response.data;
+      return response;
     } catch (err) {
       return { success: true, orderId, status };
     }
@@ -54,7 +55,7 @@ export const kitchenApi = {
       const response = await apiClient.patch(`/kitchen/menu-items/${menuItemId}/stock`, {
         isAvailable,
       });
-      return response.data;
+      return response;
     } catch (err) {
       return { success: true, menuItemId, isAvailable };
     }
