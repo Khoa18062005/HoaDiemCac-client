@@ -14,7 +14,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 
-export default function TableCardQr({
+function TableCardQr({
   table,
   onRegeneratePin,
   onToggleLock,
@@ -264,3 +264,5 @@ export default function TableCardQr({
     </div>
   );
 }
+
+export default React.memo(TableCardQr);

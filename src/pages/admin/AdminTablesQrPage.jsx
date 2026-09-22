@@ -17,10 +17,26 @@ import TableCardQr from '@/features/tables/components/TableCardQr';
 import TableQrPrintModal from '@/features/tables/components/TableQrPrintModal';
 import AdminTableDevicesModal from '@/features/tables/components/AdminTableDevicesModal';
 import { tableApi } from '@/features/tables/api/tableApi';
+import { wsManager } from '@/lib/websocket';
+
+const CACHE_KEY = 'hoadiemcat_tables_cache';
 
 export default function AdminTablesQrPage() {
-  const [tables, setTables] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [tables, setTables] = useState(() => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      return cached ? JSON.parse(cached) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      return !localStorage.getItem(CACHE_KEY);
+    } catch (e) {
+      return true;
+    }
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [areaFilter, setAreaFilter] = useState('ALL'); // ALL, COMMON, VIP
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, AVAILABLE, OCCUPIED, CLEANING
@@ -49,37 +65,73 @@ export default function AdminTablesQrPage() {
     setTimeout(() => setToast({ visible: false, message: '', type: 'success' }), 3000);
   };
 
+  const updateTablesWithCache = (updater) => {
+    setTables((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+      } catch (e) {
+        console.warn('Lỗi lưu cache:', e);
+      }
+      return next;
+    });
+  };
+
   const fetchTables = async (isInitial = false) => {
     try {
-      if (isInitial) setLoading(true);
+      if (isInitial && tables.length === 0) setLoading(true);
       const data = await tableApi.getAllTables();
       if (Array.isArray(data)) {
-        setTables(data);
+        updateTablesWithCache(data);
       }
     } catch (err) {
       console.error('Lỗi tải danh sách bàn:', err);
-      if (isInitial) showToast('Lỗi khi tải danh sách bàn', 'error');
+      if (isInitial && tables.length === 0) showToast('Lỗi khi tải danh sách bàn', 'error');
     } finally {
       if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTables(true);
+    fetchTables(tables.length === 0);
 
-    // Tự động đồng bộ thời gian thực từ Database định kỳ mỗi 3 giây
+    // 1. Tự động đồng bộ thời gian thực qua WebSocket (< 50ms)
+    const unsubTables = wsManager.subscribe('/topic/tables', (tableUpdate) => {
+      if (!tableUpdate) return;
+      if (Array.isArray(tableUpdate)) {
+        updateTablesWithCache(tableUpdate);
+      } else if (tableUpdate.id) {
+        updateTablesWithCache((prev) =>
+          prev.map((t) => (t.id === tableUpdate.id ? { ...t, ...tableUpdate } : t))
+        );
+      } else {
+        fetchTables(false);
+      }
+    });
+
+    // 2. Polling dự phòng mỗi 30 giây (đã có WebSocket real-time)
     const interval = setInterval(() => {
       fetchTables(false);
-    }, 3000);
+    }, 30000);
 
-    return () => clearInterval(interval);
+    // 3. Tự động đồng bộ lại ngay khi người dùng quay lại tab
+    const handleFocus = () => {
+      fetchTables(false);
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      if (typeof unsubTables === 'function') unsubTables();
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   // Handler đổi mã PIN mới (thanh toán / giải phóng bàn về BÀN TRỐNG, mở khóa order)
   const handleRegeneratePin = async (tableId) => {
     try {
       const res = await tableApi.regeneratePin(tableId);
-      setTables((prev) =>
+      updateTablesWithCache((prev) =>
         prev.map((t) =>
           t.id === tableId
             ? {
@@ -105,7 +157,7 @@ export default function AdminTablesQrPage() {
       const current = tables.find((t) => t.id === tableId);
       const newLocked = !Boolean(current?.isOrderLocked);
       const res = await tableApi.toggleOrderLock(tableId);
-      setTables((prev) =>
+      updateTablesWithCache((prev) =>
         prev.map((t) => (t.id === tableId ? { ...t, ...res, isOrderLocked: res.isOrderLocked ?? newLocked } : t))
       );
       showToast(newLocked ? 'Đã kích hoạt khóa order khẩn cấp' : 'Đã mở khóa order cho bàn');
@@ -118,7 +170,7 @@ export default function AdminTablesQrPage() {
   const handleUpdateStatus = async (tableId, newStatus) => {
     try {
       const res = await tableApi.updateTableStatus(tableId, newStatus);
-      setTables((prev) =>
+      updateTablesWithCache((prev) =>
         prev.map((t) =>
           t.id === tableId
             ? {
@@ -132,12 +184,6 @@ export default function AdminTablesQrPage() {
             : t
         )
       );
-      const statusLabels = {
-        AVAILABLE: 'Bàn Trống (Sẵn sàng - Mở khóa order)',
-        OCCUPIED: 'Có Khách',
-        CLEANING: 'Dọn Dẹp',
-      };
-      showToast(`Đã chuyển trạng thái sang: ${statusLabels[newStatus] || newStatus}`);
     } catch (err) {
       showToast('Lỗi khi cập nhật trạng thái bàn', 'error');
     }
@@ -164,7 +210,7 @@ export default function AdminTablesQrPage() {
       activeDeviceCount: 0,
     };
 
-    setTables((prev) => [...prev, newTable]);
+    updateTablesWithCache((prev) => [...prev, newTable]);
     setIsAddModalOpen(false);
     setNewTableData({ tableNumber: '', name: '', area: 'COMMON', capacity: 4, maxActiveDevices: 6 });
     showToast(`Đã thêm bàn mới: ${newTable.name}`);
@@ -234,7 +280,7 @@ export default function AdminTablesQrPage() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
               </span>
-              <span>Đồng bộ thời gian thực: 3s</span>
+              <span>Đồng bộ thời gian thực: WebSocket</span>
             </div>
 
             <button

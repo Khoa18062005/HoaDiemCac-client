@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Search, Bell, X, Check, Crown, Users } from 'lucide-react';
+import { ShoppingBag, Search, Bell, X, Check, Crown, Users, Receipt, Loader2 } from 'lucide-react';
+import { tableApi } from '@/features/tables/api/tableApi';
 
 /**
  * CustomerHeader
  * Header thích ứng đa nền tảng (Mobile, Tablet, Laptop):
- * - Mobile: Brand seal, Tên nhà hàng, Bàn XX, Nút giỏ hàng, Nút chuông gọi phục vụ.
+ * - Mobile: Brand seal, Tên nhà hàng, Bàn XX, Nút giỏ hàng, Nút chuông gọi phục vụ, Nút yêu cầu thanh toán.
  * - Tablet & Laptop: Mở rộng thanh tìm kiếm món ăn, nút gọi phục vụ có chữ, chỉ báo bàn VIP.
  */
 export default function CustomerHeader({
@@ -18,10 +19,36 @@ export default function CustomerHeader({
   onOpenDevices,
 }) {
   const [calledService, setCalledService] = useState(false);
+  const [isCallingStaff, setIsCallingStaff] = useState(false);
+  const [payRequested, setPayRequested] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
 
-  const handleCallWaiter = () => {
-    setCalledService(true);
-    setTimeout(() => setCalledService(false), 3000);
+  const handleCallWaiter = async () => {
+    if (isCallingStaff || calledService) return;
+    setIsCallingStaff(true);
+    try {
+      await tableApi.callStaff(tableNumber, 'CALL_STAFF', `Bàn ${tableNumber} cần gọi phục vụ`);
+      setCalledService(true);
+      setTimeout(() => setCalledService(false), 4000);
+    } catch (err) {
+      console.warn('Lỗi gọi phục vụ:', err);
+    } finally {
+      setIsCallingStaff(false);
+    }
+  };
+
+  const handleRequestPayment = async () => {
+    if (isPaying || payRequested) return;
+    setIsPaying(true);
+    try {
+      await tableApi.callStaff(tableNumber, 'PAYMENT_REQUEST', `Bàn ${tableNumber} yêu cầu thanh toán`);
+      setPayRequested(true);
+      setTimeout(() => setPayRequested(false), 4000);
+    } catch (err) {
+      console.error('Lỗi yêu cầu thanh toán:', err);
+    } finally {
+      setIsPaying(false);
+    }
   };
 
   return (
@@ -66,16 +93,17 @@ export default function CustomerHeader({
           </div>
         )}
 
-        {/* 3. Actions: Call Waiter, Table Status, Cart Button */}
+        {/* 3. Actions: Call Waiter, Request Payment, Table Status, Cart Button */}
         <div className="flex items-center space-x-1.5 sm:space-x-2.5 flex-shrink-0">
           {/* Nút Gọi Nhân Viên / Phục Vụ */}
           <button
             type="button"
             onClick={handleCallWaiter}
+            disabled={isCallingStaff || calledService}
             title="Gọi nhân viên phục vụ tại bàn"
             className={`py-1.5 px-2 sm:px-2.5 rounded-full border text-xs font-medium flex items-center space-x-1.5 active:scale-95 transition-all select-none ${
               calledService
-                ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300 shadow-sm'
+                ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300 shadow-sm cursor-default'
                 : 'bg-[#22181A] border-[rgba(212,175,55,0.3)] text-[#D6D3CD] hover:border-[#D4AF37]/70 hover:text-[#FFE699]'
             }`}
           >
@@ -86,8 +114,43 @@ export default function CustomerHeader({
               </>
             ) : (
               <>
-                <Bell className="w-3.5 h-3.5 text-[#D4AF37]" />
-                <span className="hidden md:inline text-[11px] text-[#FFE699]">Gọi phục vụ</span>
+                {isCallingStaff ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#D4AF37]" />
+                ) : (
+                  <Bell className="w-3.5 h-3.5 text-[#D4AF37]" />
+                )}
+                <span className="hidden md:inline text-[11px] text-[#FFE699]">
+                  {isCallingStaff ? 'Đang gọi...' : 'Gọi phục vụ'}
+                </span>
+              </>
+            )}
+          </button>
+
+          {/* Nút Yêu Cầu Thanh Toán */}
+          <button
+            type="button"
+            onClick={handleRequestPayment}
+            disabled={isPaying || payRequested}
+            title="Yêu cầu nhân viên thanh toán hóa đơn"
+            className={`py-1.5 px-2 sm:px-2.5 rounded-full border text-xs font-medium flex items-center space-x-1.5 active:scale-95 transition-all select-none ${
+              payRequested
+                ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300 shadow-sm cursor-default'
+                : 'bg-[#2A1D0B] border-amber-500/40 text-amber-300 hover:border-amber-400 hover:text-[#FFE699] hover:bg-amber-500/10'
+            }`}
+          >
+            {payRequested ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-[11px] font-bold text-emerald-300">Đã gọi tính tiền!</span>
+              </>
+            ) : (
+              <>
+                {isPaying ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" />
+                ) : (
+                  <Receipt className="w-3.5 h-3.5 text-amber-400" />
+                )}
+                <span className="hidden md:inline text-[11px] text-amber-200">Thanh toán</span>
               </>
             )}
           </button>

@@ -11,7 +11,11 @@ import {
   UtensilsCrossed,
   Crown,
   Lock,
+  Receipt,
+  Loader2,
+  Bell,
 } from 'lucide-react';
+import { tableApi } from '@/features/tables/api/tableApi';
 
 /**
  * CustomerCartDrawer
@@ -41,6 +45,42 @@ export default function CustomerCartDrawer({
     setInternalTab(tab);
   };
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
+  const [payRequested, setPayRequested] = useState(false);
+  const [isCallingStaff, setIsCallingStaff] = useState(false);
+  const [staffCalled, setStaffCalled] = useState(false);
+
+  const handleRequestPayment = async () => {
+    if (isPaying || payRequested) return;
+    setIsPaying(true);
+    try {
+      await tableApi.callStaff(tableNumber, 'PAYMENT_REQUEST', `Bàn ${tableNumber} yêu cầu thanh toán`);
+      setPayRequested(true);
+      setTimeout(() => {
+        setPayRequested(false);
+      }, 6000);
+    } catch (err) {
+      console.error('Lỗi khi gửi yêu cầu thanh toán:', err);
+    } finally {
+      setIsPaying(false);
+    }
+  };
+
+  const handleCallStaff = async () => {
+    if (isCallingStaff || staffCalled) return;
+    setIsCallingStaff(true);
+    try {
+      await tableApi.callStaff(tableNumber, 'CALL_STAFF', `Bàn ${tableNumber} cần gọi phục vụ`);
+      setStaffCalled(true);
+      setTimeout(() => {
+        setStaffCalled(false);
+      }, 5000);
+    } catch (err) {
+      console.error('Lỗi khi gọi nhân viên:', err);
+    } finally {
+      setIsCallingStaff(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -327,7 +367,7 @@ export default function CustomerCartDrawer({
           <>
             <div className="flex-1 overflow-y-auto no-scrollbar px-4 py-3 space-y-3">
               {orderedItems.length === 0 ? (
-                <div className="py-12 flex flex-col items-center justify-center text-center text-[#9E9AA0] space-y-2">
+                <div className="py-12 flex flex-col items-center justify-center text-center text-[#9E9AA0] space-y-3">
                   <UtensilsCrossed className="w-12 h-12 text-[#D4AF37]/40 stroke-[1.5]" />
                   <p className="text-sm font-medium text-[#D6D3CD]">
                     Chưa có món nào được gửi bếp
@@ -335,6 +375,33 @@ export default function CustomerCartDrawer({
                   <p className="text-xs max-w-xs text-[#9E9AA0]">
                     Các món sau khi bấm "Gửi Vào Bếp" sẽ hiển thị tại đây để bạn tiện theo dõi trạng thái chế biến.
                   </p>
+                  <button
+                    type="button"
+                    onClick={handleCallStaff}
+                    disabled={isCallingStaff || staffCalled}
+                    className={`py-2 px-4 rounded-xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-all shadow-md active:scale-95 select-none ${
+                      staffCalled
+                        ? 'bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 shadow-sm cursor-default'
+                        : 'bg-[#22181A] border border-[rgba(212,175,55,0.35)] text-[#FFE699] hover:border-[#D4AF37] hover:bg-[#2E1F22]'
+                    }`}
+                  >
+                    {isCallingStaff ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" />
+                        <span>Đang gọi nhân viên...</span>
+                      </>
+                    ) : staffCalled ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Đã gọi nhân viên!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Bell className="w-3.5 h-3.5 text-[#D4AF37]" />
+                        <span>Gọi Nhân Viên Phục Vụ</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               ) : (
                 orderedItems.map((item) => (
@@ -411,7 +478,7 @@ export default function CustomerCartDrawer({
 
             {/* Footer Summary for Tab Tất cả */}
             {orderedItems.length > 0 && (
-              <div className="p-4 border-t border-white/10 bg-[#18181C] space-y-2 flex-shrink-0">
+              <div className="p-4 border-t border-white/10 bg-[#18181C] space-y-2.5 flex-shrink-0">
                 <div className="flex items-baseline justify-between">
                   <span className="text-xs text-[#D6D3CD] uppercase tracking-wider font-semibold">
                     Tổng tạm tính ({totalOrderedCount} món):
@@ -423,8 +490,73 @@ export default function CustomerCartDrawer({
                     <span className="text-xs font-bold text-[#FFD54F] ml-0.5">₫</span>
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Nút Gọi Phục Vụ */}
+                  <button
+                    type="button"
+                    onClick={handleCallStaff}
+                    disabled={isCallingStaff || staffCalled}
+                    className={`py-2.5 px-2.5 rounded-xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-all shadow-md active:scale-98 select-none ${
+                      staffCalled
+                        ? 'bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 shadow-sm cursor-default'
+                        : 'bg-[#22181A] border border-[rgba(212,175,55,0.35)] text-[#FFE699] hover:border-[#D4AF37] hover:bg-[#2E1F22]'
+                    }`}
+                  >
+                    {isCallingStaff ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" />
+                        <span>Đang gọi...</span>
+                      </>
+                    ) : staffCalled ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Đã gọi!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Bell className="w-3.5 h-3.5 text-[#D4AF37]" />
+                        <span>Gọi Phục Vụ</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Nút Yêu Cầu Thanh Toán */}
+                  <button
+                    type="button"
+                    onClick={handleRequestPayment}
+                    disabled={isPaying || payRequested}
+                    className={`py-2.5 px-2.5 rounded-xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-all shadow-md active:scale-98 select-none ${
+                      payRequested
+                        ? 'bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 shadow-sm cursor-default'
+                        : 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 border border-amber-300/60 shadow-[0_4px_12px_rgba(212,175,55,0.25)]'
+                    }`}
+                  >
+                    {isPaying ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-950" />
+                        <span>Đang gửi...</span>
+                      </>
+                    ) : payRequested ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Đã yêu cầu</span>
+                      </>
+                    ) : (
+                      <>
+                        <Receipt className="w-3.5 h-3.5 text-zinc-950" />
+                        <span>Thanh Toán</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
                 <p className="text-[10.5px] text-[#A39E93] text-center italic">
-                  Món ăn đã gửi vào bếp. Vui lòng gọi nhân viên nếu cần hỗ trợ.
+                  {payRequested
+                    ? 'Nhân viên đang in hóa đơn và mang đến bàn bạn.'
+                    : staffCalled
+                    ? 'Nhân viên đang đến hỗ trợ bàn bạn.'
+                    : 'Món ăn đã gửi vào bếp. Quý khách có thể gọi phục vụ hoặc thanh toán.'}
                 </p>
               </div>
             )}

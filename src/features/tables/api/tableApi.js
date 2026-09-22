@@ -56,6 +56,21 @@ export const tableApi = {
     return res?.result !== undefined ? res.result : res;
   },
 
+  // Tắt / xử lý chuông gọi phục vụ hoặc yêu cầu thanh toán của bàn (Admin)
+  resolveCallStaff: async (tableId, type = null) => {
+    const url = type
+      ? `/admin/tables/${tableId}/resolve-call-staff?type=${type}`
+      : `/admin/tables/${tableId}/resolve-call-staff`;
+    const res = await apiClient.post(url);
+    return res?.result !== undefined ? res.result : res;
+  },
+
+  // Khách hàng gửi yêu cầu chuông gọi nhân viên / thanh toán
+  callStaff: async (identifier, type = 'CALL_STAFF', message = '') => {
+    const res = await apiClient.post(`/customer/tables/${identifier}/call-staff?type=${type}&message=${encodeURIComponent(message)}`);
+    return res?.result !== undefined ? res.result : res;
+  },
+
   // Lấy thông tin cơ bản bàn khi khách quét QR
   getTablePublicInfo: async (identifier) => {
     const res = await apiClient.get(`/customer/tables/${identifier}/info`);
