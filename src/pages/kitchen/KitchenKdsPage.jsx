@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import {
   KitchenHeader,
   KdsOrderCard,
@@ -11,6 +12,10 @@ import { ChefHat, CheckCircle } from 'lucide-react';
 import useKdsStore from '@/stores/useKdsStore';
 
 export default function KitchenKdsPage() {
+  const outletContext = useOutletContext();
+  const isFullscreen = outletContext?.isFullscreen ?? false;
+  const toggleFullscreen = outletContext?.toggleFullscreen;
+
   // 1. Quản lý trạng thái danh sách order hàng đợi từ Store đồng bộ KDS - Waiter
   const orders = useKdsStore((state) => state.orders);
   const setOrders = useKdsStore((state) => state.setOrders);
@@ -156,7 +161,7 @@ export default function KitchenKdsPage() {
   }, [orders, areaFilter, hiddenOrderIds]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0C0C0F]">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-[#0C0C0F]">
       {/* 1. Header trạm bếp chuyên dụng tích hợp bộ điều phối chế độ xem & khu vực */}
       <KitchenHeader
         viewMode={viewMode}
@@ -167,6 +172,8 @@ export default function KitchenKdsPage() {
         onToggleAudio={toggleAudio}
         onOpenOutOfStockModal={() => setIsOutOfStockOpen(true)}
         onSimulateNewOrder={handleSimulate}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
       />
 
       {/* 3. Vùng nội dung chính KDS */}

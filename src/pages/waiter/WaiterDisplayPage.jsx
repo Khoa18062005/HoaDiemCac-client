@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import {
   WaiterHeader,
   WaiterTableCard,
@@ -11,6 +12,10 @@ import {
 } from 'lucide-react';
 
 export default function WaiterDisplayPage() {
+  const outletContext = useOutletContext();
+  const isFullscreen = outletContext?.isFullscreen ?? false;
+  const toggleFullscreen = outletContext?.toggleFullscreen;
+
   const orders = useKdsStore((state) => state.orders);
   const setOrders = useKdsStore((state) => state.setOrders);
   const deliverItem = useKdsStore((state) => state.deliverItem);
@@ -208,7 +213,7 @@ export default function WaiterDisplayPage() {
   }, [orders, areaFilter, hiddenOrderIds]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0C0C0F]">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-[#0C0C0F]">
       {/* 1. Header Màn hình phục vụ */}
       <WaiterHeader
         areaFilter={areaFilter}
@@ -216,6 +221,8 @@ export default function WaiterDisplayPage() {
         isAudioMuted={isAudioMuted}
         onToggleAudio={toggleAudio}
         onSimulateNewOrder={handleSimulate}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
       />
 
       {/* 2. Vùng lưới hiển thị các bàn phục vụ */}

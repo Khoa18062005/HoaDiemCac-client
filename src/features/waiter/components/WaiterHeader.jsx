@@ -7,9 +7,6 @@ import {
   Maximize,
   Minimize,
   ChefHat,
-  LayoutGrid,
-  LogOut,
-  BellRing,
 } from 'lucide-react';
 import logoImg from '@/assets/images/logo.png';
 import { useAuthStore } from '@/stores/useAuthStore';
@@ -20,17 +17,16 @@ export default function WaiterHeader({
   isAudioMuted = false,
   onToggleAudio,
   onSimulateNewOrder,
+  isFullscreen: propIsFullscreen,
+  onToggleFullscreen: propToggleFullscreen,
 }) {
   const navigate = useNavigate();
   const authUser = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout);
-
-  const rawRole = (authUser?.role || 'STAFF').replace(/^ROLE_/, '');
-  const isAdminOrManager = rawRole === 'ADMIN' || rawRole === 'MANAGER';
 
   // Digital Live Clock
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [internalFullscreen, setInternalFullscreen] = useState(Boolean(document.fullscreenElement));
+  const isFullscreen = propIsFullscreen !== undefined ? propIsFullscreen : internalFullscreen;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -40,23 +36,17 @@ export default function WaiterHeader({
   }, []);
 
   const toggleFullscreen = () => {
+    if (propToggleFullscreen) {
+      propToggleFullscreen();
+      return;
+    }
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+      document.documentElement.requestFullscreen().then(() => setInternalFullscreen(true)).catch(() => {});
     } else {
       if (document.exitFullscreen) {
-        document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+        document.exitFullscreen().then(() => setInternalFullscreen(false)).catch(() => {});
       }
     }
-  };
-
-  const handleLogout = () => {
-    logout();
-    try {
-      sessionStorage.clear();
-      localStorage.removeItem('currentUser');
-      localStorage.removeItem('hoadiemcat_auth');
-    } catch {}
-    navigate('/login');
   };
 
   const formattedTime = currentTime.toLocaleTimeString('vi-VN', {
@@ -73,18 +63,24 @@ export default function WaiterHeader({
   });
 
   return (
-    <header className="h-16 bg-[#101012] border-b border-surface-border px-4 flex items-center justify-between select-none z-30 flex-shrink-0 shadow-lg">
+    <header className="h-20 bg-[#101012] border-b border-surface-border px-4 flex items-center justify-between select-none z-30 flex-shrink-0 shadow-lg">
       {/* 1. Bên Trái: Logo & Màn hình phục vụ & Live Clock */}
       <div className="flex items-center gap-3 sm:gap-4">
         <div className="flex items-center gap-2 sm:gap-2.5">
-          <img
-            src={logoImg}
-            alt="Hỏa Diệm Các"
-            className="h-10 sm:h-11 w-auto object-contain cursor-pointer drop-shadow-[0_2px_10px_rgba(212,175,55,0.2)] hover:scale-105 transition-transform"
-            onClick={() => navigate('/admin')}
-            title="Hỏa Diệm Các - Nhấn để quay về Sơ đồ bàn"
-          />
-          <span className="text-xs sm:text-sm font-bold text-white tracking-wide whitespace-nowrap pl-2 border-l border-white/20">
+          {isFullscreen && (
+            <img
+              src={logoImg}
+              alt="Hỏa Diệm Các"
+              className="h-10 sm:h-11 w-auto object-contain cursor-pointer drop-shadow-[0_2px_10px_rgba(212,175,55,0.2)] hover:scale-105 transition-transform"
+              onClick={() => navigate('/admin')}
+              title="Hỏa Diệm Các - Nhấn để quay về Sơ đồ bàn"
+            />
+          )}
+          <span
+            className={`text-xs sm:text-sm font-bold text-white tracking-wide whitespace-nowrap ${
+              isFullscreen ? 'pl-2 border-l border-white/20' : ''
+            }`}
+          >
             Màn hình phục vụ
           </span>
         </div>
@@ -151,17 +147,6 @@ export default function WaiterHeader({
           <span className="hidden md:inline">Màn Hình Bếp</span>
         </button>
 
-        {/* Nút Giả lập đơn mới */}
-        {onSimulateNewOrder && (
-          <button
-            onClick={onSimulateNewOrder}
-            className="h-9 flex items-center gap-1.5 px-3 rounded-lg bg-surface-card border border-surface-border text-xs text-[#EDEDED] hover:text-gold hover:border-gold/30 transition-all font-medium active:scale-95"
-            title="Thử nhận 1 đơn order bàn mới"
-          >
-            <BellRing className="w-3.5 h-3.5 text-gold" />
-            <span className="hidden xl:inline">Thử Đơn Mới</span>
-          </button>
-        )}
 
         {/* Bật / Tắt âm thanh */}
         <button
@@ -179,31 +164,18 @@ export default function WaiterHeader({
         {/* Toàn màn hình */}
         <button
           onClick={toggleFullscreen}
-          className="h-9 w-9 flex items-center justify-center rounded-lg bg-surface-card border border-surface-border text-[#A0A0A5] hover:text-white hover:bg-surface-elevated transition-colors hidden sm:flex"
-          title={isFullscreen ? 'Thu nhỏ cửa sổ' : 'Toàn màn hình Phục Vụ'}
+          className={`h-9 px-3 flex items-center gap-1.5 rounded-lg border text-xs font-medium transition-colors select-none ${
+            isFullscreen
+              ? 'bg-gold/15 border-gold/40 text-gold hover:bg-gold/25'
+              : 'bg-surface-card border-surface-border text-[#A0A0A5] hover:text-white hover:bg-surface-elevated'
+          }`}
+          title={isFullscreen ? 'Thu nhỏ (Hiện thanh Menu)' : 'Toàn màn hình (Ẩn thanh Menu)'}
         >
           {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+          <span className="hidden md:inline">{isFullscreen ? 'Thu nhỏ' : 'Toàn màn hình'}</span>
         </button>
 
-        {/* Về Quản Trị / Sơ đồ bàn nếu có quyền */}
-        {isAdminOrManager && (
-          <button
-            onClick={() => navigate('/admin')}
-            className="h-9 w-9 flex items-center justify-center rounded-lg bg-surface-card border border-surface-border text-gold hover:bg-gold/10 transition-colors"
-            title="Quay lại Sơ đồ bàn"
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-        )}
 
-        {/* Đăng xuất */}
-        <button
-          onClick={handleLogout}
-          className="h-9 w-9 flex items-center justify-center rounded-lg bg-surface-card border border-surface-border text-[#8E8E93] hover:text-crimson hover:bg-surface-elevated transition-colors"
-          title="Đăng xuất khỏi hệ thống"
-        >
-          <LogOut className="w-4 h-4" />
-        </button>
       </div>
     </header>
   );

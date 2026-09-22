@@ -69,7 +69,7 @@ export default function AdminSidebar() {
     },
     {
       to: '/kitchen',
-      label: 'Điều Phối Bếp (KDS)',
+      label: 'Màn Hình Bếp',
       permission: 'KITCHEN',
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
