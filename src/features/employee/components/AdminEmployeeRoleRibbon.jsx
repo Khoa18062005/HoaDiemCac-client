@@ -2,10 +2,10 @@ import React from 'react';
 
 export const EMPLOYEE_ROLES = [
   { id: 'all', label: 'Tất Cả' },
-  { id: 'MANAGER', label: 'Quản Lý Ca' },
-  { id: 'CASHIER', label: 'Thu Ngân' },
-  { id: 'SERVER', label: 'Phục Vụ Bàn' },
-  { id: 'KITCHEN', label: 'Bếp / Pha Chế' },
+  { id: 'ADMIN', label: 'Quản Trị Viên' },
+  { id: 'MANAGER', label: 'Quản Lý' },
+  { id: 'KITCHEN', label: 'Bếp' },
+  { id: 'STAFF', label: 'Phục Vụ' },
 ];
 
 export default function AdminEmployeeRoleRibbon({

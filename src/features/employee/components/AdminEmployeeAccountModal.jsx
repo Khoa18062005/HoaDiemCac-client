@@ -20,7 +20,8 @@ import {
   ReceiptText,
   BarChart3,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  RotateCcw
 } from 'lucide-react';
 import {
   SYSTEM_PERMISSIONS,
@@ -38,6 +39,7 @@ const ICON_MAP = {
   ReceiptText: ReceiptText,
   BarChart3: BarChart3,
   ShieldCheck: ShieldCheck,
+  User: User,
 };
 
 export default function AdminEmployeeAccountModal({
@@ -53,38 +55,64 @@ export default function AdminEmployeeAccountModal({
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState('Phục Vụ Bàn');
+  const [role, setRole] = useState('Phục Vụ');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState('ACTIVE');
-  const [selectedPermissions, setSelectedPermissions] = useState(['TABLES']);
+  const [selectedPermissions, setSelectedPermissions] = useState(['WAITER']);
 
   // UI state
   const [showPassword, setShowPassword] = useState(true);
   const [copied, setCopied] = useState(false);
   const [passwordGenSuccess, setPasswordGenSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  // Popup xác nhận cập nhật thông tin: null | 'save' (khi bấm nút Lưu) | 'exit' (khi bấm Thoát mà chưa lưu)
+  const [confirmModalType, setConfirmModalType] = useState(null);
+  // Lưu vai trò và quyền ban đầu để so sánh diff trực quan khi chuyển đổi vai trò
+  const [originalRole, setOriginalRole] = useState('Phục Vụ');
+  const [originalPermissions, setOriginalPermissions] = useState(['WAITER']);
 
   // Reset form khi mở modal hoặc thay đổi initialData
   useEffect(() => {
     if (isOpen) {
+      setConfirmModalType(null);
       if (initialData) {
         setEmail(initialData.email || '');
         setFullName(initialData.fullName || '');
         setPhone(initialData.phone || '');
-        setRole(initialData.role || 'Phục Vụ Bàn');
-        setPassword(initialData.password || '');
+        // Chuẩn hóa tên vai trò hiển thị khớp với ROLE_PERMISSION_PRESETS
+        const rawRole = initialData.role || initialData.roleLabel || 'Phục Vụ';
+        const matchedPreset = ROLE_PERMISSION_PRESETS.find(
+          (p) =>
+            p.roleId === initialData.rolePreset ||
+            p.name.toLowerCase() === rawRole.toLowerCase() ||
+            (p.roleId === 'ADMIN' && rawRole.toLowerCase().includes('quản trị')) ||
+            (p.roleId === 'MANAGER' && rawRole.toLowerCase().includes('quản lý')) ||
+            (p.roleId === 'KITCHEN' && rawRole.toLowerCase().includes('bếp')) ||
+            (p.roleId === 'STAFF' &&
+              (rawRole.toLowerCase().includes('phục vụ') ||
+                rawRole.toLowerCase().includes('thu ngân') ||
+                rawRole.toLowerCase().includes('server')))
+        );
+        const resolvedRole = matchedPreset ? matchedPreset.name : rawRole;
+        setRole(resolvedRole);
+        setOriginalRole(resolvedRole);
+        setPassword('');
         setStatus(initialData.status || 'ACTIVE');
-        setSelectedPermissions(initialData.permissions || ['TABLES']);
+        const initPerms = initialData.permissions || ['WAITER'];
+        setSelectedPermissions(initPerms);
+        setOriginalPermissions(initPerms);
       } else {
         // Mặc định tự động sinh 1 mật khẩu mẫu 6 ký tự đạt chuẩn
         const autoPass = generateEmployeePassword();
         setEmail('');
         setFullName('');
         setPhone('');
-        setRole('Phục Vụ Bàn');
+        setRole('Phục Vụ');
+        setOriginalRole('Phục Vụ');
         setPassword(autoPass);
         setStatus('ACTIVE');
-        setSelectedPermissions(['TABLES']);
+        setSelectedPermissions(['WAITER']);
+        setOriginalPermissions(['WAITER']);
       }
       setCopied(false);
       setPasswordGenSuccess(false);
@@ -154,6 +182,63 @@ export default function AdminEmployeeAccountModal({
     setRole(preset.name);
   };
 
+  // Kiểm tra xem preset có đang được chọn theo vai trò hiện tại không
+  const isPresetActive = (preset) => {
+    if (!role) return false;
+    const normalizedRole = role.toLowerCase().trim();
+    const normalizedPresetName = preset.name.toLowerCase().trim();
+    const normalizedPresetId = preset.roleId.toLowerCase().trim();
+
+    if (normalizedRole === normalizedPresetName || normalizedRole === normalizedPresetId) return true;
+    if (preset.roleId === 'ADMIN' && (normalizedRole.includes('quản trị') || normalizedRole.includes('admin'))) return true;
+    if (preset.roleId === 'MANAGER' && (normalizedRole.includes('quản lý') || normalizedRole.includes('manager'))) return true;
+    if (preset.roleId === 'KITCHEN' && (normalizedRole.includes('bếp') || normalizedRole.includes('kitchen'))) return true;
+    if (preset.roleId === 'STAFF' && (normalizedRole.includes('phục vụ') || normalizedRole.includes('staff') || normalizedRole.includes('server') || normalizedRole.includes('thu ngân'))) return true;
+
+    return false;
+  };
+
+  // Kiểm tra xem preset có phải là vai trò gốc ban đầu của nhân viên hay không
+  const isPresetOriginal = (preset) => {
+    if (!originalRole) return false;
+    const normalizedOrig = originalRole.toLowerCase().trim();
+    const normalizedPresetName = preset.name.toLowerCase().trim();
+    const normalizedPresetId = preset.roleId.toLowerCase().trim();
+
+    if (normalizedOrig === normalizedPresetName || normalizedOrig === normalizedPresetId) return true;
+    if (preset.roleId === 'ADMIN' && (normalizedOrig.includes('quản trị') || normalizedOrig.includes('admin'))) return true;
+    if (preset.roleId === 'MANAGER' && (normalizedOrig.includes('quản lý') || normalizedOrig.includes('manager'))) return true;
+    if (preset.roleId === 'KITCHEN' && (normalizedOrig.includes('bếp') || normalizedOrig.includes('kitchen'))) return true;
+    if (preset.roleId === 'STAFF' && (normalizedOrig.includes('phục vụ') || normalizedOrig.includes('staff') || normalizedOrig.includes('server') || normalizedOrig.includes('thu ngân'))) return true;
+
+    return false;
+  };
+
+  // Kiểm tra xem hiện tại có đang trong trạng thái đổi vai trò so với vai trò ban đầu hay không
+  const isRoleChanged = Boolean(
+    originalRole && role.trim().toLowerCase() !== originalRole.trim().toLowerCase()
+  );
+
+  // Xử lý khi click vào nút gợi ý vai trò (Trực tiếp, không dùng popup, hỗ trợ diff trực quan)
+  const handlePresetClick = (preset) => {
+    // 1. Nếu click vào chính vai trò đang được chọn:
+    if (isPresetActive(preset)) {
+      // Giữ nguyên toàn bộ quyền hiện tại, tuyệt đối không tự xóa các quyền đã tích thêm
+      return;
+    }
+
+    // 2. Nếu click quay trở lại vai trò gốc ban đầu:
+    if (preset.name.trim().toLowerCase() === originalRole.trim().toLowerCase()) {
+      setRole(originalRole);
+      setSelectedPermissions([...originalPermissions]);
+      return;
+    }
+
+    // 3. Nếu chuyển sang vai trò mới khác:
+    setRole(preset.name);
+    setSelectedPermissions([...preset.permissions]);
+  };
+
   // Chọn tất cả quyền
   const selectAllPermissions = () => {
     setSelectedPermissions(SYSTEM_PERMISSIONS.map((p) => p.id));
@@ -164,68 +249,134 @@ export default function AdminEmployeeAccountModal({
     setSelectedPermissions([]);
   };
 
-  // Submit form tạo / sửa tài khoản
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // Kiểm tra tính hợp lệ của biểu mẫu
+  const validateForm = () => {
     setErrorMessage('');
-
-    // Kiểm tra tính hợp lệ
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       setErrorMessage('Vui lòng nhập email nhân viên.');
-      return;
+      return false;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(trimmedEmail)) {
       setErrorMessage('Định dạng email không hợp lệ (ví dụ: nhanvien@hoadiemcac.vn).');
-      return;
+      return false;
     }
 
     if (!fullName.trim()) {
       setErrorMessage('Vui lòng nhập họ và tên nhân viên.');
-      return;
+      return false;
     }
 
-    if (!password.trim()) {
+    if (!isEditing && !password.trim()) {
       setErrorMessage('Vui lòng tạo hoặc nhập mật khẩu cho tài khoản.');
-      return;
+      return false;
     }
 
     if (selectedPermissions.length === 0) {
       setErrorMessage('Vui lòng chọn ít nhất 1 chức năng phân quyền cho nhân viên ở cột bên trái.');
-      return;
+      return false;
     }
 
+    return true;
+  };
+
+  // Kiểm tra xem có thay đổi nào chưa được lưu không
+  const hasUnsavedChanges = () => {
+    if (!isEditing) {
+      return Boolean(
+        email.trim() ||
+        fullName.trim() ||
+        phone.trim() ||
+        password.trim() ||
+        selectedPermissions.length !== 1 ||
+        selectedPermissions[0] !== 'WAITER'
+      );
+    }
+
+    const origEmail = (initialData?.email || '').trim();
+    const origFullName = (initialData?.fullName || '').trim();
+    const origPhone = (initialData?.phone || '').trim();
+    const origRole = (initialData?.role || initialData?.roleLabel || '').trim();
+    const origPermissions = [...(initialData?.permissions || [])].sort();
+    const currentPermissions = [...selectedPermissions].sort();
+
+    const isEmailChanged = email.trim() !== origEmail;
+    const isNameChanged = fullName.trim() !== origFullName;
+    const isPhoneChanged = phone.trim() !== origPhone;
+    const isRoleChanged = Boolean(origRole && role.trim().toLowerCase() !== origRole.toLowerCase());
+    const isPasswordEntered = Boolean(password.trim());
+    const isPermissionsChanged =
+      origPermissions.length !== currentPermissions.length ||
+      origPermissions.some((p, i) => p !== currentPermissions[i]);
+
+    return isEmailChanged || isNameChanged || isPhoneChanged || isRoleChanged || isPasswordEntered || isPermissionsChanged;
+  };
+
+  // Xử lý khi nhấn nút Đóng (X) hoặc Hủy bỏ hoặc click ra ngoài
+  const handleRequestClose = () => {
+    if (hasUnsavedChanges()) {
+      setConfirmModalType('exit');
+    } else {
+      onClose();
+    }
+  };
+
+  // Submit form khi nhấn "LƯU THÔNG TIN"
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (validateForm()) {
+      setConfirmModalType('save');
+    }
+  };
+
+  // Thực thi lưu tài khoản vào API
+  const executeSave = async () => {
+    const trimmedEmail = email.trim();
     const payload = {
       ...(initialData || {}),
       email: trimmedEmail,
       fullName: fullName.trim(),
       phone: phone.trim(),
       role: role.trim() || 'Nhân Viên',
-      password: password.trim(),
       permissions: selectedPermissions,
       status: status,
       updatedAt: new Date().toISOString(),
     };
 
+    if (password.trim()) {
+      payload.password = password.trim();
+    }
+
     setIsLoading(true);
     setErrorMessage('');
+    setConfirmModalType(null);
 
     try {
-      const result = await apiClient.post('/employees', payload);
+      if (isEditing && initialData?.id) {
+        await apiClient.put(`/employees/${initialData.id}`, payload);
+      } else {
+        await apiClient.post('/employees', payload);
+      }
       onSave(payload);
       onClose();
     } catch (error) {
-      console.error('Lỗi khi tạo nhân viên:', error);
-      setErrorMessage(error.message || 'Đã xảy ra lỗi khi tạo nhân viên. Vui lòng thử lại sau.');
+      console.error('Lỗi khi lưu thông tin nhân viên:', error);
+      setErrorMessage(error.message || 'Đã xảy ra lỗi khi lưu thông tin nhân viên. Vui lòng thử lại sau.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-obsidian/85 backdrop-blur-md font-sans overflow-y-auto animate-fadeIn">
-      <div className="relative bg-[#131317] border border-gold/30 rounded-2xl w-full max-w-6xl shadow-[0_25px_70px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col my-auto max-h-[95vh]">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-obsidian/85 backdrop-blur-md font-sans overflow-y-auto animate-fadeIn"
+      onClick={handleRequestClose}
+    >
+      <div
+        className="relative bg-[#131317] border border-gold/30 rounded-2xl w-full max-w-6xl shadow-[0_25px_70px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col my-auto max-h-[95vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Modal Header */}
         <div className="px-6 py-3 border-b border-surface-border bg-[#18181D] flex items-center justify-between flex-shrink-0">
@@ -242,7 +393,7 @@ export default function AdminEmployeeAccountModal({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleRequestClose}
             className="p-2 rounded-xl text-[#8E8E93] hover:text-white hover:bg-surface-elevated transition-colors"
           >
             <X className="w-5 h-5" />
@@ -264,10 +415,10 @@ export default function AdminEmployeeAccountModal({
             {/* ========================================================================= */}
             {/* CỘT BÊN TRÁI: DANH SÁCH CÁC CHỨC NĂNG ĐỂ ADMIN PHÂN QUYỀN CHO NHÂN VIÊN  */}
             {/* ========================================================================= */}
-            <div className="lg:col-span-7 bg-[#16161B] border border-surface-border rounded-xl p-4 sm:p-5 flex flex-col space-y-4 h-full">
+            <div className="lg:col-span-7 bg-[#16161B] border border-surface-border rounded-xl p-4 sm:p-5 flex flex-col h-full min-h-0">
               
               {/* Tiêu đề cột trái */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-surface-border">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-surface-border flex-shrink-0">
                 <div>
                   <h4 className="text-sm font-bold text-white flex items-center gap-2">
                     <Shield className="w-4 h-4 text-gold" />
@@ -294,36 +445,91 @@ export default function AdminEmployeeAccountModal({
               </div>
 
               {/* Nhóm nút gợi ý phân quyền theo vị trí mẫu */}
-              <div>
-                <span className="text-[11px] font-medium text-[#A0A0A5] block mb-2">
-                  Gợi ý quyền theo vị trí:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {ROLE_PERMISSION_PRESETS.map((preset) => (
-                    <button
-                      key={preset.roleId}
-                      type="button"
-                      onClick={() => applyRolePreset(preset)}
-                      className="px-2.5 py-1 rounded-lg text-xs bg-[#1C1C22] hover:bg-surface-elevated border border-surface-border hover:border-gold/40 text-[#D1D1D6] hover:text-gold transition-all"
-                    >
-                      {preset.name}
-                    </button>
-                  ))}
+              <div className="pt-3 flex-shrink-0">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-medium text-[#A0A0A5]">
+                    Gợi ý quyền theo vị trí:
+                  </span>
+                  {isRoleChanged && (
+                    <div className="flex items-center gap-3 text-[11px]">
+                      <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        Quyền mới thêm
+                      </span>
+                      <span className="flex items-center gap-1.5 text-red-400 font-medium">
+                        <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                        Quyền cũ bị bỏ
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {ROLE_PERMISSION_PRESETS.map((preset) => {
+                    const isCurrent = isPresetActive(preset);
+                    const isOrig = isPresetOriginal(preset);
+
+                    // Khi đang chọn role mới:
+                    // - Button role mới: hiện màu ĐỎ
+                    // - Button role cũ: vẫn hiện màu VÀNG
+                    const isNewRole = isCurrent && isRoleChanged;
+                    const isOldRole = isOrig && isRoleChanged;
+                    const isDefaultRole = isCurrent && !isRoleChanged;
+
+                    let btnClass = 'bg-[#1C1C22] hover:bg-surface-elevated border border-surface-border hover:border-gold/40 text-[#D1D1D6] hover:text-gold';
+                    let checkIcon = null;
+
+                    if (isNewRole) {
+                      // Role mới: MÀU ĐỎ
+                      btnClass = 'bg-red-500/20 text-red-300 border border-red-500 shadow-[0_0_12px_rgba(239,68,68,0.35)] ring-1 ring-red-500/50 font-bold';
+                      checkIcon = <Check className="w-3.5 h-3.5 stroke-[3] text-red-400" />;
+                    } else if (isOldRole) {
+                      // Role cũ: VẪN HIỆN MÀU VÀNG
+                      btnClass = 'bg-gold/20 text-gold border border-gold shadow-[0_0_12px_rgba(212,175,55,0.3)] ring-1 ring-gold/40 font-bold';
+                      checkIcon = <Check className="w-3.5 h-3.5 stroke-[3] text-gold" />;
+                    } else if (isDefaultRole) {
+                      // Khi chưa đổi: Role hiện tại màu vàng
+                      btnClass = 'bg-gold/20 text-gold border border-gold shadow-[0_0_12px_rgba(212,175,55,0.3)] ring-1 ring-gold/40 font-bold';
+                      checkIcon = <Check className="w-3.5 h-3.5 stroke-[3] text-gold" />;
+                    }
+
+                    return (
+                      <button
+                        key={preset.roleId}
+                        type="button"
+                        onClick={() => handlePresetClick(preset)}
+                        title={`Gợi ý quyền theo vị trí ${preset.name}`}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer select-none ${btnClass}`}
+                      >
+                        {checkIcon}
+                        <span>{preset.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Danh sách các chức năng (Permissions Checkboxes) */}
-              <div className="space-y-2 pt-1 overflow-y-auto pr-4 custom-scrollbar flex-1">
+              {/* Danh sách các chức năng (Permissions Checkboxes) nằm trong thanh cuộn */}
+              <div className="space-y-2 my-3 overflow-y-auto pr-2 custom-scrollbar flex-1 min-h-0 max-h-[340px]">
                 {SYSTEM_PERMISSIONS.map((perm) => {
                   const isChecked = selectedPermissions.includes(perm.id);
+                  const inOld = originalPermissions.includes(perm.id);
                   const IconComp = ICON_MAP[perm.icon] || ShieldCheck;
+
+                  // Trạng thái diff khi đang chuyển sang role mới:
+                  const isGreen = isRoleChanged && isChecked && !inOld;
+                  const isRed = isRoleChanged && !isChecked && inOld;
+                  const isGold = isChecked && (!isRoleChanged || inOld);
 
                   return (
                     <div
                       key={perm.id}
                       onClick={() => togglePermission(perm.id)}
                       className={`group p-3 rounded-xl border transition-all cursor-pointer select-none flex items-center gap-3.5 ${
-                        isChecked
+                        isGreen
+                          ? 'bg-emerald-950/20 border-emerald-500/60 shadow-[0_0_14px_rgba(16,185,129,0.18)] hover:border-emerald-400'
+                          : isRed
+                          ? 'bg-red-950/20 border-red-500/60 shadow-[0_0_14px_rgba(239,68,68,0.18)] hover:border-red-400'
+                          : isGold
                           ? 'bg-[#1C1A17] border-gold/40 shadow-[0_0_12px_rgba(212,175,55,0.08)]'
                           : 'bg-[#141418] border-surface-border hover:border-[#3A3A42] opacity-75 hover:opacity-100'
                       }`}
@@ -332,12 +538,18 @@ export default function AdminEmployeeAccountModal({
                       <div className="flex-shrink-0">
                         <div
                           className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
-                            isChecked
+                            isGreen
+                              ? 'bg-emerald-500 border-emerald-500 text-obsidian font-bold shadow-sm'
+                              : isRed
+                              ? 'border-red-500/80 bg-red-950/40 text-red-400'
+                              : isGold
                               ? 'bg-gold border-gold text-obsidian font-bold shadow-sm'
                               : 'border-[#4A4A54] bg-[#1A1A20] group-hover:border-gold/50'
                           }`}
                         >
-                          {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                          {isGreen && <Check className="w-3.5 h-3.5 stroke-[3] text-obsidian" />}
+                          {isRed && <X className="w-3 h-3 text-red-400 stroke-[3]" />}
+                          {isGold && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                         </div>
                       </div>
 
@@ -345,8 +557,20 @@ export default function AdminEmployeeAccountModal({
                       <div
                         className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
                         style={{
-                          backgroundColor: isChecked ? `${perm.color}22` : '#1E1E24',
-                          color: isChecked ? perm.color : '#8E8E93',
+                          backgroundColor: isGreen
+                            ? 'rgba(16,185,129,0.15)'
+                            : isRed
+                            ? 'rgba(239,68,68,0.15)'
+                            : isGold
+                            ? `${perm.color}22`
+                            : '#1E1E24',
+                          color: isGreen
+                            ? '#34d399'
+                            : isRed
+                            ? '#f87171'
+                            : isGold
+                            ? perm.color
+                            : '#8E8E93',
                         }}
                       >
                         <IconComp className="w-4 h-4" />
@@ -357,11 +581,29 @@ export default function AdminEmployeeAccountModal({
                         <div className="flex items-center justify-between gap-2 mb-0.5">
                           <span
                             className={`text-xs font-semibold tracking-wide ${
-                              isChecked ? 'text-white' : 'text-[#C5C5CC]'
+                              isGreen
+                                ? 'text-emerald-300 font-bold'
+                                : isRed
+                                ? 'text-red-300 font-bold'
+                                : isGold
+                                ? 'text-white'
+                                : 'text-[#C5C5CC]'
                             }`}
                           >
                             {perm.label}
                           </span>
+
+                          {/* Huy hiệu diff trực quan */}
+                          {isGreen && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 tracking-wide flex-shrink-0">
+                              + Thêm mới
+                            </span>
+                          )}
+                          {isRed && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-500/20 text-red-400 border border-red-500/40 tracking-wide flex-shrink-0">
+                              - Bị loại bỏ
+                            </span>
+                          )}
                         </div>
                         <p className="text-[11px] text-[#8E8E93] leading-relaxed line-clamp-2">
                           {perm.description}
@@ -373,7 +615,7 @@ export default function AdminEmployeeAccountModal({
               </div>
 
               {/* Chân cột trái: Tổng số quyền đã cấp */}
-              <div className="pt-4 border-t border-surface-border flex items-center justify-between text-xs text-[#8E8E93]">
+              <div className="pt-3 border-t border-surface-border flex items-center justify-between text-xs text-[#8E8E93] flex-shrink-0 mt-auto">
                 <span>Tổng quyền hệ thống:</span>
                 <span className="font-bold text-gold">
                   Đã cấp {selectedPermissions.length} / {SYSTEM_PERMISSIONS.length} chức năng
@@ -384,9 +626,9 @@ export default function AdminEmployeeAccountModal({
             {/* ========================================================================= */}
             {/* CỘT BÊN PHẢI: FORM THÔNG TIN TÀI KHOẢN, MẬT KHẨU TỰ ĐỘNG, NÚT TẠO        */}
             {/* ========================================================================= */}
-            <div className="lg:col-span-5 bg-[#16161B] border border-surface-border rounded-xl p-4 sm:p-5 flex flex-col space-y-4 h-full">
+            <div className="lg:col-span-5 bg-[#16161B] border border-surface-border rounded-xl p-4 sm:p-5 flex flex-col h-full min-h-0">
               
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-surface-border">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-surface-border flex-shrink-0">
                 <div>
                   <h4 className="text-sm font-bold text-white flex items-center gap-2">
                     <User className="w-4 h-4 text-crimson-glow" />
@@ -395,7 +637,7 @@ export default function AdminEmployeeAccountModal({
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4 flex flex-col flex-1">
+              <form onSubmit={handleSubmit} className="space-y-3.5 flex flex-col flex-1 pt-3">
                 {/* 1. Email nhân viên (Yêu cầu bắt buộc) */}
                 <div>
                   <label className="block text-xs font-semibold text-[#D1D1D6] mb-1.5">
@@ -483,7 +725,9 @@ export default function AdminEmployeeAccountModal({
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-xs font-semibold text-gold flex items-center gap-1.5">
                       <KeyRound className="w-3.5 h-3.5" />
-                      Tạo mật khẩu <span className="text-crimson-glow">*</span>
+                      {isEditing ? 'Đổi mật khẩu mới (để trống nếu giữ nguyên)' : (
+                        <>Tạo mật khẩu <span className="text-crimson-glow">*</span></>
+                      )}
                     </label>
                   </div>
 
@@ -493,7 +737,7 @@ export default function AdminEmployeeAccountModal({
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="tối thiểu 8 ký tự"
+                      placeholder={isEditing ? 'Nhập mật khẩu mới nếu muốn đổi' : 'tối thiểu 8 ký tự'}
                       className="w-full pl-3 pr-20 py-2 rounded-lg bg-[#08080B] border border-gold/40 text-sm font-mono tracking-wider text-white font-bold outline-none focus:border-gold focus:ring-1 focus:ring-gold"
                     />
 
@@ -566,10 +810,10 @@ export default function AdminEmployeeAccountModal({
 
 
                 {/* Nút hành động */}
-                <div className="pt-4 flex items-center gap-3 mt-auto">
+                <div className="pt-3 flex items-center gap-3 mt-auto flex-shrink-0">
                   <button
                     type="button"
-                    onClick={onClose}
+                    onClick={handleRequestClose}
                     className="flex-1 py-2.5 rounded-xl border border-surface-border text-xs font-semibold text-[#8E8E93] hover:text-white hover:bg-surface-elevated transition-colors"
                   >
                     Hủy bỏ
@@ -602,6 +846,135 @@ export default function AdminEmployeeAccountModal({
         </div>
 
       </div>
+
+      {/* ========================================================================= */}
+      {/* POP-UP XÁC NHẬN CẬP NHẬT THÔNG TIN TÀI KHOẢN (Khi bấm Lưu hoặc khi Thoát)   */}
+      {/* ========================================================================= */}
+      {confirmModalType && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn"
+          onClick={() => !isLoading && setConfirmModalType(null)}
+        >
+          <div
+            className={`w-full max-w-sm sm:max-w-md rounded-2xl bg-[#141419] border ${
+              confirmModalType === 'exit'
+                ? 'border-amber-500/50 shadow-[0_25px_80px_rgba(0,0,0,0.95),0_0_50px_rgba(245,158,11,0.25)]'
+                : 'border-gold/50 shadow-[0_25px_80px_rgba(0,0,0,0.95),0_0_50px_rgba(212,175,55,0.25)]'
+            } p-6 sm:p-7 relative text-center`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Nút đóng X góc trên */}
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() => setConfirmModalType(null)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-[#8E8E93] hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+              title="Đóng"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Icon rực rỡ ở giữa */}
+            <div className="relative mx-auto w-16 h-16 mb-4 flex items-center justify-center">
+              <div
+                className={`absolute inset-0 rounded-2xl animate-ping opacity-35 ${
+                  confirmModalType === 'exit' ? 'bg-amber-500/25' : 'bg-gold/25'
+                }`}
+              ></div>
+              <div
+                className={`relative w-full h-full rounded-2xl border flex items-center justify-center shadow-lg ${
+                  confirmModalType === 'exit'
+                    ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+                    : 'bg-gold/15 border-gold/40 text-gold'
+                }`}
+              >
+                {confirmModalType === 'exit' ? (
+                  <AlertCircle className="w-8 h-8 drop-shadow-[0_2px_8px_rgba(245,158,11,0.8)]" />
+                ) : (
+                  <ShieldCheck className="w-8 h-8 drop-shadow-[0_2px_8px_rgba(212,175,55,0.8)]" />
+                )}
+              </div>
+            </div>
+
+            {/* Tiêu đề modal */}
+            <h3 className="text-lg sm:text-xl font-bold text-white mb-1.5">
+              Cập Nhật Thông Tin Tài Khoản
+            </h3>
+            <p className="text-xs text-[#8E8E93] mb-4">Hệ thống quản trị Hỏa Diệm Các</p>
+
+            {/* Câu thông báo */}
+            <p className="text-xs sm:text-sm text-[#D5D5DC] leading-relaxed mb-4 px-1">
+              {confirmModalType === 'exit'
+                ? 'Thông tin tài khoản chưa được lưu, bạn có muốn cập nhật thông tin tài khoản không?'
+                : 'Bạn có muốn cập nhật thông tin tài khoản này không?'}
+            </p>
+
+            {/* 2 dòng thông tin: Tên và Gmail đầy đủ */}
+            <div className="my-4 py-2 px-3 rounded-xl bg-[#0D0D11] border border-surface-border">
+              <p className="text-base sm:text-lg font-bold text-white tracking-wide">
+                {fullName.trim() || initialData?.fullName || 'Nhân viên'}
+              </p>
+              <p className="text-xs sm:text-sm font-mono text-[#A0A0A5] mt-0.5 break-all select-all">
+                {email.trim() || initialData?.email || 'Chưa nhập email'}
+              </p>
+            </div>
+
+            {/* Hàng nút bấm */}
+            <div className="flex items-center gap-3 mt-6">
+              {confirmModalType === 'exit' ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => {
+                      setConfirmModalType(null);
+                      onClose();
+                    }}
+                    className="flex-1 py-2.5 sm:py-3 rounded-xl border border-surface-border text-xs font-semibold text-[#8E8E93] hover:text-white hover:bg-surface-elevated hover:border-[#666] transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    Không lưu
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => {
+                      if (validateForm()) {
+                        executeSave();
+                      } else {
+                        setConfirmModalType(null);
+                      }
+                    }}
+                    className="flex-1 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-[#990000] via-[#C41E3A] to-[#B22222] hover:from-[#B80000] hover:via-[#D62846] hover:to-[#C41E3A] text-white text-xs font-bold shadow-[0_4px_18px_rgba(196,30,58,0.4)] hover:shadow-[0_6px_25px_rgba(220,38,38,0.65)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:opacity-50"
+                  >
+                    {isLoading ? 'Đang lưu...' : 'Cập nhật'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => setConfirmModalType(null)}
+                    className="flex-1 py-2.5 sm:py-3 rounded-xl border border-surface-border text-xs font-semibold text-[#8E8E93] hover:text-white hover:bg-surface-elevated hover:border-[#666] transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    Hủy bỏ
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isLoading}
+                    onClick={executeSave}
+                    className="flex-1 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-[#990000] via-[#C41E3A] to-[#B22222] hover:from-[#B80000] hover:via-[#D62846] hover:to-[#C41E3A] text-white text-xs font-bold shadow-[0_4px_18px_rgba(196,30,58,0.4)] hover:shadow-[0_6px_25px_rgba(220,38,38,0.65)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:opacity-50"
+                  >
+                    {isLoading ? 'Đang lưu...' : 'Cập nhật'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

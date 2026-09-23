@@ -15,29 +15,44 @@ import TableEntryPage from '@/pages/customer/TableEntryPage';
 import KitchenKdsPage from '@/pages/kitchen/KitchenKdsPage';
 import WaiterDisplayPage from '@/pages/waiter/WaiterDisplayPage';
 import LoginPage from '@/pages/auth/LoginPage';
+import ProtectedRoute from '@/routes/ProtectedRoute';
 
 import useAuthStore from '@/stores/useAuthStore';
 
 function PermissionRoute({ permission, adminOnly = false, children }) {
-  const user = useAuthStore((state) => state.user);
-  const rawRole = (user?.role || 'KITCHEN').replace(/^ROLE_/, '');
+  const { user, token, isAuthenticated } = useAuthStore();
+  const isUserAuthenticated = Boolean(isAuthenticated && token && user);
+
+  // Nếu chưa đăng nhập, bắt buộc chuyển hướng về trang /login
+  if (!isUserAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const rawRole = (user?.role || 'STAFF').replace(/^ROLE_/, '');
   const isAdmin = rawRole === 'ADMIN';
 
   if (isAdmin) return children;
-  const fallbackRedirect = rawRole === 'KITCHEN' ? '/kitchen' : '/admin';
-
-  if (adminOnly) return <Navigate to={fallbackRedirect} replace />;
 
   const permissions = user?.permissions || (
-    rawRole === 'MANAGER' ? ['TABLES', 'MENU', 'KITCHEN', 'WAITER'] :
-    rawRole === 'KITCHEN' ? ['KITCHEN', 'MENU'] :
-    ['TABLES', 'KITCHEN', 'WAITER']
+    rawRole === 'MANAGER' ? ['DASHBOARD', 'INVOICES', 'MENU', 'KITCHEN', 'WAITER', 'TABLES_QR'] :
+    rawRole === 'KITCHEN' ? ['KITCHEN'] :
+    ['WAITER']
   );
 
-  // Trạm Bếp KDS và Màn hình Phục Vụ cho phép truy cập trực tiếp
-  if (permission === 'KITCHEN' || permission === 'WAITER') {
-    return children;
-  }
+  const getFallbackRedirect = () => {
+    if (permissions.includes('TABLES')) return '/admin';
+    if (permissions.includes('KITCHEN')) return '/kitchen';
+    if (permissions.includes('WAITER')) return '/waiter';
+    if (permissions.includes('MENU')) return '/admin/menu';
+    if (permissions.includes('TABLES_QR')) return '/admin/tables-qr';
+    if (permissions.includes('INVOICES')) return '/admin/invoices';
+    if (permissions.includes('DASHBOARD')) return '/admin/dashboard';
+    return '/admin/profile';
+  };
+
+  const fallbackRedirect = getFallbackRedirect();
+
+  if (adminOnly) return <Navigate to={fallbackRedirect} replace />;
 
   if (permission && !permissions.includes(permission)) {
     return <Navigate to={fallbackRedirect} replace />;
@@ -89,7 +104,11 @@ export const router = createBrowserRouter([
   },
   {
     path: '/admin',
-    element: <AdminLayout />,
+    element: (
+      <ProtectedRoute>
+        <AdminLayout />
+      </ProtectedRoute>
+    ),
     children: [
       {
         index: true,
@@ -126,7 +145,7 @@ export const router = createBrowserRouter([
       {
         path: 'tables-qr',
         element: (
-          <PermissionRoute adminOnly>
+          <PermissionRoute permission="TABLES_QR">
             <AdminTablesQrPage />
           </PermissionRoute>
         ),
@@ -134,7 +153,7 @@ export const router = createBrowserRouter([
       {
         path: 'invoices',
         element: (
-          <PermissionRoute adminOnly>
+          <PermissionRoute permission="INVOICES">
             <AdminInvoicesPage />
           </PermissionRoute>
         ),
@@ -142,7 +161,7 @@ export const router = createBrowserRouter([
       {
         path: 'dashboard',
         element: (
-          <PermissionRoute adminOnly>
+          <PermissionRoute permission="DASHBOARD">
             <AdminDashboardPage />
           </PermissionRoute>
         ),
@@ -160,9 +179,11 @@ export const router = createBrowserRouter([
   {
     path: '/kitchen',
     element: (
-      <PermissionRoute permission="KITCHEN">
-        <KitchenLayout />
-      </PermissionRoute>
+      <ProtectedRoute>
+        <PermissionRoute permission="KITCHEN">
+          <KitchenLayout />
+        </PermissionRoute>
+      </ProtectedRoute>
     ),
     children: [
       {
@@ -174,9 +195,11 @@ export const router = createBrowserRouter([
   {
     path: '/waiter',
     element: (
-      <PermissionRoute permission="WAITER">
-        <KitchenLayout />
-      </PermissionRoute>
+      <ProtectedRoute>
+        <PermissionRoute permission="WAITER">
+          <KitchenLayout />
+        </PermissionRoute>
+      </ProtectedRoute>
     ),
     children: [
       {

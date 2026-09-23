@@ -3,6 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import logoImg from '../../assets/images/logo.png';
 import DbConnectionCheckButton from '../feedback/DbConnectionCheckButton';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { apiClient } from '@/lib/axios';
+import { LogOut, X } from 'lucide-react';
 
 const LOGO_URL = logoImg;
 
@@ -10,6 +12,13 @@ export default function AdminSidebar() {
   const navigate = useNavigate();
   const authUser = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const syncUserProfile = useAuthStore((state) => state.syncUserProfile);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Tự động kiểm tra và đồng bộ lại quyền hạn khi Sidebar xuất hiện
+  useEffect(() => {
+    syncUserProfile?.();
+  }, [syncUserProfile]);
 
   // Fallback if authUser not yet loaded from store
   const effectiveUser = authUser || (() => {
@@ -26,10 +35,10 @@ export default function AdminSidebar() {
 
   // Lấy danh sách quyền hạn
   const permissions = effectiveUser?.permissions || (
-    isAdmin ? ['TABLES', 'MENU', 'EMPLOYEES', 'PROFILE', 'TABLES_QR', 'INVOICES', 'DASHBOARD', 'KITCHEN'] :
-    rawRole === 'MANAGER' ? ['TABLES', 'MENU', 'KITCHEN'] :
-    rawRole === 'KITCHEN' ? ['KITCHEN', 'MENU'] :
-    ['TABLES']
+    isAdmin ? ['TABLES', 'KITCHEN', 'WAITER', 'MENU', 'EMPLOYEES', 'PROFILE', 'TABLES_QR', 'INVOICES', 'DASHBOARD'] :
+    rawRole === 'MANAGER' ? ['DASHBOARD', 'INVOICES', 'MENU', 'KITCHEN', 'WAITER', 'TABLES_QR'] :
+    rawRole === 'KITCHEN' ? ['KITCHEN'] :
+    ['WAITER']
   );
 
   const fullName = effectiveUser?.fullName || effectiveUser?.username || 'Nhân Viên';
@@ -39,18 +48,29 @@ export default function AdminSidebar() {
     : (effectiveUser?.username || 'NV').substring(0, 2).toUpperCase();
 
   const roleName = isAdmin ? 'Quản Trị Viên' :
-    rawRole === 'MANAGER' ? 'Quản Lý Ca' :
-    rawRole === 'KITCHEN' ? 'Bếp / Pha Chế' :
-    rawRole === 'STAFF' ? 'Phục Vụ Bàn' : (effectiveUser?.role || 'Nhân Viên');
+    rawRole === 'MANAGER' ? 'Quản Lý' :
+    rawRole === 'KITCHEN' ? 'Bếp' :
+    rawRole === 'STAFF' ? 'Phục Vụ' : (effectiveUser?.role || 'Nhân Viên');
 
-  const handleLogout = () => {
+  const handleLogout = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    try {
+      await apiClient.post('/auth/logout').catch(() => {});
+    } catch {}
+
     logout();
     try {
       sessionStorage.clear();
       localStorage.removeItem('currentUser');
       localStorage.removeItem('hoadiemcat_auth');
     } catch {}
-    navigate('/login');
+
+    setShowLogoutModal(false);
+    navigate('/login', { replace: true });
   };
 
   const allNavItems = [
@@ -81,7 +101,7 @@ export default function AdminSidebar() {
     {
       to: '/waiter',
       label: 'Màn Hình Phục Vụ',
-      permission: 'TABLES',
+      permission: 'WAITER',
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
@@ -129,7 +149,6 @@ export default function AdminSidebar() {
       to: '/admin/tables-qr',
       label: 'Quản Lý Bàn & QR',
       permission: 'TABLES_QR',
-      adminOnly: true,
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <rect height="5" rx="1" width="5" x="3" y="3"></rect>
@@ -151,7 +170,6 @@ export default function AdminSidebar() {
       to: '/admin/invoices',
       label: 'Lịch Sử Hóa Đơn',
       permission: 'INVOICES',
-      adminOnly: true,
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path>
@@ -165,7 +183,6 @@ export default function AdminSidebar() {
       to: '/admin/dashboard',
       label: 'Báo Cáo Doanh Thu',
       permission: 'DASHBOARD',
-      adminOnly: true,
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <line x1="12" x2="12" y1="20" y2="10"></line>
@@ -179,8 +196,10 @@ export default function AdminSidebar() {
   const navItems = allNavItems.filter((item) => {
     if (isAdmin) return true;
     if (item.alwaysShow) return true;
-    if (item.adminOnly) return false;
-    return permissions.includes(item.permission);
+    if (item.permission) {
+      return permissions.includes(item.permission);
+    }
+    return !item.adminOnly;
   });
 
   return (
@@ -243,21 +262,71 @@ export default function AdminSidebar() {
             </div>
           </div>
           <button
-            className="p-1.5 rounded hover:bg-surface-card text-[#8E8E93] hover:text-crimson transition-colors"
+            type="button"
+            className="p-1.5 rounded hover:bg-surface-elevated text-[#8E8E93] hover:text-crimson-glow transition-all duration-150 z-10 active:scale-95 group/btn"
             title="Đăng xuất khỏi hệ thống"
             onClick={(e) => {
+              e.preventDefault();
               e.stopPropagation();
-              handleLogout();
+              setShowLogoutModal(true);
             }}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-              <polyline points="16 17 21 12 16 7"></polyline>
-              <line x1="21" x2="9" y1="12" y2="12"></line>
-            </svg>
+            <LogOut className="w-4 h-4 text-[#8E8E93] group-hover/btn:text-crimson-glow transition-colors" />
           </button>
         </div>
       </div>
+
+      {/* Pop-up Xác Nhận Đăng Xuất (Không làm mờ màn hình) */}
+      {showLogoutModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/35 animate-fadeIn"
+          onClick={() => setShowLogoutModal(false)}
+        >
+          <div
+            className="bg-[#141418] border border-gold/40 rounded-2xl p-6 max-w-sm w-full shadow-[0_25px_60px_rgba(0,0,0,0.9)] relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowLogoutModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-[#8E8E93] hover:text-white transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-crimson/20 border border-crimson/40 flex items-center justify-center text-crimson-glow">
+                <LogOut className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Xác Nhận Đăng Xuất</h3>
+                <p className="text-xs text-[#8E8E93]">Hệ thống quản trị Hỏa Diệm Các</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-[#D5D5DC] leading-relaxed mb-5">
+              Bạn có muốn đăng xuất không?
+            </p>
+
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowLogoutModal(false)}
+                className="flex-1 py-2.5 rounded-xl border border-surface-border text-xs font-semibold text-[#8E8E93] hover:text-white hover:bg-surface-elevated hover:border-[#555] transition-all duration-200 cursor-pointer active:scale-95"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#990000] via-[#C41E3A] to-[#B22222] hover:from-[#B80000] hover:via-[#D62846] hover:to-[#C41E3A] text-white text-xs font-bold shadow-[0_4px_15px_rgba(196,30,58,0.35)] hover:shadow-[0_6px_25px_rgba(220,38,38,0.7)] hover:scale-[1.03] active:scale-[0.97] transition-all duration-200 cursor-pointer"
+              >
+                Đăng xuất
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

@@ -48,7 +48,7 @@ export default function AdminProfilePage() {
       shift: 'Ca tối (16:00 - 23:30)',
       lastLogin: 'Hôm nay',
       avatarUrl: user?.avatarUrl || '',
-      permissions: ['tables', 'menu', 'tables_qr', 'kds_orders', 'invoices', 'reports', 'employees'],
+      permissions: user?.permissions || ['TABLES', 'KITCHEN', 'WAITER', 'MENU', 'EMPLOYEES', 'PROFILE', 'TABLES_QR', 'INVOICES', 'DASHBOARD'],
     };
   });
 
@@ -537,7 +537,9 @@ export default function AdminProfilePage() {
               {/* Grid Permissions */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {SYSTEM_PERMISSIONS.map((perm) => {
-                  const isGranted = formData.permissions.includes(perm.code);
+                  const isGranted = (formData.permissions || []).some(
+                    (p) => p.toUpperCase() === perm.id.toUpperCase() || p.toLowerCase() === perm.code.toLowerCase()
+                  );
                   return (
                     <div
                       key={perm.id}

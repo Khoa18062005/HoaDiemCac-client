@@ -6,7 +6,10 @@ import {
   Copy,
   Check,
   Sparkles,
-  KeyRound
+  KeyRound,
+  Lock,
+  Unlock,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   AdminEmployeeHeader,
@@ -27,6 +30,10 @@ export default function AdminEmployeeManagePage() {
   const [selectedRole, setSelectedRole] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'locked'
+
+  // Xác nhận đóng / mở khóa tài khoản
+  const [statusConfirmModal, setStatusConfirmModal] = useState(null);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
 
   const fetchEmployees = async () => {
     try {
@@ -134,25 +141,46 @@ export default function AdminEmployeeManagePage() {
     }
   };
 
-  // Khóa / Mở khóa tài khoản
+  // Mở modal xác nhận Khóa / Mở khóa tài khoản
   const handleToggleStatus = (emp) => {
+    setStatusConfirmModal(emp);
+  };
+
+  // Thực thi cập nhật trạng thái sau khi người dùng xác nhận trên Pop-up
+  const handleConfirmToggleStatus = async () => {
+    if (!statusConfirmModal) return;
+    const emp = statusConfirmModal;
     const nextStatus = emp.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-    setEmployees((prev) =>
-      prev.map((item) => (item.id === emp.id ? { ...item, status: nextStatus } : item))
-    );
-    showToast(
-      nextStatus === 'ACTIVE'
-        ? `Đã kích hoạt lại tài khoản ${emp.fullName}!`
-        : `Đã tạm khóa tài khoản ${emp.fullName}!`,
-      nextStatus === 'ACTIVE' ? 'success' : 'info'
-    );
+    setIsTogglingStatus(true);
+    try {
+      await apiClient.patch(`/employees/${emp.id}/status`);
+      setEmployees((prev) =>
+        prev.map((item) => (item.id === emp.id ? { ...item, status: nextStatus } : item))
+      );
+      showToast(
+        nextStatus === 'ACTIVE'
+          ? `Đã mở khóa và kích hoạt lại tài khoản ${emp.fullName}!`
+          : `Đã tạm khóa tài khoản ${emp.fullName}!`,
+        nextStatus === 'ACTIVE' ? 'success' : 'info'
+      );
+      setStatusConfirmModal(null);
+    } catch (err) {
+      showToast(err.message || 'Lỗi khi cập nhật trạng thái nhân viên', 'error');
+    } finally {
+      setIsTogglingStatus(false);
+    }
   };
 
   // Xóa tài khoản nhân viên
-  const handleDeleteEmployee = (emp) => {
+  const handleDeleteEmployee = async (emp) => {
     if (window.confirm(`Bạn có chắc muốn xóa vĩnh viễn tài khoản của nhân viên "${emp.fullName}"?`)) {
-      setEmployees((prev) => prev.filter((item) => item.id !== emp.id));
-      showToast(`Đã xóa tài khoản ${emp.fullName}!`, 'info');
+      try {
+        await apiClient.delete(`/employees/${emp.id}`);
+        setEmployees((prev) => prev.filter((item) => item.id !== emp.id));
+        showToast(`Đã xóa tài khoản ${emp.fullName}!`, 'info');
+      } catch (err) {
+        showToast(err.message || 'Lỗi khi xóa nhân viên', 'error');
+      }
     }
   };
 
@@ -166,16 +194,21 @@ export default function AdminEmployeeManagePage() {
     setCopiedResetPass(false);
   };
 
-  const handleConfirmResetPassword = () => {
+  const handleConfirmResetPassword = async () => {
     if (!resetModalData) return;
     const { employee, newPassword } = resetModalData;
-    setEmployees((prev) =>
-      prev.map((item) =>
-        item.id === employee.id ? { ...item, password: newPassword } : item
-      )
-    );
-    setResetModalData(null);
-    showToast(`Đã cấp mật khẩu mới cho ${employee.fullName}: ${newPassword}`);
+    try {
+      await apiClient.post(`/employees/${employee.id}/reset-password`, { newPassword });
+      setEmployees((prev) =>
+        prev.map((item) =>
+          item.id === employee.id ? { ...item, password: newPassword } : item
+        )
+      );
+      setResetModalData(null);
+      showToast(`Đã cấp mật khẩu mới cho ${employee.fullName}: ${newPassword}`);
+    } catch (err) {
+      showToast(err.message || 'Lỗi khi cấp lại mật khẩu', 'error');
+    }
   };
 
   return (
@@ -384,7 +417,106 @@ export default function AdminEmployeeManagePage() {
       )}
 
       {/* ========================================================================= */}
-      {/* 5. TOAST NOTIFICATION                                                     */}
+      {/* 5. MODAL XÁC NHẬN TẠM KHÓA / MỞ KHÓA TÀI KHOẢN NHÂN VIÊN                  */}
+      {/* ========================================================================= */}
+      {statusConfirmModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn"
+          onClick={() => !isTogglingStatus && setStatusConfirmModal(null)}
+        >
+          <div
+            className={`w-full max-w-sm sm:max-w-md rounded-2xl bg-[#141419] border ${
+              statusConfirmModal.status === 'ACTIVE'
+                ? 'border-red-500/50 shadow-[0_25px_80px_rgba(0,0,0,0.95),0_0_50px_rgba(220,38,38,0.3)]'
+                : 'border-emerald-500/50 shadow-[0_25px_80px_rgba(0,0,0,0.95),0_0_50px_rgba(16,185,129,0.3)]'
+            } p-6 sm:p-7 relative text-center`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Nút đóng X góc trên */}
+            <button
+              type="button"
+              disabled={isTogglingStatus}
+              onClick={() => setStatusConfirmModal(null)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-[#8E8E93] hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+              title="Đóng"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Icon lớn rực rỡ ở giữa */}
+            <div className="relative mx-auto w-16 h-16 mb-4 flex items-center justify-center">
+              <div
+                className={`absolute inset-0 rounded-2xl animate-ping opacity-35 ${
+                  statusConfirmModal.status === 'ACTIVE' ? 'bg-red-500/25' : 'bg-emerald-500/25'
+                }`}
+              ></div>
+              <div
+                className={`relative w-full h-full rounded-2xl border flex items-center justify-center shadow-lg ${
+                  statusConfirmModal.status === 'ACTIVE'
+                    ? 'bg-red-500/15 border-red-500/40 text-red-400'
+                    : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                }`}
+              >
+                {statusConfirmModal.status === 'ACTIVE' ? (
+                  <Lock className="w-8 h-8 drop-shadow-[0_2px_8px_rgba(220,38,38,0.8)]" />
+                ) : (
+                  <Unlock className="w-8 h-8 drop-shadow-[0_2px_8px_rgba(16,185,129,0.8)]" />
+                )}
+              </div>
+            </div>
+
+            {/* Tiêu đề modal */}
+            <h3 className="text-lg sm:text-xl font-bold text-white mb-1.5">
+              {statusConfirmModal.status === 'ACTIVE'
+                ? 'Xác Nhận Tạm Khóa Tài Khoản'
+                : 'Xác Nhận Mở Khóa Tài Khoản'}
+            </h3>
+            <p className="text-xs text-[#8E8E93] mb-4">Hệ thống quản trị Hỏa Diệm Các</p>
+
+            {/* Hiển thị 2 dòng: Tên nhân viên & Gmail đầy đủ theo yêu cầu */}
+            <div className="my-6 space-y-1.5 px-2">
+              <p className="text-base sm:text-lg font-bold text-white tracking-wide">
+                {statusConfirmModal.fullName}
+              </p>
+              <p className="text-xs sm:text-sm font-mono text-[#A0A0A5] break-all select-all">
+                {statusConfirmModal.email}
+              </p>
+            </div>
+
+            {/* Hàng nút bấm: Hủy bỏ / Xác nhận */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={isTogglingStatus}
+                onClick={() => setStatusConfirmModal(null)}
+                className="flex-1 py-2.5 sm:py-3 rounded-xl border border-surface-border text-xs font-semibold text-[#8E8E93] hover:text-white hover:bg-surface-elevated hover:border-[#666] transition-all cursor-pointer disabled:opacity-50"
+              >
+                Hủy bỏ
+              </button>
+
+              <button
+                type="button"
+                disabled={isTogglingStatus}
+                onClick={handleConfirmToggleStatus}
+                className={`flex-1 py-2.5 sm:py-3 rounded-xl text-white text-xs font-bold transition-all duration-200 cursor-pointer disabled:opacity-50 ${
+                  statusConfirmModal.status === 'ACTIVE'
+                    ? 'bg-gradient-to-r from-[#990000] via-[#C41E3A] to-[#B22222] hover:from-[#B80000] hover:via-[#D62846] hover:to-[#C41E3A] shadow-[0_4px_18px_rgba(196,30,58,0.4)] hover:shadow-[0_6px_25px_rgba(220,38,38,0.65)] hover:scale-[1.02] active:scale-[0.98]'
+                    : 'bg-gradient-to-r from-[#00695C] via-[#00897B] to-[#00796B] hover:from-[#00796B] hover:via-[#009688] hover:to-[#00897B] shadow-[0_4px_18px_rgba(0,137,123,0.4)] hover:shadow-[0_6px_25px_rgba(0,150,136,0.65)] hover:scale-[1.02] active:scale-[0.98]'
+                }`}
+              >
+                {isTogglingStatus
+                  ? 'Đang xử lý...'
+                  : statusConfirmModal.status === 'ACTIVE'
+                  ? 'Tạm khóa'
+                  : 'Mở khóa'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 6. TOAST NOTIFICATION                                                     */}
       {/* ========================================================================= */}
       {toast.visible && (
         <div className="fixed bottom-6 right-6 z-50 animate-fadeIn">

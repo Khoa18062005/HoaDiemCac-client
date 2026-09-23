@@ -192,14 +192,14 @@ export default function AdminEmployeeTableRow({
           <button
             type="button"
             onClick={() => onToggleStatus(employee)}
-            className={`p-1.5 rounded-lg transition-colors ${
+            className={`p-1.5 rounded-lg border transition-all duration-150 ${
               isActive
-                ? 'text-[#A0A0A5] hover:text-red-400 hover:bg-surface-elevated'
-                : 'text-[#A0A0A5] hover:text-jade-bright hover:bg-surface-elevated'
+                ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/40'
+                : 'text-red-400 bg-red-500/15 border-red-500/30 hover:bg-emerald-500/20 hover:text-emerald-400 hover:border-emerald-500/40'
             }`}
-            title={isActive ? 'Khóa tài khoản này' : 'Kích hoạt lại tài khoản'}
+            title={isActive ? `Tạm khóa tài khoản ${fullName}` : `Mở khóa tài khoản ${fullName}`}
           >
-            {isActive ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+            {isActive ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
           </button>
 
           {/* Nút Xóa nhân viên */}

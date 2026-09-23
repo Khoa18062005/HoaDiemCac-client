@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Mail, 
   Lock, 
@@ -9,7 +9,8 @@ import {
   HelpCircle,
   X,
   Flame,
-  Sparkles
+  Sparkles,
+  ShieldAlert
 } from 'lucide-react';
 import logoImg from '@/assets/images/logo.png';
 import hotpotImg from '@/assets/images/hotpot-banner.jpg';
@@ -18,6 +19,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const login = useAuthStore((state) => state.login);
 
   // Form State
@@ -26,7 +28,17 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showLockedModal, setShowLockedModal] = useState(false);
+  const [lockedAccountEmail, setLockedAccountEmail] = useState('');
   const [error, setError] = useState('');
+
+  // Tự động mở pop-up thông báo tạm khóa nếu bị điều hướng từ hệ thống (?reason=locked)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('reason') === 'locked') {
+      setShowLockedModal(true);
+    }
+  }, [location.search]);
 
   // Xử lý nộp form đăng nhập
   const handleLogin = async (e) => {
@@ -55,7 +67,25 @@ export default function LoginPage() {
         navigate('/admin');
       }
     } catch (err) {
-      setError(err.message || 'Đăng nhập thất bại, vui lòng kiểm tra lại!');
+      const errMsg = err.message || '';
+      const isLockedAccount = 
+        errMsg.toLowerCase().includes('khóa') || 
+        errMsg.toLowerCase().includes('chưa kích hoạt') ||
+        errMsg.toLowerCase().includes('locked') ||
+        errMsg.toLowerCase().includes('disabled');
+
+      if (isLockedAccount) {
+        // Lưu lại email vừa đăng nhập để hiển thị trên pop-up
+        setLockedAccountEmail(email.trim());
+        // Mở pop-up to ở giữa màn hình
+        setShowLockedModal(true);
+        // Tuyệt đối không hiển thị lỗi trong ô login theo yêu cầu người dùng
+        setError('');
+      } else if (errMsg.includes('Bad credentials')) {
+        setError('Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại!');
+      } else {
+        setError(errMsg || 'Đăng nhập thất bại, vui lòng kiểm tra lại!');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -309,6 +339,59 @@ export default function LoginPage() {
               className="mt-5 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white text-xs font-semibold hover:brightness-110 transition-all"
             >
               Đã hiểu, quay lại đăng nhập
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* POP-UP THÔNG BÁO TÀI KHOẢN TẠM KHÓA NẰM CHÍNH GIỮA MÀN HÌNH              */}
+      {/* ========================================================================= */}
+      {showLockedModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn"
+          onClick={() => setShowLockedModal(false)}
+        >
+          <div
+            className="w-full max-w-sm sm:max-w-md rounded-2xl bg-[#141419] border border-red-500/50 p-6 sm:p-7 shadow-[0_25px_80px_rgba(0,0,0,0.95),0_0_50px_rgba(220,38,38,0.3)] relative text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Nút đóng X góc trên */}
+            <button
+              type="button"
+              onClick={() => setShowLockedModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-[#8E8E93] hover:text-white hover:bg-white/10 transition-colors"
+              title="Đóng thông báo"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Icon cảnh báo đỏ rực rỡ ở giữa */}
+            <div className="relative mx-auto w-16 h-16 mb-4 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-2xl bg-red-500/25 animate-ping opacity-35"></div>
+              <div className="relative w-full h-full rounded-2xl bg-red-500/15 border border-red-500/40 flex items-center justify-center shadow-[0_0_25px_rgba(220,38,38,0.45)]">
+                <ShieldAlert className="w-8 h-8 text-red-400 drop-shadow-[0_2px_8px_rgba(220,38,38,0.8)]" />
+              </div>
+            </div>
+
+            {/* Tiêu đề thông báo */}
+            <h3 className="text-lg sm:text-xl font-bold text-white mb-1.5">
+              Tài Khoản Tạm Khóa
+            </h3>
+            <p className="text-xs text-[#8E8E93] mb-5">Hệ thống quản trị Hỏa Diệm Các</p>
+
+            {/* Nội dung thông báo ngắn gọn súc tích theo yêu cầu */}
+            <p className="text-sm sm:text-[15px] text-[#D5D5DC] leading-relaxed mb-6 px-2">
+              Tài khoản của bạn đã bị tạm khóa, vui lòng liên hệ ban quản lý để mở lại.
+            </p>
+
+            {/* Nút bấm xác nhận to rõ ràng */}
+            <button
+              type="button"
+              onClick={() => setShowLockedModal(false)}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#990000] via-[#C41E3A] to-[#B22222] hover:from-[#B80000] hover:via-[#D62846] hover:to-[#C41E3A] text-white text-sm font-bold shadow-[0_4px_18px_rgba(196,30,58,0.4)] hover:shadow-[0_6px_25px_rgba(220,38,38,0.65)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 cursor-pointer"
+            >
+              Đã hiểu
             </button>
           </div>
         </div>
