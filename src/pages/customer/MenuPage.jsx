@@ -22,7 +22,7 @@ import {
 } from '@/features/tables/api/tableApi';
 import { menuApi } from '@/features/menu';
 import { orderApi } from '@/features/customer/api/orderApi';
-import useKdsStore, { normalizeTableCode, playChimeSound } from '@/stores/useKdsStore';
+import useKdsStore, { normalizeTableCode, playChimeSound, syncChannel } from '@/stores/useKdsStore';
 import { wsManager } from '@/lib/websocket';
 
 /**
@@ -330,14 +330,17 @@ export default function MenuPage() {
       ? wsManager.subscribe(`/topic/table/${currentNormTable}/status`, handleRemoteUpdate)
       : null;
 
-    // Lắng nghe kênh thực đơn toàn hệ thống (Watermark SOLD OUT thời gian thực)
-    const unsubMenu = wsManager.subscribe('/topic/menu-items', (payload) => {
+    // Lắng nghe kênh thực đơn toàn hệ thống (Watermark SOLD OUT thời gian thực & Mở bán lại)
+    const handleMenuUpdate = (payload) => {
       if (!payload) return;
 
-      // Xử lý mở bán lại món (Restock) -> Gỡ watermark SOLD OUT
-      if (payload.type === 'MENU_ITEM_RESTOCKED') {
-        const targetId = payload.menuItemId;
-        const targetName = payload.name || payload.menuItemName;
+      const targetId = payload.menuItemId;
+      const targetName = payload.name || payload.menuItemName;
+      const isRestocked = payload.type === 'MENU_ITEM_RESTOCKED' || (payload.type === 'MENU_ITEM_UPDATED' && payload.isAvailable === true);
+      const isOutOfStock = payload.type === 'MENU_ITEM_OUT_OF_STOCK' || (payload.type === 'MENU_ITEM_UPDATED' && payload.isAvailable === false);
+
+      // Xử lý mở bán lại món (Restock) -> Gỡ watermark SOLD OUT ngay lập tức
+      if (isRestocked) {
         setDbItems((prev) =>
           prev.map((item) =>
             (String(item.id) === String(targetId) || item.name === targetName)
@@ -348,15 +351,12 @@ export default function MenuPage() {
         return;
       }
 
-      if (payload.type === 'MENU_ITEM_OUT_OF_STOCK' || payload.type === 'MENU_ITEM_UPDATED') {
-        const targetId = payload.menuItemId;
-        const targetName = payload.name || payload.menuItemName;
-
+      if (isOutOfStock) {
         // Cập nhật thực đơn real-time (hiện watermark SOLD OUT)
         setDbItems((prev) =>
           prev.map((item) =>
             (String(item.id) === String(targetId) || item.name === targetName)
-              ? { ...item, isAvailable: payload.isAvailable ?? false }
+              ? { ...item, isAvailable: false }
               : item
           )
         );
@@ -390,7 +390,18 @@ export default function MenuPage() {
           syncTableOrders();
         }
       }
-    });
+    };
+
+    const unsubMenu = wsManager.subscribe('/topic/menu-items', handleMenuUpdate);
+
+    const handleBroadcast = (event) => {
+      if (event?.data?.type === 'MENU_SYNC' && event.data.menuEvent) {
+        handleMenuUpdate(event.data.menuEvent);
+      }
+    };
+    if (syncChannel) {
+      syncChannel.addEventListener('message', handleBroadcast);
+    }
 
     // 3. Polling dự phòng mỗi 4 giây (đảm bảo đồng bộ ngay cả khi WebSocket chập chờn trên mạng đa máy tính)
     const interval = setInterval(syncTableOrders, 4000);
@@ -400,6 +411,9 @@ export default function MenuPage() {
       if (unsub1) unsub1();
       if (unsub2) unsub2();
       if (unsubMenu) unsubMenu();
+      if (syncChannel) {
+        syncChannel.removeEventListener('message', handleBroadcast);
+      }
       clearInterval(interval);
     };
   }, [tableNumber, currentNormTable]);

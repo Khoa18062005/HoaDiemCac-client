@@ -3,7 +3,8 @@ import { X, Search, AlertTriangle, CheckCircle, PackageX, RefreshCw, Loader2 } f
 import { menuApi } from '@/features/menu';
 import { kitchenApi } from '../api/kitchenApi';
 import ConfirmOutOfStockModal from './ConfirmOutOfStockModal';
-import useKdsStore from '@/stores/useKdsStore';
+import useKdsStore, { syncChannel, broadcastMenuSync } from '@/stores/useKdsStore';
+import { wsManager } from '@/lib/websocket';
 
 export default function OutOfStockModal({ isOpen, onClose, onShowToast }) {
   const [items, setItems] = useState([]);
@@ -45,6 +46,55 @@ export default function OutOfStockModal({ isOpen, onClose, onShowToast }) {
     };
   }, [isOpen]);
 
+  // Lắng nghe cập nhật thực đơn thời gian thực (Mở bán lại / Báo hết món)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleMenuEvent = (payload) => {
+      if (!payload) return;
+      const targetId = payload.menuItemId;
+      const targetName = payload.name || payload.menuItemName;
+      const isRestocked = payload.type === 'MENU_ITEM_RESTOCKED' || (payload.type === 'MENU_ITEM_UPDATED' && payload.isAvailable === true);
+      const isOutOfStock = payload.type === 'MENU_ITEM_OUT_OF_STOCK' || (payload.type === 'MENU_ITEM_UPDATED' && payload.isAvailable === false);
+
+      if (isRestocked) {
+        setItems((prev) =>
+          prev.map((i) =>
+            (String(i.id) === String(targetId) || i.name === targetName)
+              ? { ...i, isAvailable: true }
+              : i
+          )
+        );
+      } else if (isOutOfStock) {
+        setItems((prev) =>
+          prev.map((i) =>
+            (String(i.id) === String(targetId) || i.name === targetName)
+              ? { ...i, isAvailable: false }
+              : i
+          )
+        );
+      }
+    };
+
+    const unsubWs = wsManager.subscribe('/topic/menu-items', handleMenuEvent);
+
+    const handleBroadcast = (event) => {
+      if (event?.data?.type === 'MENU_SYNC' && event.data.menuEvent) {
+        handleMenuEvent(event.data.menuEvent);
+      }
+    };
+    if (syncChannel) {
+      syncChannel.addEventListener('message', handleBroadcast);
+    }
+
+    return () => {
+      if (unsubWs) unsubWs();
+      if (syncChannel) {
+        syncChannel.removeEventListener('message', handleBroadcast);
+      }
+    };
+  }, [isOpen]);
+
   // Lọc danh sách món ăn
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -77,6 +127,12 @@ export default function OutOfStockModal({ isOpen, onClose, onShowToast }) {
         setItems((prev) =>
           prev.map((i) => (i.id === item.id ? { ...i, isAvailable: true } : i))
         );
+        broadcastMenuSync({
+          type: 'MENU_ITEM_RESTOCKED',
+          menuItemId: item.id,
+          name: item.name,
+          isAvailable: true,
+        });
         if (onShowToast) {
           onShowToast(`Đã mở bán lại: ${item.name}`);
         }
@@ -109,6 +165,12 @@ export default function OutOfStockModal({ isOpen, onClose, onShowToast }) {
 
       // 3. Xóa các món đang nấu khỏi đơn hàng KDS và phát realtime
       useKdsStore.getState().removeOutOfStockItem(item.id, item.name);
+      broadcastMenuSync({
+        type: 'MENU_ITEM_OUT_OF_STOCK',
+        menuItemId: item.id,
+        name: item.name,
+        isAvailable: false,
+      });
 
       if (onShowToast) {
         onShowToast(`ĐÃ BÁO HẾT MÓN: ${item.name} (Đã khóa trên menu khách)`);

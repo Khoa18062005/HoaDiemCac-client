@@ -6,9 +6,27 @@ import { waiterApi } from '@/features/waiter/api/waiterApi';
 const tabId = typeof window !== 'undefined' ? `tab_${Math.random().toString(36).substring(2, 9)}` : 'server';
 
 // BroadcastChannel cho phép các tab trình duyệt đồng bộ ngay tức thì (0ms latency)
-const syncChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
+export const syncChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
   ? new BroadcastChannel('hoadiemcat_kds_sync_channel')
   : null;
+
+/**
+ * Phát sự kiện thay đổi trạng thái thực đơn (Hết món / Mở bán lại) sang tất cả các tab khác
+ */
+export function broadcastMenuSync(menuEvent) {
+  if (syncChannel) {
+    try {
+      syncChannel.postMessage({
+        type: 'MENU_SYNC',
+        senderTabId: tabId,
+        menuEvent,
+        timestamp: Date.now(),
+      });
+    } catch (err) {
+      console.error('BroadcastChannel menu sync error:', err);
+    }
+  }
+}
 
 /**
  * Chuẩn hóa mã bàn thành định dạng thống nhất: 'BÀN 08', 'VIP 12'
@@ -743,7 +761,7 @@ export const useKdsStore = create((set, get) => ({
 
 // Lắng nghe đồng bộ từ các tab khác qua BroadcastChannel
 if (syncChannel) {
-  syncChannel.onmessage = (event) => {
+  syncChannel.addEventListener('message', (event) => {
     const data = event.data;
     if (!data || data.senderTabId === tabId) return;
 
@@ -761,7 +779,7 @@ if (syncChannel) {
         playChimeSound();
       }
     }
-  };
+  });
 }
 
 // Hỗ trợ dự phòng qua sự kiện storage

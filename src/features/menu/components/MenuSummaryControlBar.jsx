@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Plus, Filter } from 'lucide-react';
+import { Search, Plus, Filter, RefreshCw } from 'lucide-react';
 
 export default function MenuSummaryControlBar({
   searchQuery,
@@ -7,6 +7,8 @@ export default function MenuSummaryControlBar({
   statusFilter,
   onStatusFilterChange,
   onOpenAddModal,
+  onRefresh,
+  isRefreshing = false,
 }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 font-sans">
@@ -84,6 +86,20 @@ export default function MenuSummaryControlBar({
             Tạm Khóa
           </button>
         </div>
+
+        {/* Nút Làm mới từ Database */}
+        {onRefresh && (
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-surface-card hover:bg-surface-elevated text-gold hover:text-gold-light border border-surface-border text-xs transition-colors cursor-pointer disabled:opacity-50 select-none flex-shrink-0"
+            title="Làm mới danh sách từ Database"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{isRefreshing ? 'Đang tải...' : 'Làm mới từ DB'}</span>
+          </button>
+        )}
 
         {/* Nút Thêm Món Mới */}
         <button

@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Loader2, RefreshCw, AlertCircle, Database } from 'lucide-react';
+import { Loader2, RefreshCw, AlertCircle } from 'lucide-react';
+import { wsManager } from '@/lib/websocket';
+import { syncChannel, broadcastMenuSync } from '@/stores/useKdsStore';
 import {
   menuApi,
   AdminMenuHeader,
@@ -86,6 +88,55 @@ export default function MenuManagePage() {
   useEffect(() => {
     fetchMenuData();
   }, [fetchMenuData]);
+
+  // Đồng bộ thời gian thực trạng thái món ăn (Còn hàng / Hết hàng / Mở bán lại) qua WebSocket & BroadcastChannel
+  useEffect(() => {
+    const handleMenuEvent = (payload) => {
+      if (!payload) return;
+      const targetId = payload.menuItemId;
+      const targetName = payload.name || payload.menuItemName;
+      const isRestocked = payload.type === 'MENU_ITEM_RESTOCKED' || (payload.type === 'MENU_ITEM_UPDATED' && payload.isAvailable === true);
+      const isOutOfStock = payload.type === 'MENU_ITEM_OUT_OF_STOCK' || (payload.type === 'MENU_ITEM_UPDATED' && payload.isAvailable === false);
+
+      if (isRestocked) {
+        setMenuItems((prev) =>
+          prev.map((item) =>
+            (String(item.id) === String(targetId) || item.name === targetName)
+              ? { ...item, isAvailable: true }
+              : item
+          )
+        );
+        triggerToast(`🔔 Đồng bộ thời gian thực: Món "${targetName || targetId}" đã mở bán lại`);
+      } else if (isOutOfStock) {
+        setMenuItems((prev) =>
+          prev.map((item) =>
+            (String(item.id) === String(targetId) || item.name === targetName)
+              ? { ...item, isAvailable: false }
+              : item
+          )
+        );
+        triggerToast(`🔔 Đồng bộ thời gian thực: Món "${targetName || targetId}" đã tạm khóa (Hết hàng)`);
+      }
+    };
+
+    const unsubWs = wsManager.subscribe('/topic/menu-items', handleMenuEvent);
+
+    const handleBroadcast = (event) => {
+      if (event?.data?.type === 'MENU_SYNC' && event.data.menuEvent) {
+        handleMenuEvent(event.data.menuEvent);
+      }
+    };
+    if (syncChannel) {
+      syncChannel.addEventListener('message', handleBroadcast);
+    }
+
+    return () => {
+      if (unsubWs) unsubWs();
+      if (syncChannel) {
+        syncChannel.removeEventListener('message', handleBroadcast);
+      }
+    };
+  }, []);
 
   // Thống kê Món Ăn
   const dishStats = useMemo(() => {
@@ -184,6 +235,13 @@ export default function MenuManagePage() {
         : `Đã tạm khóa phục vụ: ${itemToToggle.name}`
     );
 
+    broadcastMenuSync({
+      type: nextState ? 'MENU_ITEM_RESTOCKED' : 'MENU_ITEM_OUT_OF_STOCK',
+      menuItemId: itemId,
+      name: itemToToggle.name,
+      isAvailable: nextState,
+    });
+
     try {
       await menuApi.toggleMenuItemStatus(itemId);
     } catch (err) {
@@ -193,6 +251,12 @@ export default function MenuManagePage() {
           item.id === itemId ? { ...item, isAvailable: previousState } : item
         )
       );
+      broadcastMenuSync({
+        type: previousState ? 'MENU_ITEM_RESTOCKED' : 'MENU_ITEM_OUT_OF_STOCK',
+        menuItemId: itemId,
+        name: itemToToggle.name,
+        isAvailable: previousState,
+      });
       triggerToast(`⚠️ Lỗi cập nhật Database: ${err.message}`);
     }
   };
@@ -347,29 +411,6 @@ export default function MenuManagePage() {
 
       {/* 2. Vùng nội dung cuộn chính */}
       <div className="flex-1 px-8 py-6 overflow-y-scroll [scrollbar-gutter:stable] space-y-6 relative">
-        {/* Banner trạng thái kết nối Database / Làm mới */}
-        <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-surface-card border border-surface-border text-xs">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-jade-bright animate-pulse"></span>
-            <span className="text-[#A0A0A5] flex items-center gap-1.5">
-              <Database className="w-3.5 h-3.5 text-gold" />
-              Nguồn dữ liệu: <strong className="text-white">Aiven MySQL Database</strong>
-            </span>
-            <span className="text-[#656569] hidden md:inline">• Đồng bộ thời gian thực</span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => fetchMenuData(true)}
-            disabled={isRefreshing || loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-elevated/80 text-gold hover:text-gold-light border border-surface-border text-xs transition-colors cursor-pointer disabled:opacity-50"
-            title="Làm mới danh sách từ Database"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>{isRefreshing ? 'Đang tải...' : 'Làm mới từ DB'}</span>
-          </button>
-        </div>
-
         {/* Cảnh báo nếu lỗi kết nối */}
         {error && (
           <div className="p-3 rounded-xl bg-crimson/15 border border-crimson/40 text-[#ff8080] text-xs flex items-center justify-between gap-3">
@@ -404,6 +445,8 @@ export default function MenuManagePage() {
                 setCurrentPage(1);
               }}
               onOpenAddModal={handleOpenAddModal}
+              onRefresh={() => fetchMenuData(true)}
+              isRefreshing={isRefreshing || loading}
             />
 
             {/* 2A.2. Dải băng phân loại danh mục (Category Ribbon) */}
