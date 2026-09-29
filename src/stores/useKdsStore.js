@@ -699,6 +699,39 @@ export const useKdsStore = create((set, get) => ({
     saveOrdersToStorage(mapped);
   },
 
+  // 7.1 Xóa món báo hết khỏi tất cả các bàn chưa phục vụ (UC19)
+  removeOutOfStockItem: (menuItemId, itemName) => {
+    const currentOrders = get().orders;
+    const nextOrders = currentOrders
+      .map((order) => {
+        const remainingItems = order.items.filter((item) => {
+          // Món đã bưng cho khách (DELIVERED) thì giữ nguyên để tính tiền, tuyệt đối không xóa
+          if (item.status === 'DELIVERED') return true;
+          // Chỉ xóa các món ĐANG HOẠT ĐỘNG (COOKING: Đang nấu, SERVED: Chờ bưng) của món bị hết
+          const isMatchMenu = menuItemId && String(item.menuItemId) === String(menuItemId);
+          const isMatchName = itemName && item.name === itemName;
+          const isActive = item.status === 'COOKING' || item.status === 'SERVED' || item.status === 'READY';
+          return !(isActive && (isMatchMenu || isMatchName));
+        });
+        return {
+          ...order,
+          items: remainingItems,
+        };
+      })
+      .filter((order) => order.items.length > 0);
+
+    const eventData = {
+      type: 'ITEM_OUT_OF_STOCK_CANCELLED',
+      menuItemId,
+      menuItemName: itemName,
+      message: `🚫 Món ${itemName} đã hết hàng. Đã xóa khỏi đơn các bàn`,
+    };
+
+    set({ orders: nextOrders, lastBroadcastEvent: eventData });
+    broadcastUpdate(nextOrders, eventData);
+    return eventData;
+  },
+
   // 8. Khôi phục dữ liệu gốc (xóa sạch về mảng rỗng)
   resetToDefault: () => {
     localStorage.removeItem('hoadiemcat_kds_orders_v2');

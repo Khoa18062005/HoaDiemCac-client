@@ -5,6 +5,7 @@ import {
   KdsOrderCard,
   KdsAggregatedView,
   OutOfStockModal,
+  ConfirmOutOfStockModal,
   kitchenApi,
   useKitchenSocket,
 } from '@/features/kitchen';
@@ -21,8 +22,12 @@ export default function KitchenKdsPage() {
   const setOrders = useKdsStore((state) => state.setOrders);
   const toggleKitchenItemStatus = useKdsStore((state) => state.toggleKitchenItemStatus);
   const completeAllKitchenItems = useKdsStore((state) => state.completeAllKitchenItems);
+  const removeOutOfStockItem = useKdsStore((state) => state.removeOutOfStockItem);
   const addNewOrder = useKdsStore((state) => state.addNewOrder);
   const simulateNewOrderStore = useKdsStore((state) => state.simulateNewOrder);
+
+  // Modal Báo Hết Món nhanh từ Thẻ Bàn (xác nhận trước khi gửi DB)
+  const [targetOutOfStockItem, setTargetOutOfStockItem] = useState(null);
 
   // Luôn đồng bộ hàng đợi thực tế từ Backend khi mở màn hình bếp & polling định kỳ
   useEffect(() => {
@@ -86,6 +91,29 @@ export default function KitchenKdsPage() {
     completeAllKitchenItems(orderId);
     await kitchenApi.updateOrderStatus(orderId, 'COMPLETED');
   }, [completeAllKitchenItems]);
+
+  // 6.1 Xử lý xác nhận báo hết món khẩn cấp từ thẻ đơn bàn (UC19)
+  const handleConfirmOutOfStock = useCallback(async (order, item) => {
+    try {
+      // 1. Gửi request xuống DB MySQL qua Spring Boot Backend
+      await kitchenApi.reportOutOfStock({
+        orderItemId: item.id,
+        menuItemId: item.menuItemId,
+        reason: `Bếp trưởng báo hết nguyên liệu từ ${order.tableCode}`,
+      });
+
+      // 2. Xóa món khỏi state KDS Store cục bộ và qua BroadcastChannel tới các tab
+      removeOutOfStockItem(item.menuItemId, item.name);
+
+      // 3. Tải lại hàng đợi từ server để đồng bộ chính xác nhất
+      const updatedQueue = await kitchenApi.getKitchenQueue();
+      if (Array.isArray(updatedQueue)) {
+        setOrders(updatedQueue);
+      }
+    } catch (err) {
+      console.error('Lỗi khi báo hết món:', err);
+    }
+  }, [removeOutOfStockItem, setOrders]);
 
   // 7. Quản lý danh sách ID đơn hàng đã hoàn thành và hết 10 giây đệm để ẩn
   const [hiddenOrderIds, setHiddenOrderIds] = useState(() => new Set());
@@ -199,6 +227,7 @@ export default function KitchenKdsPage() {
                 order={order}
                 onToggleItemStatus={handleToggleItemStatus}
                 onCompleteAllItems={handleCompleteAllItems}
+                onReportOutOfStock={(ord, item) => setTargetOutOfStockItem({ order: ord, item })}
               />
             ))}
           </div>
@@ -211,10 +240,18 @@ export default function KitchenKdsPage() {
         )}
       </main>
 
-      {/* 4. Modal Báo Hết Món Khẩn Cấp (UC19) */}
+      {/* 4. Modal Báo Hết Món Toàn Hệ Thống (UC19) */}
       <OutOfStockModal
         isOpen={isOutOfStockOpen}
         onClose={() => setIsOutOfStockOpen(false)}
+      />
+
+      {/* 5. Modal Xác Nhận Báo Hết Món Nhanh từ Thẻ Bàn (UC19) */}
+      <ConfirmOutOfStockModal
+        isOpen={Boolean(targetOutOfStockItem)}
+        onClose={() => setTargetOutOfStockItem(null)}
+        target={targetOutOfStockItem}
+        onConfirm={handleConfirmOutOfStock}
       />
     </div>
   );

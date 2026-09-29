@@ -26,7 +26,9 @@ export default function CustomerDishCard({
         <img
           src={dish.image}
           alt={dish.name}
-          className="absolute inset-0 w-full h-full object-cover"
+          className={`absolute inset-0 w-full h-full object-cover transition-all ${
+            dish.isAvailable === false ? 'opacity-40 grayscale-[40%]' : ''
+          }`}
           loading="lazy"
           onError={(e) => {
             e.target.onerror = null;
@@ -35,7 +37,7 @@ export default function CustomerDishCard({
         />
 
         {/* Status Badge */}
-        {dish.tag && (
+        {dish.tag && dish.isAvailable !== false && (
           <span
             className={`absolute top-1 left-1 z-10 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs select-none ${
               dish.tagType === 'crimson'
@@ -48,12 +50,25 @@ export default function CustomerDishCard({
             {dish.tag}
           </span>
         )}
+
+        {/* Watermark SOLD OUT Realtime */}
+        {dish.isAvailable === false && (
+          <div className="absolute inset-0 z-20 bg-black/60 backdrop-blur-[1px] flex items-center justify-center p-1 select-none">
+            <div className="border-2 border-dashed border-red-500/90 bg-red-950/90 px-2 py-0.5 rounded shadow-xl transform -rotate-12 flex items-center justify-center">
+              <span className="text-[11px] sm:text-xs font-black text-red-200 tracking-wider uppercase drop-shadow-md">
+                SOLD OUT
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Dish Info & Actions */}
       <div className="flex-1 min-w-0 flex flex-col justify-between h-[104px] sm:h-[108px]">
         <div>
-          <h3 className="font-bold text-[13px] sm:text-[14px] text-[#FDFBF7] leading-snug line-clamp-1">
+          <h3 className={`font-bold text-[13px] sm:text-[14px] leading-snug line-clamp-1 ${
+            dish.isAvailable === false ? 'text-[#8E8E93] line-through' : 'text-[#FDFBF7]'
+          }`}>
             {dish.name}
           </h3>
 
@@ -65,15 +80,23 @@ export default function CustomerDishCard({
         {/* Price & Stepper Button Bar */}
         <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-white/5">
           <div className="flex items-baseline">
-            <span className="text-[14px] font-black text-[#FFD54F] tracking-tight">
+            <span className={`text-[14px] font-black tracking-tight ${
+              dish.isAvailable === false ? 'text-[#8E8E93]' : 'text-[#FFD54F]'
+            }`}>
               {formatPrice(dish.price)}
             </span>
-            <span className="text-[11px] font-bold text-[#FFD54F] ml-0.5">₫</span>
+            <span className={`text-[11px] font-bold ml-0.5 ${
+              dish.isAvailable === false ? 'text-[#8E8E93]' : 'text-[#FFD54F]'
+            }`}>₫</span>
           </div>
 
-          {/* Action: Add Button or Stepper (Fixed Height Container to guarantee identical vertical position) */}
+          {/* Action: Add Button, Stepper or Out of Stock Tag */}
           <div className="h-[34px] flex items-center flex-shrink-0">
-            {cartQuantity === 0 ? (
+            {dish.isAvailable === false ? (
+              <span className="text-[11px] font-bold text-red-400 bg-red-950/50 border border-red-500/30 px-2.5 py-1 rounded-lg select-none shadow-2xs">
+                Tạm hết
+              </span>
+            ) : cartQuantity === 0 ? (
               <button
                 type="button"
                 onClick={() => onAddToCart(dish, dish.price)}

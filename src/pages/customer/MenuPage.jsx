@@ -9,6 +9,7 @@ import {
   CustomerBottomCartBar,
   CustomerCartDrawer,
   CustomerCartSidebar,
+  CustomerOutOfStockNoticeModal,
   CATEGORY_ICONS,
 } from '@/features/customer';
 import TablePasscodeModal from '@/features/tables/components/TablePasscodeModal';
@@ -53,6 +54,9 @@ export default function MenuPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isPasscodeRequired, setIsPasscodeRequired] = useState(false);
+
+  // Modal Thông Báo Cáo Lỗi Hết Món Cho Khách Hàng (UC19)
+  const [outOfStockNotice, setOutOfStockNotice] = useState(null);
 
   // Trạng thái Chủ Bàn (Host) & Quản lý thiết bị
   const [isHost, setIsHost] = useState(() => {
@@ -280,6 +284,38 @@ export default function MenuPage() {
     const handleRemoteUpdate = (payload) => {
       if (!payload) return;
 
+      if (payload.type === 'ITEM_OUT_OF_STOCK_CANCELLED' || payload.type === 'MENU_ITEM_OUT_OF_STOCK') {
+        const targetId = payload.menuItemId;
+        const targetName = payload.menuItemName || payload.name;
+
+        // Cập nhật trạng thái món trên thực đơn (isAvailable = false) ngay lập tức
+        setDbItems((prev) =>
+          prev.map((item) =>
+            (String(item.id) === String(targetId) || item.name === targetName)
+              ? { ...item, isAvailable: false }
+              : item
+          )
+        );
+
+        // Xóa món khỏi giỏ hàng nháp nếu khách đang chọn
+        setCartItems((prev) =>
+          prev.filter((i) => !(targetId && String(i.id) === String(targetId)) && !(targetName && i.name === targetName))
+        );
+
+        // Xóa món khỏi KDS store của bàn
+        useKdsStore.getState().removeOutOfStockItem(targetId, targetName);
+
+        // Hiển thị hộp thoại cáo lỗi trang trọng
+        setOutOfStockNotice({
+          menuItemName: targetName,
+          message: payload.message || payload.politeMessage,
+        });
+
+        // Đồng bộ lại từ server
+        syncTableOrders();
+        return;
+      }
+
       if (payload.type === 'KITCHEN_ITEM_STATUS_TOGGLED' || payload.type === 'WAITER_ITEM_DELIVERED') {
         useKdsStore.getState().applyRemoteItemStatusUpdate(payload);
       } else if (payload.type === 'WAITER_ALL_ITEMS_DELIVERED') {
@@ -294,6 +330,53 @@ export default function MenuPage() {
       ? wsManager.subscribe(`/topic/table/${currentNormTable}/status`, handleRemoteUpdate)
       : null;
 
+    // Lắng nghe kênh thực đơn toàn hệ thống (Watermark SOLD OUT thời gian thực)
+    const unsubMenu = wsManager.subscribe('/topic/menu-items', (payload) => {
+      if (!payload) return;
+      if (payload.type === 'MENU_ITEM_OUT_OF_STOCK' || payload.type === 'MENU_ITEM_UPDATED') {
+        const targetId = payload.menuItemId;
+        const targetName = payload.name || payload.menuItemName;
+
+        // Cập nhật thực đơn real-time (hiện watermark SOLD OUT)
+        setDbItems((prev) =>
+          prev.map((item) =>
+            (String(item.id) === String(targetId) || item.name === targetName)
+              ? { ...item, isAvailable: payload.isAvailable ?? false }
+              : item
+          )
+        );
+
+        // Kiểm tra xem giỏ hàng hoặc bàn hiện tại có món này không
+        setCartItems((prev) => {
+          const hadInCart = prev.some((i) => (targetId && String(i.id) === String(targetId)) || (targetName && i.name === targetName));
+          if (hadInCart) {
+            setOutOfStockNotice({
+              menuItemName: targetName,
+              message: payload.politeMessage || `Kính thưa Quý khách, món "${targetName}" hiện tại đã hết nguyên liệu. Món đã được tự động gỡ khỏi giỏ hàng của Quý khách!`,
+            });
+            return prev.filter((i) => !(targetId && String(i.id) === String(targetId)) && !(targetName && i.name === targetName));
+          }
+          return prev;
+        });
+
+        // Kiểm tra trong đơn đã đặt của bàn
+        const currentOrders = useKdsStore.getState().orders;
+        const currentTableOrders = currentOrders.filter((o) => normalizeTableCode(o.tableCode) === currentNormTable);
+        const hasOrdered = currentTableOrders.some((o) =>
+          (o.items || []).some((i) => (targetId && String(i.menuItemId) === String(targetId)) || (targetName && i.name === targetName))
+        );
+
+        if (hasOrdered) {
+          useKdsStore.getState().removeOutOfStockItem(targetId, targetName);
+          setOutOfStockNotice({
+            menuItemName: targetName,
+            message: payload.politeMessage || `Kính thưa Quý khách, món "${targetName}" hiện tại bếp đã hết. Món đã được tự động gỡ khỏi đơn của Quý khách!`,
+          });
+          syncTableOrders();
+        }
+      }
+    });
+
     // 3. Polling dự phòng mỗi 4 giây (đảm bảo đồng bộ ngay cả khi WebSocket chập chờn trên mạng đa máy tính)
     const interval = setInterval(syncTableOrders, 4000);
 
@@ -301,6 +384,7 @@ export default function MenuPage() {
       isMounted = false;
       if (unsub1) unsub1();
       if (unsub2) unsub2();
+      if (unsubMenu) unsubMenu();
       clearInterval(interval);
     };
   }, [tableNumber, currentNormTable]);
@@ -371,19 +455,59 @@ export default function MenuPage() {
     return result;
   }, [allOrders, currentNormTable, dishesList]);
 
+  // Lắng nghe BroadcastChannel từ tab Bếp sang tab Khách (Đồng bộ đa tab thời gian thực 0ms)
+  useEffect(() => {
+    if (!lastBroadcastEvent) return;
+    if (lastBroadcastEvent.type === 'ITEM_OUT_OF_STOCK_CANCELLED') {
+      const targetId = lastBroadcastEvent.menuItemId;
+      const targetName = lastBroadcastEvent.menuItemName;
+
+      // Đổi trạng thái món trên menu thành hết hàng
+      setDbItems((prev) =>
+        prev.map((item) =>
+          (String(item.id) === String(targetId) || item.name === targetName)
+            ? { ...item, isAvailable: false }
+            : item
+        )
+      );
+
+      // Xóa món khỏi giỏ hàng nháp nếu có
+      setCartItems((prev) => {
+        const hadInCart = prev.some((i) => (targetId && String(i.id) === String(targetId)) || (targetName && i.name === targetName));
+        if (hadInCart) {
+          setOutOfStockNotice({
+            menuItemName: targetName,
+            message: lastBroadcastEvent.message,
+          });
+          return prev.filter((i) => !(targetId && String(i.id) === String(targetId)) && !(targetName && i.name === targetName));
+        }
+        return prev;
+      });
+
+      // Kiểm tra xem bàn có món này trong đơn đã đặt không
+      const hasOrdered = orderedItems.some(
+        (i) => (targetId && (String(i.dishId) === String(targetId) || String(i.menuItemId) === String(targetId))) || (targetName && i.name === targetName)
+      );
+      if (hasOrdered) {
+        setOutOfStockNotice({
+          menuItemName: targetName,
+          message: lastBroadcastEvent.message,
+        });
+      }
+    }
+  }, [lastBroadcastEvent]);
+
   // Chuẩn bị các section danh mục liên tục phục vụ trải nghiệm cuộn liền mạch (Continuous Scroll)
   const categorySections = useMemo(() => {
-    // Chỉ hiển thị các món đang mở bán (isAvailable !== false)
-    const availableDishes = dishesList.filter((d) => d.isAvailable !== false);
-
+    // Không lọc bỏ các món hết hàng (isAvailable !== false) để hiện Watermark SOLD OUT trên menu khách hàng
     return customerCategories.map((cat) => {
       let dishes = [];
       if (cat.id === 'ban-chay') {
         // Món Bán Chạy: Lấy các món nổi bật (isFeatured), nếu ít hơn 4 thì lấy thêm các món đầu tiên
-        const featured = availableDishes.filter((d) => d.isFeatured);
-        dishes = featured.length >= 2 ? featured : availableDishes.slice(0, 6);
+        const featured = dishesList.filter((d) => d.isFeatured);
+        dishes = featured.length >= 2 ? featured : dishesList.slice(0, 6);
       } else {
-        dishes = availableDishes.filter((d) => {
+        dishes = dishesList.filter((d) => {
           if (d.categoryId === cat.id || String(d.categoryId) === String(cat.id)) return true;
           if (cat.numericId && String(d.categoryId) === String(cat.numericId)) return true;
           if (d.categories && Array.isArray(d.categories)) {
@@ -765,6 +889,13 @@ export default function MenuPage() {
         tableNumber={tableNumber}
         isCurrentHost={isHost}
         onHostTransferred={handleHostTransferred}
+      />
+
+      {/* 8. Modal Thông Báo Cáo Lỗi Hết Món Cho Khách Hàng (UC19) */}
+      <CustomerOutOfStockNoticeModal
+        isOpen={Boolean(outOfStockNotice)}
+        onClose={() => setOutOfStockNotice(null)}
+        noticeData={outOfStockNotice}
       />
     </div>
   );

@@ -7,6 +7,7 @@ import {
   AlertCircle,
   Flame,
   Sparkles,
+  PackageX,
 } from 'lucide-react';
 
 /**
@@ -28,6 +29,7 @@ export default function KdsOrderCard({
   order,
   onToggleItemStatus,
   onCompleteAllItems,
+  onReportOutOfStock,
 }) {
   // Bộ đếm thời gian trôi qua thực tế
   const [elapsedSeconds, setElapsedSeconds] = useState(() => {
@@ -171,37 +173,57 @@ export default function KdsOrderCard({
                 </div>
               </div>
 
-              {/* Bên phải: Nút thao tác một chạm (One-tap action) */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (isDelivered) return;
-                  onToggleItemStatus(order.id, item.id);
-                }}
-                className={`p-1.5 rounded-lg border transition-all flex items-center justify-center flex-shrink-0 ${
-                  isDelivered
-                    ? 'bg-jade/25 border-jade/50 text-jade-bright cursor-default'
-                    : isServed
-                    ? 'bg-jade/20 border-jade/40 text-jade-bright hover:bg-jade/30'
-                    : 'bg-surface-card border-surface-border text-[#8E8E93] hover:border-gold hover:text-gold hover:bg-surface-elevated'
-                }`}
-                title={
-                  isDelivered
-                    ? 'Đã bưng lên bàn'
-                    : isServed
-                    ? 'Đã nấu xong. Bấm để hoàn tác'
-                    : 'Bấm để đánh dấu đã chế biến xong'
-                }
-              >
-                {isDelivered ? (
-                  <CheckCheck className="w-4 h-4 text-emerald-400 stroke-[2.5]" />
-                ) : isServed ? (
-                  <Check className="w-4 h-4 stroke-[2.5]" />
-                ) : (
-                  <Check className="w-4 h-4" />
+              {/* Bên phải: Nút thao tác một chạm & Nút báo hết món nhỏ */}
+              <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isDelivered) return;
+                    onToggleItemStatus(order.id, item.id);
+                  }}
+                  className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
+                    isDelivered
+                      ? 'bg-jade/25 border-jade/50 text-jade-bright cursor-default'
+                      : isServed
+                      ? 'bg-jade/20 border-jade/40 text-jade-bright hover:bg-jade/30'
+                      : 'bg-surface-card border-surface-border text-[#8E8E93] hover:border-gold hover:text-gold hover:bg-surface-elevated'
+                  }`}
+                  title={
+                    isDelivered
+                      ? 'Đã bưng lên bàn'
+                      : isServed
+                      ? 'Đã nấu xong. Bấm để hoàn tác'
+                      : 'Bấm để đánh dấu đã chế biến xong'
+                  }
+                >
+                  {isDelivered ? (
+                    <CheckCheck className="w-4 h-4 text-emerald-400 stroke-[2.5]" />
+                  ) : isServed ? (
+                    <Check className="w-4 h-4 stroke-[2.5]" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                </button>
+
+                {/* Nút báo hết món nhỏ ở dưới nút tick (khi món chưa phục vụ lên bàn) */}
+                {!isDelivered && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onReportOutOfStock) {
+                        onReportOutOfStock(order, item);
+                      }
+                    }}
+                    className="px-1.5 py-0.5 rounded text-[10px] font-medium text-amber-500/80 hover:text-red-400 hover:bg-red-500/15 border border-amber-500/25 hover:border-red-500/40 transition-all flex items-center gap-0.5 shadow-2xs group/btn"
+                    title={`Báo hết món khẩn cấp: ${item.name}`}
+                  >
+                    <PackageX className="w-3 h-3 text-amber-500 group-hover/btn:text-red-400" />
+                    <span className="scale-90 origin-left">Hết</span>
+                  </button>
                 )}
-              </button>
+              </div>
             </div>
           );
         })}

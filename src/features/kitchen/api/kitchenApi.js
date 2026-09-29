@@ -60,6 +60,27 @@ export const kitchenApi = {
       return { success: true, menuItemId, isAvailable };
     }
   },
+
+  /**
+   * Báo hết món khẩn cấp từ Bếp KDS (UC19): Khóa món trên thực đơn (SOLD OUT) & tự động xóa món khỏi đơn các bàn đang đặt
+   * @param {Object} params
+   * @param {number|string} params.orderItemId - ID món trong order (nếu ấn từ thẻ bàn)
+   * @param {number|string} params.menuItemId - ID món ăn trên thực đơn
+   * @param {string} params.reason - Lý do hết món
+   */
+  reportOutOfStock: async ({ orderItemId, menuItemId, reason = 'Bếp trưởng báo hết nguyên liệu' }) => {
+    try {
+      const response = await apiClient.post('/kitchen/out-of-stock', {
+        orderItemId,
+        menuItemId,
+        reason,
+      });
+      return response?.data || response;
+    } catch (err) {
+      console.warn('Lỗi khi gọi API báo hết món:', err);
+      return { success: false, error: err };
+    }
+  },
 };
 
 export default kitchenApi;
