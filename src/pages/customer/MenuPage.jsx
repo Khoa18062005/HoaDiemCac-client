@@ -66,22 +66,8 @@ export default function MenuPage() {
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
   // Trạng thái Bàn bị khóa / Đóng băng order khi nhân viên xem hóa đơn tạm tính hoặc chốt đơn
-  const [isOrderLocked, setIsOrderLocked] = useState(() => {
-    const s = getStoredTableSession();
-    if (s && (s.tableNumber === tableNumber || s.tableNumber === currentNormTable) && s.isOrderLocked) {
-      return true;
-    }
-    try {
-      const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
-      if (
-        lockedMap[tableNumber.toUpperCase()] ||
-        lockedMap[currentNormTable.toUpperCase()]
-      ) {
-        return true;
-      }
-    } catch {}
-    return false;
-  });
+  // Khởi tạo mặc định là false để loại bỏ hiện tượng hiển thị chớp giật (flash 1s) modal thanh toán khi khách đang dùng bữa F5 tải lại trang.
+  const [isOrderLocked, setIsOrderLocked] = useState(false);
 
   const [serverTableTotal, setServerTableTotal] = useState(0);
   const [calledSupport, setCalledSupport] = useState(false);
@@ -101,67 +87,108 @@ export default function MenuPage() {
     }
   };
 
+  const handleKillSession = useCallback(() => {
+    clearTableSession();
+    try {
+      const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
+      delete lockedMap[tableNumber.toUpperCase()];
+      delete lockedMap[currentNormTable.toUpperCase()];
+      localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
+    } catch {}
+    try {
+      useTableSessionStore.getState().clearTableSession();
+    } catch {}
+    try {
+      useCartStore.getState().clearCart();
+    } catch {}
+    // Không dùng alert() của trình duyệt để tránh gây phiền và chặn màn hình khách hàng
+    navigate(`/table/${tableNumber}`, { replace: true });
+  }, [tableNumber, currentNormTable, navigate]);
+
   // Kiểm tra phiên bàn ăn hợp lệ từ localStorage và đồng bộ trạng thái thiết bị
   useEffect(() => {
     let isMounted = true;
 
     const checkSessionAndDevices = async () => {
-      // 1. Luôn kiểm tra trạng thái khóa order của bàn từ Server trước
+      // 1. Luôn kiểm tra trạng thái và thông tin bàn từ Server trước
       let isTableLocked = false;
       try {
         const info = await tableApi.getTablePublicInfo(tableNumber);
-        if (info && info.isOrderLocked !== undefined) {
-          isTableLocked = Boolean(info.isOrderLocked);
-          if (isMounted) setIsOrderLocked(isTableLocked);
-        }
-        if (info && info.totalAmount !== undefined) {
-          if (isMounted) setServerTableTotal(Number(info.totalAmount) || 0);
+        if (info) {
+          // CHỈ KHI NHÂN VIÊN ĐÃ HOÀN TẤT THANH TOÁN (Trạng thái chuyển sang CLEANING hoặc AVAILABLE):
+          // Tiến trình bên khách hàng mới bị kết thúc (kill session)!
+          if (info.status === 'CLEANING' || info.status === 'AVAILABLE') {
+            const currentSession = getStoredTableSession();
+            if (
+              currentSession &&
+              (currentSession.tableNumber === tableNumber ||
+                currentSession.tableNumber === currentNormTable)
+            ) {
+              handleKillSession();
+              return;
+            }
+          }
+
+          if (info.isOrderLocked !== undefined) {
+            isTableLocked = Boolean(info.isOrderLocked);
+            if (isMounted) setIsOrderLocked(isTableLocked);
+
+            // Đồng bộ trạng thái khóa order vào localStorage session và dọn sạch dữ liệu cũ
+            const currentSession = getStoredTableSession();
+            if (
+              currentSession &&
+              (currentSession.tableNumber === tableNumber ||
+                currentSession.tableNumber === currentNormTable)
+            ) {
+              saveTableSession({ ...currentSession, isOrderLocked: isTableLocked });
+            }
+            try {
+              const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
+              if (!isTableLocked) {
+                delete lockedMap[tableNumber.toUpperCase()];
+                delete lockedMap[currentNormTable.toUpperCase()];
+              } else {
+                lockedMap[tableNumber.toUpperCase()] = true;
+              }
+              localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
+            } catch {}
+          }
+          if (info.totalAmount !== undefined) {
+            if (isMounted) setServerTableTotal(Number(info.totalAmount) || 0);
+          }
         }
       } catch (err) {
-        try {
-          const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
-          if (
-            lockedMap[tableNumber.toUpperCase()] ||
-            lockedMap[currentNormTable.toUpperCase()]
-          ) {
-            isTableLocked = true;
-            if (isMounted) setIsOrderLocked(true);
-          }
-        } catch {}
+        // Lỗi kết nối mạng tạm thời, không khóa bàn tùy tiện
       }
 
       // NẾU BÀN ĐANG TRONG QUÁ TRÌNH THANH TOÁN / KHÓA ORDER:
-      // Tuyệt đối không bao giờ hiển thị popup nhập mã PIN!
+      // Khách hàng luôn ở lại màn hình tạm tính (Hình 1) đối soát chi tiết
       if (isTableLocked || isOrderLocked) {
-        if (isMounted) setIsPasscodeRequired(false);
-        return;
-      }
-
-      // 2. Nếu bàn bình thường (không bị khóa), mới kiểm tra session
-      const session = getStoredTableSession();
-      if (!session || !session.sessionToken || session.tableNumber !== tableNumber) {
-        if (isMounted) setIsPasscodeRequired(true);
-        return;
-      }
-
-      // 3. Xác thực session với Backend
-      try {
-        const isValid = await tableApi.validateSession();
-        if (!isValid) {
-          if (isTableLocked || isOrderLocked) {
-            if (isMounted) setIsPasscodeRequired(false);
-            return;
-          }
-          clearTableSession();
-          if (isMounted) setIsPasscodeRequired(true);
-          return;
+        if (isMounted) {
+          setIsPasscodeRequired(false);
+          setIsOrderLocked(true);
         }
-      } catch (err) {
-        console.warn('Lỗi kiểm tra session bàn ăn:', err.message);
+      }
+
+      // 2. Kiểm tra session tại client
+      const session = getStoredTableSession();
+      const normStoredNum = normalizeTableNumber(session?.tableNumber);
+      const kdsStoredNum = normalizeTableCode(session?.tableNumber);
+      if (
+        !session ||
+        !session.sessionToken ||
+        (normStoredNum !== tableNumber && kdsStoredNum !== currentNormTable && session?.tableNumber !== tableNumber)
+      ) {
+        if (isMounted && !isTableLocked && !isOrderLocked) {
+          setIsPasscodeRequired(true);
+        }
+        return;
       }
 
       if (isMounted) {
-        setIsPasscodeRequired(false);
+        if (!isTableLocked && !isOrderLocked) {
+          setIsPasscodeRequired(false);
+        }
         if (session.isHost !== undefined) {
           setIsHost(Boolean(session.isHost));
         }
@@ -217,14 +244,19 @@ export default function MenuPage() {
           const data = event.data;
           if (!data) return;
           const targetNum = (data.tableNumber || '').toUpperCase().trim();
+          const targetKds = normalizeTableCode(data.kdsTableCode || data.tableNumber);
           if (
             targetNum === tableNumber.toUpperCase().trim() ||
-            targetNum === currentNormTable.toUpperCase().trim()
+            targetNum === currentNormTable.toUpperCase().trim() ||
+            targetKds === currentNormTable
           ) {
             if (data.type === 'ORDER_LOCKED') {
-              setIsOrderLocked(Boolean(data.isOrderLocked));
-              if (data.isOrderLocked) {
+              const isLocked = Boolean(data.isOrderLocked);
+              setIsOrderLocked(isLocked);
+              if (isLocked) {
                 setCartTab('all');
+                setIsPasscodeRequired(false);
+                syncTableOrders();
               }
             }
           }
@@ -239,13 +271,18 @@ export default function MenuPage() {
       const detail = e.detail;
       if (!detail) return;
       const targetNum = (detail.tableNumber || '').toUpperCase().trim();
+      const targetKds = normalizeTableCode(detail.kdsTableCode || detail.tableNumber);
       if (
         targetNum === tableNumber.toUpperCase().trim() ||
-        targetNum === currentNormTable.toUpperCase().trim()
+        targetNum === currentNormTable.toUpperCase().trim() ||
+        targetKds === currentNormTable
       ) {
-        setIsOrderLocked(Boolean(detail.isOrderLocked));
-        if (detail.isOrderLocked) {
+        const isLocked = Boolean(detail.isOrderLocked);
+        setIsOrderLocked(isLocked);
+        if (isLocked) {
           setCartTab('all');
+          setIsPasscodeRequired(false);
+          syncTableOrders();
         }
       }
     };
@@ -255,10 +292,18 @@ export default function MenuPage() {
       if (e.key === 'hoadiemcat_locked_tables') {
         try {
           const map = JSON.parse(e.newValue || '{}');
-          if (map[tableNumber.toUpperCase()] !== undefined) {
-            setIsOrderLocked(Boolean(map[tableNumber.toUpperCase()]));
-            if (map[tableNumber.toUpperCase()]) {
+          if (
+            map[tableNumber.toUpperCase()] !== undefined ||
+            map[currentNormTable.toUpperCase()] !== undefined
+          ) {
+            const isLocked = Boolean(
+              map[tableNumber.toUpperCase()] ?? map[currentNormTable.toUpperCase()]
+            );
+            setIsOrderLocked(isLocked);
+            if (isLocked) {
               setCartTab('all');
+              setIsPasscodeRequired(false);
+              syncTableOrders();
             }
           }
         } catch {}
@@ -266,10 +311,17 @@ export default function MenuPage() {
       if (e.key === 'hoadiemcat_table_session') {
         try {
           const s = JSON.parse(e.newValue || '{}');
-          if (s.tableNumber === tableNumber && s.isOrderLocked !== undefined) {
-            setIsOrderLocked(Boolean(s.isOrderLocked));
-            if (s.isOrderLocked) {
+          const sKds = normalizeTableCode(s.tableNumber);
+          if (
+            (s.tableNumber === tableNumber || sKds === currentNormTable) &&
+            s.isOrderLocked !== undefined
+          ) {
+            const isLocked = Boolean(s.isOrderLocked);
+            setIsOrderLocked(isLocked);
+            if (isLocked) {
               setCartTab('all');
+              setIsPasscodeRequired(false);
+              syncTableOrders();
             }
           }
         } catch {}
@@ -435,15 +487,41 @@ export default function MenuPage() {
     const handleRemoteUpdate = (payload) => {
       if (!payload) return;
 
+      if (
+        payload.status === 'CLEANING' ||
+        payload.status === 'AVAILABLE' ||
+        payload.type === 'TABLE_SESSION_ENDED' ||
+        payload.event === 'SESSION_KILLED'
+      ) {
+        handleKillSession(
+          payload.message ||
+            'Bàn ăn đã hoàn tất thanh toán và chuyển sang trạng thái dọn dẹp. Cảm ơn quý khách!'
+        );
+        return;
+      }
+
       if (payload.isOrderLocked !== undefined) {
-        setIsOrderLocked(Boolean(payload.isOrderLocked));
-        if (payload.isOrderLocked) {
+        const isLocked = Boolean(payload.isOrderLocked);
+        setIsOrderLocked(isLocked);
+        if (isLocked) {
           setCartTab('all');
+          setIsPasscodeRequired(false);
+          syncTableOrders();
         }
         const s = getStoredTableSession();
-        if (s && s.tableNumber === tableNumber) {
-          saveTableSession({ ...s, isOrderLocked: Boolean(payload.isOrderLocked) });
+        if (s && (s.tableNumber === tableNumber || s.tableNumber === currentNormTable)) {
+          saveTableSession({ ...s, isOrderLocked: isLocked });
         }
+        try {
+          const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
+          if (!isLocked) {
+            delete lockedMap[tableNumber.toUpperCase()];
+            delete lockedMap[currentNormTable.toUpperCase()];
+          } else {
+            lockedMap[tableNumber.toUpperCase()] = true;
+          }
+          localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
+        } catch {}
       }
 
       if (payload.type === 'KITCHEN_ITEM_STATUS_TOGGLED' || payload.type === 'WAITER_ITEM_DELIVERED') {
@@ -464,24 +542,52 @@ export default function MenuPage() {
     const unsubTables = wsManager.subscribe('/topic/tables', (tableData) => {
       if (!tableData) return;
       const tNum = (tableData.tableNumber || '').toUpperCase().trim();
-      if (tNum === tableNumber.toUpperCase().trim() || tNum === currentNormTable.toUpperCase().trim()) {
+      const tKds = normalizeTableCode(tableData.tableNumber || '');
+      if (
+        tNum === tableNumber.toUpperCase().trim() ||
+        tNum === currentNormTable.toUpperCase().trim() ||
+        tKds === currentNormTable
+      ) {
+        if (tableData.status === 'CLEANING' || tableData.status === 'AVAILABLE') {
+          handleKillSession('Bàn ăn đã hoàn tất thanh toán và đang được dọn dẹp. Phiên phục vụ đã kết thúc!');
+          return;
+        }
+
         if (tableData.isOrderLocked !== undefined) {
-          setIsOrderLocked(Boolean(tableData.isOrderLocked));
-          if (tableData.isOrderLocked) {
+          const isLocked = Boolean(tableData.isOrderLocked);
+          setIsOrderLocked(isLocked);
+          if (isLocked) {
             setCartTab('all');
+            setIsPasscodeRequired(false);
+            syncTableOrders();
           }
           const s = getStoredTableSession();
           if (s) {
-            saveTableSession({ ...s, isOrderLocked: Boolean(tableData.isOrderLocked) });
+            saveTableSession({ ...s, isOrderLocked: isLocked });
           }
+          try {
+            const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
+            if (!isLocked) {
+              delete lockedMap[tableNumber.toUpperCase()];
+              delete lockedMap[currentNormTable.toUpperCase()];
+            } else {
+              lockedMap[tableNumber.toUpperCase()] = true;
+            }
+            localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
+          } catch {}
         }
       }
     });
 
-    // Lắng nghe sự kiện chuyển bàn thời gian thực (được kích hoạt khi bàn được chuyển/ghép)
+    // Lắng nghe sự kiện chuyển bàn hoặc kết thúc phiên qua token phiên
     const currentSession = getStoredTableSession();
     const unsubTransferred = currentSession?.sessionToken
       ? wsManager.subscribe(`/topic/table/${currentSession.sessionToken}`, (msg) => {
+          if (msg?.event === 'SESSION_KILLED' || msg?.type === 'TABLE_SESSION_ENDED' || msg?.status === 'CLEANING') {
+            handleKillSession(msg.message || 'Bàn ăn đã hoàn tất thanh toán. Phiên phục vụ đã kết thúc!');
+            return;
+          }
+
           if (msg?.event === 'TABLE_TRANSFERRED') {
             alert(`Bàn ăn của bạn đã được chuyển sang ${msg.newTableNumber}! Hệ thống sẽ tự động cập nhật.`);
             saveTableSession({
@@ -507,7 +613,7 @@ export default function MenuPage() {
       if (unsubTransferred) unsubTransferred();
       clearInterval(interval);
     };
-  }, [tableNumber, currentNormTable, navigate]);
+  }, [tableNumber, currentNormTable, navigate, handleKillSession]);
 
   // Danh sách toàn bộ các món đã gửi bếp của bàn (đồng bộ thời gian thực từ useKdsStore)
   const orderedItems = useMemo(() => {

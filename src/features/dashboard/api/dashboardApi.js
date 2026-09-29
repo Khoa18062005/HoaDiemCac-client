@@ -10,18 +10,12 @@ export const dashboardApi = {
       if (endDate) params.append('endDate', endDate);
 
       const res = await apiClient.get(`/admin/dashboard/summary?${params.toString()}`);
-      const data = res?.totalRevenue ? res : res?.result;
-      if (data && data.totalRevenue) {
-        const localInvoices = getStoredInvoices();
-        if (localInvoices.length > 0 && Array.isArray(data.recentInvoices)) {
-          const existingCodes = new Set(data.recentInvoices.map((i) => i.invoiceCode));
-          const newLocal = localInvoices.filter((i) => !existingCodes.has(i.invoiceCode));
-          data.recentInvoices = [...newLocal, ...data.recentInvoices];
-        }
+      const data = res?.totalRevenue !== undefined ? res : res?.result;
+      if (data && data.totalRevenue !== undefined) {
         return data;
       }
     } catch (err) {
-      console.warn('Backend dashboard chưa online, sử dụng dữ liệu giả lập:', err.message);
+      console.warn('Backend dashboard chưa online hoặc gặp lỗi:', err.message);
     }
 
     // Realistic fallback analytics data based on selected period

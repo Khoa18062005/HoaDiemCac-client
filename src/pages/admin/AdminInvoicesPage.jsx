@@ -42,6 +42,7 @@ export default function AdminInvoicesPage() {
   const fetchInvoices = async () => {
     try {
       setLoading(true);
+      invoiceApi.clearStoredInvoices();
       const res = await invoiceApi.getInvoices();
       setInvoices(res.content || []);
     } catch (err) {

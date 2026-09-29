@@ -26,6 +26,7 @@ import { tableApi, getStoredTableSession, saveTableSession } from '@/features/ta
 import { orderApi } from '@/features/customer/api/orderApi';
 import { apiClient } from '@/lib/axios';
 import { saveInvoiceToHistory } from '@/features/invoices/api/invoiceApi';
+import { normalizeTableCode } from '@/stores/useKdsStore';
 
 export function formatCurrencyVND(amount) {
   if (!amount) return '0 ₫';
@@ -247,7 +248,10 @@ export default function AdminTableDetailModal({
 
   // Đồng bộ trạng thái khóa order tới tất cả các tab và thiết bị
   const syncOrderLockState = (tableId, tableNumber, isLocked) => {
-    const norm = (tableNumber || '').toUpperCase().trim();
+    const rawNum = tableNumber || '';
+    const norm = rawNum.toUpperCase().trim();
+    const kdsNorm = normalizeTableCode(rawNum);
+
     // 1. BroadcastChannel (đồng bộ các tab trên cùng máy)
     try {
       if (typeof window !== 'undefined' && window.BroadcastChannel) {
@@ -256,6 +260,7 @@ export default function AdminTableDetailModal({
           type: 'ORDER_LOCKED',
           tableId,
           tableNumber: norm,
+          kdsTableCode: kdsNorm,
           isOrderLocked: isLocked,
           timestamp: Date.now(),
         });
@@ -270,6 +275,7 @@ export default function AdminTableDetailModal({
           detail: {
             tableId,
             tableNumber: norm,
+            kdsTableCode: kdsNorm,
             isOrderLocked: isLocked,
           },
         })
@@ -277,14 +283,21 @@ export default function AdminTableDetailModal({
       const lockedTables = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
       if (isLocked) {
         lockedTables[norm] = true;
+        lockedTables[kdsNorm] = true;
       } else {
         delete lockedTables[norm];
+        delete lockedTables[kdsNorm];
       }
       localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedTables));
 
       // Cập nhật session storage nếu đúng bàn
       const currentSession = getStoredTableSession();
-      if (currentSession && (currentSession.tableNumber === norm || String(currentSession.tableId) === String(tableId))) {
+      if (
+        currentSession &&
+        (currentSession.tableNumber === norm ||
+          normalizeTableCode(currentSession.tableNumber) === kdsNorm ||
+          String(currentSession.tableId) === String(tableId))
+      ) {
         saveTableSession({ ...currentSession, isOrderLocked: isLocked });
       }
     } catch {}

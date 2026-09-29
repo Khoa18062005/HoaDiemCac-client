@@ -126,8 +126,14 @@ export default function TableEntryPage() {
         deviceToken: res.deviceToken,
         deviceName: res.deviceName,
         isHost: res.isHost ?? true,
+        isOrderLocked: false,
         verifiedAt: new Date().toISOString(),
       });
+      try {
+        const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
+        delete lockedMap[normalizedTableCode.toUpperCase()];
+        localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
+      } catch {}
 
       // Chuyển hướng vào thực đơn gọi món
       navigate(`/menu?table=${normalizedTableCode}`);

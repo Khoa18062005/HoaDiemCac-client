@@ -102,9 +102,9 @@ export const tableApi = {
     try {
       const res = await apiClient.get('/customer/tables/validate-session');
       return res?.result !== undefined ? Boolean(res.result) : Boolean(res);
-    } catch {
-      const session = getStoredTableSession();
-      return Boolean(session && session.sessionToken);
+    } catch (err) {
+      console.warn('Lỗi xác thực phiên bàn ăn:', err.message);
+      return false;
     }
   },
 
