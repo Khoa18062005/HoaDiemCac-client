@@ -2,6 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { X, Search, AlertTriangle, CheckCircle, PackageX, RefreshCw, Loader2 } from 'lucide-react';
 import { menuApi } from '@/features/menu';
 import { kitchenApi } from '../api/kitchenApi';
+import ConfirmOutOfStockModal from './ConfirmOutOfStockModal';
+import useKdsStore from '@/stores/useKdsStore';
 
 export default function OutOfStockModal({ isOpen, onClose, onShowToast }) {
   const [items, setItems] = useState([]);
@@ -10,6 +12,9 @@ export default function OutOfStockModal({ isOpen, onClose, onShowToast }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loadingItemId, setLoadingItemId] = useState(null);
+
+  // State quản lý mở hộp thoại xác nhận khi bấm Báo hết món
+  const [confirmItem, setConfirmItem] = useState(null);
 
   // Tải danh sách món ăn và danh mục từ Database khi mở modal
   useEffect(() => {
@@ -57,28 +62,63 @@ export default function OutOfStockModal({ isOpen, onClose, onShowToast }) {
 
   if (!isOpen) return null;
 
-  // Toggle trạng thái Còn Hàng / Hết Hàng
+  // Toggle trạng thái Còn Hàng / Hết Hàng:
+  // - Nếu đang Còn Hàng -> muốn chuyển thành TẠM HẾT: Mở hộp thoại xác nhận
+  // - Nếu đang TẠM HẾT -> muốn chuyển thành Còn Hàng: Bỏ qua hộp thoại xác nhận, mở bán lại ngay
   const handleToggleStock = async (item) => {
-    const nextState = !item.isAvailable;
-    setLoadingItemId(item.id);
+    if (item.isAvailable) {
+      // 1. Chuyển sang TẠM HẾT -> Bắt buộc mở modal xác nhận
+      setConfirmItem({ item });
+    } else {
+      // 2. Chuyển sang CÒN HÀNG (Mở bán lại) -> Bỏ qua hộp thoại xác nhận
+      setLoadingItemId(item.id);
+      try {
+        await kitchenApi.restockItem(item.id);
+        setItems((prev) =>
+          prev.map((i) => (i.id === item.id ? { ...i, isAvailable: true } : i))
+        );
+        if (onShowToast) {
+          onShowToast(`Đã mở bán lại: ${item.name}`);
+        }
+      } catch (err) {
+        console.warn('Lỗi khi mở bán lại món:', err);
+        if (onShowToast) onShowToast('Không thể cập nhật trạng thái món');
+      } finally {
+        setLoadingItemId(null);
+      }
+    }
+  };
 
+  // Xử lý khi xác nhận trong hộp thoại Báo Hết Món
+  const handleConfirmOutOfStock = async (order, targetItem) => {
+    const item = targetItem || confirmItem?.item;
+    if (!item) return;
+
+    setLoadingItemId(item.id);
     try {
-      await kitchenApi.toggleItemStock(item.id, nextState);
+      // 1. Gọi API backend báo hết món
+      await kitchenApi.reportOutOfStock({
+        menuItemId: item.id,
+        reason: 'Báo hết món từ Modal Báo Hết Món KDS',
+      });
+
+      // 2. Cập nhật state local
       setItems((prev) =>
-        prev.map((i) => (i.id === item.id ? { ...i, isAvailable: nextState } : i))
+        prev.map((i) => (i.id === item.id ? { ...i, isAvailable: false } : i))
       );
 
+      // 3. Xóa các món đang nấu khỏi đơn hàng KDS và phát realtime
+      useKdsStore.getState().removeOutOfStockItem(item.id, item.name);
+
       if (onShowToast) {
-        onShowToast(
-          nextState
-            ? `Đã mở bán lại: ${item.name}`
-            : `ĐÃ BÁO HẾT MÓN: ${item.name} (Đã khóa trên menu khách)`
-        );
+        onShowToast(`ĐÃ BÁO HẾT MÓN: ${item.name} (Đã khóa trên menu khách)`);
       }
-    } catch (e) {
+    } catch (err) {
+      console.warn('Lỗi khi báo hết món:', err);
       if (onShowToast) onShowToast('Không thể cập nhật trạng thái món');
     } finally {
       setLoadingItemId(null);
+      setConfirmItem(null);
     }
   };
 
@@ -229,6 +269,14 @@ export default function OutOfStockModal({ isOpen, onClose, onShowToast }) {
           </button>
         </div>
       </div>
+
+      {/* Hộp thoại xác nhận báo hết món khi nhấn Còn Hàng -> TẠM HẾT */}
+      <ConfirmOutOfStockModal
+        isOpen={Boolean(confirmItem)}
+        onClose={() => setConfirmItem(null)}
+        target={confirmItem}
+        onConfirm={handleConfirmOutOfStock}
+      />
     </div>
   );
 }

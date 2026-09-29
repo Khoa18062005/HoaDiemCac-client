@@ -81,6 +81,20 @@ export const kitchenApi = {
       return { success: false, error: err };
     }
   },
+
+  /**
+   * Mở bán lại món ăn (Restock) từ Bếp KDS (UC19)
+   * @param {number|string} menuItemId - ID món ăn trên thực đơn
+   */
+  restockItem: async (menuItemId) => {
+    try {
+      const response = await apiClient.post('/kitchen/restock', { menuItemId });
+      return response?.data || response;
+    } catch (err) {
+      console.warn('Lỗi khi mở bán lại món:', err);
+      return { success: false, error: err };
+    }
+  },
 };
 
 export default kitchenApi;

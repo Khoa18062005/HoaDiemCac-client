@@ -333,6 +333,21 @@ export default function MenuPage() {
     // Lắng nghe kênh thực đơn toàn hệ thống (Watermark SOLD OUT thời gian thực)
     const unsubMenu = wsManager.subscribe('/topic/menu-items', (payload) => {
       if (!payload) return;
+
+      // Xử lý mở bán lại món (Restock) -> Gỡ watermark SOLD OUT
+      if (payload.type === 'MENU_ITEM_RESTOCKED') {
+        const targetId = payload.menuItemId;
+        const targetName = payload.name || payload.menuItemName;
+        setDbItems((prev) =>
+          prev.map((item) =>
+            (String(item.id) === String(targetId) || item.name === targetName)
+              ? { ...item, isAvailable: true }
+              : item
+          )
+        );
+        return;
+      }
+
       if (payload.type === 'MENU_ITEM_OUT_OF_STOCK' || payload.type === 'MENU_ITEM_UPDATED') {
         const targetId = payload.menuItemId;
         const targetName = payload.name || payload.menuItemName;
