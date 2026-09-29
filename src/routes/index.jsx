@@ -40,13 +40,13 @@ function PermissionRoute({ permission, adminOnly = false, children }) {
   );
 
   const getFallbackRedirect = () => {
-    if (permissions.includes('TABLES')) return '/admin';
+    if (permissions.includes('DASHBOARD')) return '/admin/dashboard';
+    if (permissions.includes('TABLES')) return '/admin/tables';
     if (permissions.includes('KITCHEN')) return '/kitchen';
     if (permissions.includes('WAITER')) return '/waiter';
     if (permissions.includes('MENU')) return '/admin/menu';
     if (permissions.includes('TABLES_QR')) return '/admin/tables-qr';
     if (permissions.includes('INVOICES')) return '/admin/invoices';
-    if (permissions.includes('DASHBOARD')) return '/admin/dashboard';
     return '/admin/profile';
   };
 
@@ -59,6 +59,25 @@ function PermissionRoute({ permission, adminOnly = false, children }) {
   }
 
   return children;
+}
+
+function AdminIndexRedirect() {
+  const { user } = useAuthStore();
+  const rawRole = (user?.role || 'STAFF').replace(/^ROLE_/, '');
+  const isAdmin = rawRole === 'ADMIN';
+  const permissions = user?.permissions || (
+    rawRole === 'MANAGER' ? ['DASHBOARD', 'INVOICES', 'MENU', 'KITCHEN', 'WAITER', 'TABLES_QR'] :
+    rawRole === 'KITCHEN' ? ['KITCHEN'] :
+    ['WAITER']
+  );
+
+  if (isAdmin || permissions.includes('DASHBOARD')) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+  if (permissions.includes('TABLES')) {
+    return <Navigate to="/admin/tables" replace />;
+  }
+  return <Navigate to="/admin/profile" replace />;
 }
 
 export const router = createBrowserRouter([
@@ -112,6 +131,10 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
+        element: <AdminIndexRedirect />,
+      },
+      {
+        path: 'tables',
         element: (
           <PermissionRoute permission="TABLES">
             <TableManagePage />
