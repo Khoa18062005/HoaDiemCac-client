@@ -10,6 +10,7 @@ import {
   CustomerCartDrawer,
   CustomerCartSidebar,
   CustomerOutOfStockNoticeModal,
+  TableTransferModal,
   CATEGORY_ICONS,
 } from '@/features/customer';
 import TablePasscodeModal from '@/features/tables/components/TablePasscodeModal';
@@ -65,6 +66,7 @@ export default function MenuPage() {
   });
   const [deviceCount, setDeviceCount] = useState(1);
   const [isDevicesModalOpen, setIsDevicesModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
   // Kiểm tra phiên bàn ăn hợp lệ từ localStorage và đồng bộ trạng thái thiết bị
   useEffect(() => {
@@ -246,8 +248,44 @@ export default function MenuPage() {
     return [];
   }, [dbItems]);
 
-  // Khởi tạo giỏ hàng rỗng ban đầu cho khách hàng
-  const [cartItems, setCartItems] = useState([]);
+  const currentNormTable = useMemo(() => normalizeTableCode(tableNumber), [tableNumber]);
+
+  // Khởi tạo giỏ hàng từ localStorage (nếu có lưu trước đó) hoặc mảng rỗng
+  const [cartItems, setCartItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`hoadiemcat_cart_${normalizeTableCode(tableNumber)}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Tự động lưu giỏ hàng vào localStorage khi có thay đổi
+  useEffect(() => {
+    try {
+      if (cartItems.length > 0) {
+        localStorage.setItem(`hoadiemcat_cart_${currentNormTable}`, JSON.stringify(cartItems));
+      } else {
+        localStorage.removeItem(`hoadiemcat_cart_${currentNormTable}`);
+      }
+    } catch (e) {
+      console.warn('Lỗi lưu giỏ hàng vào localStorage:', e);
+    }
+  }, [cartItems, currentNormTable]);
+
+  // Cập nhật lại giỏ hàng nếu bàn ăn thay đổi
+  const prevTableRef = useRef(currentNormTable);
+  useEffect(() => {
+    if (prevTableRef.current !== currentNormTable) {
+      prevTableRef.current = currentNormTable;
+      try {
+        const saved = localStorage.getItem(`hoadiemcat_cart_${currentNormTable}`);
+        setCartItems(saved ? JSON.parse(saved) : []);
+      } catch {
+        setCartItems([]);
+      }
+    }
+  }, [currentNormTable]);
 
   // Quản lý tab giỏ hàng đang kích hoạt ('draft': Chọn món | 'all': Tất cả)
   const [cartTab, setCartTab] = useState('draft');
@@ -256,8 +294,6 @@ export default function MenuPage() {
   const allOrders = useKdsStore((state) => state.orders);
   const submitCustomerOrder = useKdsStore((state) => state.submitCustomerOrder);
   const lastBroadcastEvent = useKdsStore((state) => state.lastBroadcastEvent);
-
-  const currentNormTable = useMemo(() => normalizeTableCode(tableNumber), [tableNumber]);
 
   // Đồng bộ đơn hàng từ Server MySQL & Lắng nghe WebSocket thời gian thực (Hỗ trợ đa máy tính)
   useEffect(() => {
@@ -328,6 +364,42 @@ export default function MenuPage() {
     const unsub1 = wsManager.subscribe(`/topic/table/${tableNumber}/status`, handleRemoteUpdate);
     const unsub2 = (tableNumber !== currentNormTable)
       ? wsManager.subscribe(`/topic/table/${currentNormTable}/status`, handleRemoteUpdate)
+      : null;
+
+    // Lắng nghe sự kiện chuyển bàn thời gian thực (được kích hoạt khi bàn được chuyển/ghép)
+    const currentSession = getStoredTableSession();
+    const unsubTransferred = currentSession?.sessionToken
+      ? wsManager.subscribe(`/topic/table/${currentSession.sessionToken}`, (msg) => {
+          if (msg?.event === 'TABLE_TRANSFERRED') {
+            const oldTableKey = `hoadiemcat_cart_${currentNormTable}`;
+            const newTableKey = `hoadiemcat_cart_${msg.newTableNumber}`;
+
+            // Đồng bộ giỏ hàng nháp sang bàn mới
+            if (Array.isArray(msg.cartItems)) {
+              try {
+                localStorage.setItem(newTableKey, JSON.stringify(msg.cartItems));
+              } catch (e) {
+                console.warn(e);
+              }
+            } else {
+              const oldCart = localStorage.getItem(oldTableKey);
+              if (oldCart) {
+                localStorage.setItem(newTableKey, oldCart);
+              }
+            }
+            localStorage.removeItem(oldTableKey);
+
+            alert(`Bàn ăn của bạn đã được chuyển sang ${msg.newTableNumber}! Hệ thống sẽ tự động cập nhật.`);
+            saveTableSession({
+              ...currentSession,
+              tableNumber: msg.newTableNumber,
+              tableName: msg.newTableName || `Bàn ${msg.newTableNumber}`,
+              sessionToken: msg.newSessionToken,
+            });
+            navigate(`/menu?table=${msg.newTableNumber}`);
+            window.location.reload();
+          }
+        })
       : null;
 
     // Lắng nghe kênh thực đơn toàn hệ thống (Watermark SOLD OUT thời gian thực & Mở bán lại)
@@ -410,13 +482,14 @@ export default function MenuPage() {
       isMounted = false;
       if (unsub1) unsub1();
       if (unsub2) unsub2();
+      if (unsubTransferred) unsubTransferred();
       if (unsubMenu) unsubMenu();
       if (syncChannel) {
         syncChannel.removeEventListener('message', handleBroadcast);
       }
       clearInterval(interval);
     };
-  }, [tableNumber, currentNormTable]);
+  }, [tableNumber, currentNormTable, navigate]);
 
   // Danh sách toàn bộ các món đã gửi bếp của bàn (đồng bộ thời gian thực từ useKdsStore)
   const orderedItems = useMemo(() => {
@@ -767,6 +840,7 @@ export default function MenuPage() {
         isHost={isHost}
         deviceCount={deviceCount}
         onOpenDevices={() => setIsDevicesModalOpen(true)}
+        onOpenTransfer={() => setIsTransferModalOpen(true)}
       />
 
       {/* 2. Thanh Thông Báo Thời Gian Thực Cùng Bàn */}
@@ -925,6 +999,18 @@ export default function MenuPage() {
         isOpen={Boolean(outOfStockNotice)}
         onClose={() => setOutOfStockNotice(null)}
         noticeData={outOfStockNotice}
+      />
+
+      {/* 9. Modal Chuyển Bàn / Ghép Bàn */}
+      <TableTransferModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        tableNumber={tableNumber}
+        isHost={isHost}
+        cartItems={cartItems}
+        onTransferSuccess={() => {
+          setIsTransferModalOpen(false);
+        }}
       />
     </div>
   );

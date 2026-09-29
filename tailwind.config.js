@@ -41,6 +41,10 @@ export default {
         sans: ['"Plus Jakarta Sans"', 'sans-serif'],
         serif: ['"Plus Jakarta Sans"', 'sans-serif'],
         display: ['"Plus Jakarta Sans"', 'sans-serif'],
+        mono: ['"Plus Jakarta Sans"', 'sans-serif'],
+      },
+      borderColor: {
+        DEFAULT: 'rgba(255, 255, 255, 0.08)',
       },
       animation: {
         'bell-shake': 'bell-shake 0.8s ease-in-out infinite',

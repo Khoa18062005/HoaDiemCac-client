@@ -122,44 +122,45 @@ export default function AdminInvoicesPage() {
 
   return (
     <div className="flex-1 flex flex-col h-screen overflow-hidden bg-[#0E0E10] text-[#EDEDED]">
-      {/* 1. Header & KPI Cards */}
-      <div className="px-8 py-6 border-b border-surface-border bg-[#121214] flex flex-col gap-5 select-none">
-        <div className="flex items-center justify-between">
+      {/* 1. Top Header đồng bộ chiều cao h-20 (80px), khớp 100% với đường gạch dưới Logo tại Sidebar */}
+      <div className="h-20 px-8 border-b border-surface-border bg-[#121214] flex items-center justify-between flex-shrink-0 select-none">
+        <div className="flex items-center gap-2.5">
+          <span className="p-2 rounded-xl bg-gold/10 border border-gold/20 text-gold shadow-sm">
+            <Receipt className="w-5 h-5" />
+          </span>
           <div>
-            <div className="flex items-center gap-2.5">
-              <span className="p-2 rounded-xl bg-gold/10 border border-gold/20 text-gold">
-                <Receipt className="w-5 h-5" />
-              </span>
-              <h1 className="text-xl font-bold font-serif text-[#EDEDED] tracking-wide">
-                Lịch Sử Hóa Đơn & Giao Dịch
-              </h1>
-            </div>
-            <p className="text-xs text-[#8E8E93] mt-1">
+            <h1 className="text-xl font-bold font-serif text-[#EDEDED] tracking-wide">
+              Lịch Sử Hóa Đơn & Giao Dịch
+            </h1>
+            <p className="text-xs text-[#8E8E93] mt-0.5">
               Tra cứu lịch sử thanh toán, chi tiết đợt gọi món và in lại phiếu tính tiền 80mm
             </p>
           </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={fetchInvoices}
-              className="p-2.5 rounded-xl border border-surface-border hover:bg-surface-hover text-[#A0A0A5] hover:text-[#EDEDED] transition-colors"
-              title="Tải lại danh sách"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-gold' : ''}`} />
-            </button>
-            <button
-              onClick={handleExportCsv}
-              className="px-4 py-2.5 rounded-xl border border-surface-border hover:border-gold/50 bg-surface-card hover:bg-surface-hover text-xs font-semibold text-gold flex items-center gap-2 transition-all shadow-sm"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Xuất Báo Cáo CSV</span>
-            </button>
-          </div>
         </div>
 
-        {/* 4 Thẻ KPI Doanh Thu Nhanh */}
-        <div className="grid grid-cols-4 gap-4">
-          <div className="p-4 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={fetchInvoices}
+            className="p-2.5 rounded-xl border border-surface-border hover:bg-surface-hover text-[#A0A0A5] hover:text-[#EDEDED] transition-colors cursor-pointer"
+            title="Tải lại danh sách"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-gold' : ''}`} />
+          </button>
+          <button
+            onClick={handleExportCsv}
+            className="px-4 py-2.5 rounded-xl border border-surface-border hover:border-gold/50 bg-surface-card hover:bg-surface-hover text-xs font-semibold text-gold flex items-center gap-2 transition-all shadow-sm cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Xuất Báo Cáo CSV</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2. Vùng cuộn nội dung: 4 Thẻ KPI Doanh Thu Nhanh -> Thanh Tìm Kiếm/Lọc -> Bảng Dữ Liệu */}
+      <div className="flex-1 px-8 py-6 overflow-y-auto space-y-6">
+        {/* 4 Thẻ KPI Doanh Thu Nhanh (Đã chuyển xuống dưới header) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-4 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between shadow-sm">
             <div>
               <p className="text-[10px] uppercase font-semibold text-[#8E8E93]">Hóa Đơn Hoàn Tất</p>
               <p className="text-xl font-bold font-mono text-white mt-1">{stats.count}</p>
@@ -170,7 +171,7 @@ export default function AdminInvoicesPage() {
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between">
+          <div className="p-4 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between shadow-sm">
             <div>
               <p className="text-[10px] uppercase font-semibold text-gold">Tổng Doanh Thu Đã Thu</p>
               <p className="text-xl font-bold font-mono text-gold mt-1">{formatVND(stats.totalRevenue)}</p>
@@ -181,12 +182,12 @@ export default function AdminInvoicesPage() {
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between">
+          <div className="p-4 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between shadow-sm">
             <div>
               <p className="text-[10px] uppercase font-semibold text-cyan-400">Chuyển Khoản VietQR</p>
               <p className="text-xl font-bold font-mono text-cyan-400 mt-1">{formatVND(stats.vietQrRevenue)}</p>
-              <p className="text-[10px] text-[#8E8E93] mt-0.5">Tỷ trọng:{' '}
-                {stats.totalRevenue > 0 ? Math.round((stats.vietQrRevenue / stats.totalRevenue) * 100) : 0}%
+              <p className="text-[10px] text-[#8E8E93] mt-0.5">
+                Tỷ trọng: {stats.totalRevenue > 0 ? Math.round((stats.vietQrRevenue / stats.totalRevenue) * 100) : 0}%
               </p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
@@ -194,12 +195,12 @@ export default function AdminInvoicesPage() {
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between">
+          <div className="p-4 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between shadow-sm">
             <div>
               <p className="text-[10px] uppercase font-semibold text-amber-400">Thanh Toán Tiền Mặt</p>
               <p className="text-xl font-bold font-mono text-amber-400 mt-1">{formatVND(stats.cashRevenue)}</p>
-              <p className="text-[10px] text-[#8E8E93] mt-0.5">Tỷ trọng:{' '}
-                {stats.totalRevenue > 0 ? Math.round((stats.cashRevenue / stats.totalRevenue) * 100) : 0}%
+              <p className="text-[10px] text-[#8E8E93] mt-0.5">
+                Tỷ trọng: {stats.totalRevenue > 0 ? Math.round((stats.cashRevenue / stats.totalRevenue) * 100) : 0}%
               </p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
@@ -207,60 +208,59 @@ export default function AdminInvoicesPage() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* 2. Toolbar Tìm Kiếm & Bộ Lọc */}
-      <div className="px-8 py-3.5 border-b border-surface-border bg-[#0E0E10] flex items-center justify-between gap-4 select-none">
-        <div className="flex items-center gap-3 flex-1 max-w-md">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-[#8E8E93] absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Tìm theo mã HĐ (HD-xxxx), số bàn, tên thu ngân..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#18181B] border border-surface-border rounded-xl pl-9 pr-4 py-2 text-xs text-[#EDEDED] placeholder-[#71717A] outline-none focus:border-gold/60 transition-colors"
-            />
+        {/* Toolbar Tìm Kiếm & Bộ Lọc */}
+        <div className="p-3.5 rounded-2xl bg-surface-card border border-surface-border flex flex-wrap items-center justify-between gap-4 select-none shadow-sm">
+          <div className="flex items-center gap-3 flex-1 min-w-[240px] max-w-md">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-[#8E8E93] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Tìm theo mã HĐ (HD-xxxx), số bàn, tên thu ngân..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#18181B] border border-surface-border rounded-xl pl-9 pr-4 py-2 text-xs text-[#EDEDED] placeholder-[#71717A] outline-none focus:border-gold/60 transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Phương Thức & Trạng Thái Filter */}
+          <div className="flex items-center flex-wrap gap-2">
+            <div className="flex items-center p-1 bg-[#18181B] border border-surface-border rounded-xl">
+              {[
+                { id: 'ALL', label: 'Tất Cả Phương Thức' },
+                { id: 'VIETQR', label: 'VietQR' },
+                { id: 'CASH', label: 'Tiền Mặt' },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setMethodFilter(m.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border outline-none focus:outline-none focus:ring-0 active:outline-none select-none transition-colors duration-150 cursor-pointer ${
+                    methodFilter === m.id
+                      ? 'bg-crimson-subtle text-gold border-crimson-border font-semibold shadow-xs'
+                      : 'border-transparent text-[#8E8E93] hover:text-gold hover:bg-gold/10 hover:border-gold/30'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-[#18181B] border border-surface-border text-[#EDEDED] text-xs rounded-xl px-3 py-2 outline-none focus:border-gold/60 cursor-pointer"
+            >
+              <option value="ALL">Tất cả trạng thái</option>
+              <option value="PAID">Đã thanh toán</option>
+              <option value="PENDING">Chờ thanh toán</option>
+              <option value="CANCELLED">Đã hủy</option>
+            </select>
           </div>
         </div>
 
-        {/* Phương Thức Thanh Toán Filter */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center p-1 bg-[#18181B] border border-surface-border rounded-xl">
-            {[
-              { id: 'ALL', label: 'Tất Cả Phương Thức' },
-              { id: 'VIETQR', label: 'VietQR' },
-              { id: 'CASH', label: 'Tiền Mặt' },
-            ].map((m) => (
-              <button
-                key={m.id}
-                onClick={() => setMethodFilter(m.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  methodFilter === m.id
-                    ? 'bg-crimson-subtle text-gold border border-crimson-border shadow-sm'
-                    : 'text-[#8E8E93] hover:text-[#EDEDED]'
-                }`}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-[#18181B] border border-surface-border text-[#EDEDED] text-xs rounded-xl px-3 py-2 outline-none focus:border-gold/60 cursor-pointer"
-          >
-            <option value="ALL">Tất cả trạng thái</option>
-            <option value="PAID">Đã thanh toán</option>
-            <option value="PENDING">Chờ thanh toán</option>
-            <option value="CANCELLED">Đã hủy</option>
-          </select>
-        </div>
-      </div>
-
-      {/* 3. Bảng Dữ Liệu Hóa Đơn (Scrollable Table) */}
-      <div className="flex-1 px-8 py-6 overflow-y-auto">
+        {/* Bảng Dữ Liệu Hóa Đơn */}
         <div className="bg-[#18181B] border border-surface-border rounded-2xl overflow-hidden shadow-xl">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#121214] border-b border-surface-border text-[#A0A0A5] uppercase font-semibold text-[11px] select-none">

@@ -24,6 +24,7 @@ export default function KitchenKdsPage() {
   const completeAllKitchenItems = useKdsStore((state) => state.completeAllKitchenItems);
   const removeOutOfStockItem = useKdsStore((state) => state.removeOutOfStockItem);
   const addNewOrder = useKdsStore((state) => state.addNewOrder);
+  const changeTableOrders = useKdsStore((state) => state.changeTableOrders);
   const simulateNewOrderStore = useKdsStore((state) => state.simulateNewOrder);
 
   // Modal Báo Hết Món nhanh từ Thẻ Bàn (xác nhận trước khi gửi DB)
@@ -66,12 +67,19 @@ export default function KitchenKdsPage() {
     addNewOrder(newOrder);
   }, [addNewOrder]);
 
+  const handleTableChanged = useCallback((payload) => {
+    if (payload?.oldTableNumber && payload?.newTableNumber) {
+      changeTableOrders(payload.oldTableNumber, payload.newTableNumber);
+    }
+  }, [changeTableOrders]);
+
   const {
     isAudioMuted,
     toggleAudio,
     simulateNewOrder: simulateSocketOrder,
   } = useKitchenSocket({
     onNewOrder: handleNewOrderReceived,
+    onTableChanged: handleTableChanged,
   });
 
   const handleSimulate = useCallback(() => {

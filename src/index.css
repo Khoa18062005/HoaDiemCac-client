@@ -3,14 +3,32 @@
 @tailwind utilities;
 
 @layer base {
-  html, body, button, input, select, textarea {
+  *, *::before, *::after {
     font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  html, body, button, input, select, textarea, code, pre {
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
   }
 }
 
-/* Vô hiệu hóa viền trắng focus mặc định của trình duyệt trên toàn ứng dụng */
-*:focus, *:focus-visible {
+/* Vô hiệu hóa triệt để viền trắng focus, active và highlight mặc định của trình duyệt */
+*, *::before, *::after {
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+*:focus, *:focus-visible, *:focus-within, *:active {
   outline: none !important;
+  box-shadow: none !important;
+}
+
+button, a, input, select {
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+button:focus, button:focus-visible, button:active {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* Xóa bỏ mũi tên tăng giảm số (spinner arrows) trên tất cả input type=number */

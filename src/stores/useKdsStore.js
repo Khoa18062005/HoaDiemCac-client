@@ -717,7 +717,43 @@ export const useKdsStore = create((set, get) => ({
     saveOrdersToStorage(mapped);
   },
 
-  // 7.1 Xóa món báo hết khỏi tất cả các bàn chưa phục vụ (UC19)
+  // 7.1 Đổi số bàn của các đơn hàng khi bàn được chuyển hoặc ghép (MOVE / MERGE)
+  changeTableOrders: (oldTableCode, newTableCode) => {
+    const normOld = normalizeTableCode(oldTableCode);
+    const normNew = normalizeTableCode(newTableCode);
+    const isNewVip = normNew.startsWith('VIP');
+
+    const currentOrders = get().orders;
+    let changedCount = 0;
+
+    const nextOrders = currentOrders.map((order) => {
+      if (normalizeTableCode(order.tableCode) === normOld) {
+        changedCount++;
+        return {
+          ...order,
+          tableCode: normNew,
+          tableId: normNew.toLowerCase().replace(/\s+/g, ''),
+          area: isNewVip ? 'VIP' : (order.area || 'COMMON'),
+        };
+      }
+      return order;
+    });
+
+    if (changedCount > 0) {
+      const eventData = {
+        type: 'TABLE_CHANGED',
+        oldTableCode: normOld,
+        newTableCode: normNew,
+        message: `🔄 Đã chuyển ${changedCount} đợt gọi món từ ${normOld} sang ${normNew}!`,
+      };
+
+      set({ orders: nextOrders, lastBroadcastEvent: eventData });
+      broadcastUpdate(nextOrders, eventData);
+      playChimeSound();
+    }
+  },
+
+  // 7.2 Xóa món báo hết khỏi tất cả các bàn chưa phục vụ (UC19)
   removeOutOfStockItem: (menuItemId, itemName) => {
     const currentOrders = get().orders;
     const nextOrders = currentOrders

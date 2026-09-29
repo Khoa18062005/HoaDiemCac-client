@@ -7,5 +7,6 @@ export { default as CustomerBottomCartBar } from './components/CustomerBottomCar
 export { default as CustomerCartDrawer } from './components/CustomerCartDrawer';
 export { default as CustomerCartSidebar } from './components/CustomerCartSidebar';
 export { default as CustomerOutOfStockNoticeModal } from './components/CustomerOutOfStockNoticeModal';
+export { default as TableTransferModal } from './components/TableTransferModal';
 
 export * from './data/mockCustomerMenu';
