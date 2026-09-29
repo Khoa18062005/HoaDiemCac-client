@@ -87,17 +87,17 @@ export default function MenuSummaryControlBar({
           </button>
         </div>
 
-        {/* Nút Làm mới từ Database */}
+        {/* Nút Làm mới */}
         {onRefresh && (
           <button
             type="button"
             onClick={onRefresh}
             disabled={isRefreshing}
             className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-surface-card hover:bg-surface-elevated text-gold hover:text-gold-light border border-surface-border text-xs transition-colors cursor-pointer disabled:opacity-50 select-none flex-shrink-0"
-            title="Làm mới danh sách từ Database"
+            title="Làm mới danh sách"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">{isRefreshing ? 'Đang tải...' : 'Làm mới từ DB'}</span>
+            <span>{isRefreshing ? 'Đang tải...' : 'Làm mới'}</span>
           </button>
         )}
 

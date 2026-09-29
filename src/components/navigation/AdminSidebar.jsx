@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import logoImg from '../../assets/images/logo.png';
-import DbConnectionCheckButton from '../feedback/DbConnectionCheckButton';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { apiClient } from '@/lib/axios';
 import { LogOut, X } from 'lucide-react';
@@ -243,10 +242,8 @@ export default function AdminSidebar() {
         </nav>
       </div>
 
-      {/* Database Connection Check & User Profile at Bottom */}
+      {/* User Profile at Bottom */}
       <div className="p-3 border-t border-surface-border bg-[#0E0E10]/50 space-y-2.5">
-        <DbConnectionCheckButton />
-
         <div
           onClick={() => navigate('/admin/profile')}
           className="p-2 rounded-lg bg-surface-card border border-surface-border hover:border-gold/50 hover:bg-surface-elevated transition-all cursor-pointer flex items-center justify-between group select-none"
