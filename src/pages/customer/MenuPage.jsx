@@ -244,8 +244,44 @@ export default function MenuPage() {
     return [];
   }, [dbItems]);
 
-  // Khởi tạo giỏ hàng rỗng ban đầu cho khách hàng
-  const [cartItems, setCartItems] = useState([]);
+  const currentNormTable = useMemo(() => normalizeTableCode(tableNumber), [tableNumber]);
+
+  // Khởi tạo giỏ hàng từ localStorage (nếu có lưu trước đó) hoặc mảng rỗng
+  const [cartItems, setCartItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`hoadiemcat_cart_${normalizeTableCode(tableNumber)}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Tự động lưu giỏ hàng vào localStorage khi có thay đổi
+  useEffect(() => {
+    try {
+      if (cartItems.length > 0) {
+        localStorage.setItem(`hoadiemcat_cart_${currentNormTable}`, JSON.stringify(cartItems));
+      } else {
+        localStorage.removeItem(`hoadiemcat_cart_${currentNormTable}`);
+      }
+    } catch (e) {
+      console.warn('Lỗi lưu giỏ hàng vào localStorage:', e);
+    }
+  }, [cartItems, currentNormTable]);
+
+  // Cập nhật lại giỏ hàng nếu bàn ăn thay đổi
+  const prevTableRef = useRef(currentNormTable);
+  useEffect(() => {
+    if (prevTableRef.current !== currentNormTable) {
+      prevTableRef.current = currentNormTable;
+      try {
+        const saved = localStorage.getItem(`hoadiemcat_cart_${currentNormTable}`);
+        setCartItems(saved ? JSON.parse(saved) : []);
+      } catch {
+        setCartItems([]);
+      }
+    }
+  }, [currentNormTable]);
 
   // Quản lý tab giỏ hàng đang kích hoạt ('draft': Chọn món | 'all': Tất cả)
   const [cartTab, setCartTab] = useState('draft');
@@ -254,8 +290,6 @@ export default function MenuPage() {
   const allOrders = useKdsStore((state) => state.orders);
   const submitCustomerOrder = useKdsStore((state) => state.submitCustomerOrder);
   const lastBroadcastEvent = useKdsStore((state) => state.lastBroadcastEvent);
-
-  const currentNormTable = useMemo(() => normalizeTableCode(tableNumber), [tableNumber]);
 
   // Đồng bộ đơn hàng từ Server MySQL & Lắng nghe WebSocket thời gian thực (Hỗ trợ đa máy tính)
   useEffect(() => {
@@ -301,6 +335,24 @@ export default function MenuPage() {
     const unsubTransferred = currentSession?.sessionToken
       ? wsManager.subscribe(`/topic/table/${currentSession.sessionToken}`, (msg) => {
           if (msg?.event === 'TABLE_TRANSFERRED') {
+            const oldTableKey = `hoadiemcat_cart_${currentNormTable}`;
+            const newTableKey = `hoadiemcat_cart_${msg.newTableNumber}`;
+
+            // Đồng bộ giỏ hàng nháp sang bàn mới
+            if (Array.isArray(msg.cartItems)) {
+              try {
+                localStorage.setItem(newTableKey, JSON.stringify(msg.cartItems));
+              } catch (e) {
+                console.warn(e);
+              }
+            } else {
+              const oldCart = localStorage.getItem(oldTableKey);
+              if (oldCart) {
+                localStorage.setItem(newTableKey, oldCart);
+              }
+            }
+            localStorage.removeItem(oldTableKey);
+
             alert(`Bàn ăn của bạn đã được chuyển sang ${msg.newTableNumber}! Hệ thống sẽ tự động cập nhật.`);
             saveTableSession({
               ...currentSession,
@@ -795,6 +847,7 @@ export default function MenuPage() {
         onClose={() => setIsTransferModalOpen(false)}
         tableNumber={tableNumber}
         isHost={isHost}
+        cartItems={cartItems}
         onTransferSuccess={() => {
           setIsTransferModalOpen(false);
         }}

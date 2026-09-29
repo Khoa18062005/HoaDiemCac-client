@@ -150,11 +150,24 @@ export const tableApi = {
   },
 
   // Khách hàng (Chủ Bàn) yêu cầu tạo mã Chuyển/Ghép bàn (TTL 5 phút)
-  requestTransfer: async (sourceTableNumber, transferType = 'MOVE', reason = '') => {
+  requestTransfer: async (sourceTableNumber, transferType = 'MOVE', reason = '', draftCartItems = []) => {
+    const formattedDraftItems = Array.isArray(draftCartItems)
+      ? draftCartItems.map((item) => ({
+          menuItemId: typeof item.id === 'number' ? item.id : (item.menuItemId || null),
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          note: item.note || '',
+          image: item.image || item.imageUrl || '',
+          unit: item.unit || item.subTitle || '',
+        }))
+      : [];
+
     const res = await apiClient.post('/customer/tables/transfers/request', {
       sourceTableNumber,
       transferType,
       reason,
+      draftCartItems: formattedDraftItems,
     });
     return res?.result !== undefined ? res.result : res;
   },

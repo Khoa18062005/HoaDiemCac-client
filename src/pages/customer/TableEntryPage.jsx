@@ -166,9 +166,20 @@ export default function TableEntryPage() {
         'Thiết bị chuyển'
       );
 
+      const targetTable = res.newTableNumber || normalizedTableCode;
+
+      // Đồng bộ giỏ hàng nháp đã hợp nhất/chuyển vào localStorage của bàn mới
+      if (Array.isArray(res.cartItems)) {
+        try {
+          localStorage.setItem(`hoadiemcat_cart_${targetTable}`, JSON.stringify(res.cartItems));
+        } catch (e) {
+          console.warn('Lỗi lưu giỏ hàng chuyển bàn vào localStorage:', e);
+        }
+      }
+
       saveTableSession({
-        tableNumber: res.newTableNumber || normalizedTableCode,
-        tableName: res.newTableName || `Bàn ${normalizedTableCode}`,
+        tableNumber: targetTable,
+        tableName: res.newTableName || `Bàn ${targetTable}`,
         sessionToken: res.newSessionToken,
         deviceToken: res.deviceToken,
         deviceName: res.deviceName,
@@ -176,7 +187,7 @@ export default function TableEntryPage() {
         verifiedAt: new Date().toISOString(),
       });
 
-      navigate(`/menu?table=${normalizedTableCode}`);
+      navigate(`/menu?table=${targetTable}`);
     } catch (err) {
       setErrorMsg(err.message || 'Mã chuyển bàn không hợp lệ hoặc đã hết hạn.');
     } finally {

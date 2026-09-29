@@ -18,6 +18,7 @@ export default function TableTransferModal({
   onClose,
   tableNumber = 'B01',
   isHost = true,
+  cartItems = [],
   onTransferSuccess,
 }) {
   const [transferType, setTransferType] = useState('MOVE'); // 'MOVE' | 'MERGE'
@@ -59,7 +60,7 @@ export default function TableTransferModal({
     setLoading(true);
     setErrorMsg('');
     try {
-      const res = await tableApi.requestTransfer(tableNumber, transferType, reason);
+      const res = await tableApi.requestTransfer(tableNumber, transferType, reason, cartItems);
       setTransferData(res);
       const ttl = res.ttlSeconds || 300;
       setCountdown(ttl);
@@ -204,7 +205,7 @@ export default function TableTransferModal({
                   <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                     <div className="text-[11px] leading-relaxed">
-                      <strong>Bảo toàn 100% món ăn:</strong> Giỏ hàng và các đơn đã gọi được lưu an toàn trên hệ thống. Nếu không sử dụng mã trong 5 phút, bàn sẽ tự động mở khóa bình thường.
+                      <strong>Bảo toàn 100% món ăn:</strong> {cartItems.length > 0 ? `${cartItems.reduce((acc, i) => acc + (i.quantity || 1), 0)} món trong giỏ hàng và các đơn đã gọi được lưu an toàn lên máy chủ.` : 'Giỏ hàng và các đơn đã gọi được lưu an toàn trên hệ thống.'} Nếu không sử dụng mã trong 5 phút, bàn sẽ tự động mở khóa bình thường.
                     </div>
                   </div>
 
