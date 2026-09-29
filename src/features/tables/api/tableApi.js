@@ -148,6 +148,44 @@ export const tableApi = {
       targetDeviceToken,
     });
   },
+
+  // Khách hàng (Chủ Bàn) yêu cầu tạo mã Chuyển/Ghép bàn (TTL 5 phút)
+  requestTransfer: async (sourceTableNumber, transferType = 'MOVE', reason = '') => {
+    const res = await apiClient.post('/customer/tables/transfers/request', {
+      sourceTableNumber,
+      transferType,
+      reason,
+    });
+    return res?.result !== undefined ? res.result : res;
+  },
+
+  // Khách hàng xác nhận nhập mã Chuyển/Ghép bàn tại bàn mới
+  confirmTransfer: async (targetTableNumber, transferCode, deviceFingerprint = 'web-client', deviceName = '') => {
+    const res = await apiClient.post('/customer/tables/transfers/confirm', {
+      targetTableNumber,
+      transferCode,
+      deviceFingerprint,
+      deviceName,
+    });
+    return res?.result !== undefined ? res.result : res;
+  },
+
+  // Khách hàng hủy yêu cầu chuyển/ghép bàn tại bàn cũ
+  cancelTransfer: async (transferCode) => {
+    const res = await apiClient.post(`/customer/tables/transfers/cancel?transferCode=${encodeURIComponent(transferCode)}`);
+    return res?.result !== undefined ? res.result : res;
+  },
+
+  // Nhân viên / Quản lý Chuyển hoặc Ghép bàn trực tiếp từ POS (Admin)
+  directTransfer: async (sourceTableId, targetTableId, transferType = 'MOVE', reason = '') => {
+    const res = await apiClient.post('/admin/tables/direct-transfer', {
+      sourceTableId,
+      targetTableId,
+      transferType,
+      reason,
+    });
+    return res?.result !== undefined ? res.result : res;
+  },
 };
 
 export default tableApi;

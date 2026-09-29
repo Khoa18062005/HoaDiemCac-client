@@ -9,6 +9,7 @@ import {
   CustomerBottomCartBar,
   CustomerCartDrawer,
   CustomerCartSidebar,
+  TableTransferModal,
   CATEGORY_ICONS,
 } from '@/features/customer';
 import TablePasscodeModal from '@/features/tables/components/TablePasscodeModal';
@@ -61,6 +62,7 @@ export default function MenuPage() {
   });
   const [deviceCount, setDeviceCount] = useState(1);
   const [isDevicesModalOpen, setIsDevicesModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
   // Kiểm tra phiên bàn ăn hợp lệ từ localStorage và đồng bộ trạng thái thiết bị
   useEffect(() => {
@@ -294,6 +296,24 @@ export default function MenuPage() {
       ? wsManager.subscribe(`/topic/table/${currentNormTable}/status`, handleRemoteUpdate)
       : null;
 
+    // Lắng nghe sự kiện chuyển bàn thời gian thực (được kích hoạt khi bàn được chuyển/ghép)
+    const currentSession = getStoredTableSession();
+    const unsubTransferred = currentSession?.sessionToken
+      ? wsManager.subscribe(`/topic/table/${currentSession.sessionToken}`, (msg) => {
+          if (msg?.event === 'TABLE_TRANSFERRED') {
+            alert(`Bàn ăn của bạn đã được chuyển sang ${msg.newTableNumber}! Hệ thống sẽ tự động cập nhật.`);
+            saveTableSession({
+              ...currentSession,
+              tableNumber: msg.newTableNumber,
+              tableName: msg.newTableName || `Bàn ${msg.newTableNumber}`,
+              sessionToken: msg.newSessionToken,
+            });
+            navigate(`/menu?table=${msg.newTableNumber}`);
+            window.location.reload();
+          }
+        })
+      : null;
+
     // 3. Polling dự phòng mỗi 4 giây (đảm bảo đồng bộ ngay cả khi WebSocket chập chờn trên mạng đa máy tính)
     const interval = setInterval(syncTableOrders, 4000);
 
@@ -301,9 +321,10 @@ export default function MenuPage() {
       isMounted = false;
       if (unsub1) unsub1();
       if (unsub2) unsub2();
+      if (unsubTransferred) unsubTransferred();
       clearInterval(interval);
     };
-  }, [tableNumber, currentNormTable]);
+  }, [tableNumber, currentNormTable, navigate]);
 
   // Danh sách toàn bộ các món đã gửi bếp của bàn (đồng bộ thời gian thực từ useKdsStore)
   const orderedItems = useMemo(() => {
@@ -614,6 +635,7 @@ export default function MenuPage() {
         isHost={isHost}
         deviceCount={deviceCount}
         onOpenDevices={() => setIsDevicesModalOpen(true)}
+        onOpenTransfer={() => setIsTransferModalOpen(true)}
       />
 
       {/* 2. Thanh Thông Báo Thời Gian Thực Cùng Bàn */}
@@ -765,6 +787,17 @@ export default function MenuPage() {
         tableNumber={tableNumber}
         isCurrentHost={isHost}
         onHostTransferred={handleHostTransferred}
+      />
+
+      {/* 8. Modal Chuyển Bàn / Ghép Bàn */}
+      <TableTransferModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        tableNumber={tableNumber}
+        isHost={isHost}
+        onTransferSuccess={() => {
+          setIsTransferModalOpen(false);
+        }}
       />
     </div>
   );

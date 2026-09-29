@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Search, Bell, X, Check, Crown, Users, Receipt, Loader2 } from 'lucide-react';
+import { ShoppingBag, Search, Bell, X, Check, Crown, Users, Receipt, Loader2, ArrowLeftRight } from 'lucide-react';
 import { tableApi } from '@/features/tables/api/tableApi';
 
 /**
@@ -17,6 +17,7 @@ export default function CustomerHeader({
   isHost = true,
   deviceCount = 1,
   onOpenDevices,
+  onOpenTransfer,
 }) {
   const [calledService, setCalledService] = useState(false);
   const [isCallingStaff, setIsCallingStaff] = useState(false);
@@ -195,6 +196,19 @@ export default function CustomerHeader({
                 </span>
               )}
             </button>
+
+            {/* Nút Đổi/Ghép Bàn (Dành cho Chủ Bàn) */}
+            {onOpenTransfer && isHost && (
+              <button
+                type="button"
+                onClick={onOpenTransfer}
+                className="py-1 px-2 rounded-full border text-[10px] font-bold flex items-center gap-1 bg-[#1E1418] text-[#FFE699] border-[#D4AF37]/50 hover:border-[#D4AF37] hover:bg-[#2A1820] active:scale-95 transition-all shadow-xs cursor-pointer select-none"
+                title="Nhấn để Chuyển bàn hoặc Ghép bàn (Bảo toàn giỏ hàng)"
+              >
+                <ArrowLeftRight className="w-3 h-3 text-[#FFD54F]" />
+                <span className="hidden sm:inline">Đổi Bàn</span>
+              </button>
+            )}
           </div>
 
           {/* Quick Cart Button (chỉ hiện trên Mobile & Tablet, ẩn trên Laptop vì đã có docked sidebar) */}

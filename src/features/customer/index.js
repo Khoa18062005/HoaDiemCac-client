@@ -6,5 +6,6 @@ export { default as CustomerDishCard } from './components/CustomerDishCard';
 export { default as CustomerBottomCartBar } from './components/CustomerBottomCartBar';
 export { default as CustomerCartDrawer } from './components/CustomerCartDrawer';
 export { default as CustomerCartSidebar } from './components/CustomerCartSidebar';
+export { default as TableTransferModal } from './components/TableTransferModal';
 
 export * from './data/mockCustomerMenu';
