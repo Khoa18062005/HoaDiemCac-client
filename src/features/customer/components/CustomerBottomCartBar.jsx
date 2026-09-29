@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, ShoppingBag, ChefHat, CheckCircle2, Bell } from 'lucide-react';
+import { ArrowRight, ShoppingBag, ChefHat, CheckCircle2, Bell, Lock } from 'lucide-react';
 
 /**
  * CustomerBottomCartBar
@@ -15,6 +15,7 @@ export default function CustomerBottomCartBar({
   waitingServeCount = 0,
   deliveredCount = 0,
   isHost = true,
+  isOrderLocked = false,
   onOpenCart,
 }) {
   const formatPrice = (amount) => {
@@ -56,11 +57,24 @@ export default function CustomerBottomCartBar({
           <button
             type="button"
             onClick={onOpenCart}
-            aria-label={isHost ? 'Xem giỏ hàng và gửi bếp' : 'Xem giỏ hàng'}
-            className="bg-gradient-to-r from-[#FFD54F] via-[#F3C649] to-[#D4AF37] text-[#5A0808] font-extrabold text-xs px-3.5 py-2.5 rounded-xl shadow-[0_2px_10px_rgba(212,175,55,0.4)] flex items-center space-x-1.5 active:scale-95 transition-transform hover:brightness-105 select-none"
+            aria-label={isOrderLocked ? 'Bàn đang chốt hóa đơn' : isHost ? 'Xem giỏ hàng và gửi bếp' : 'Xem giỏ hàng'}
+            className={`${
+              isOrderLocked
+                ? 'bg-zinc-800 text-amber-300 border border-amber-500/40 shadow-xs'
+                : 'bg-gradient-to-r from-[#FFD54F] via-[#F3C649] to-[#D4AF37] text-[#5A0808] shadow-[0_2px_10px_rgba(212,175,55,0.4)] hover:brightness-105'
+            } font-extrabold text-xs px-3.5 py-2.5 rounded-xl flex items-center space-x-1.5 active:scale-95 transition-transform select-none`}
           >
-            <span>{isHost ? 'Gửi Bếp' : 'Xem Giỏ'}</span>
-            <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
+            {isOrderLocked ? (
+              <>
+                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                <span>Đã Khóa</span>
+              </>
+            ) : (
+              <>
+                <span>{isHost ? 'Gửi Bếp' : 'Xem Giỏ'}</span>
+                <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
+              </>
+            )}
           </button>
         </div>
       </footer>
@@ -73,7 +87,11 @@ export default function CustomerBottomCartBar({
     let icon = <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
     let iconBg = 'bg-[#0A2E1D] border-emerald-500/40';
 
-    if (activeCookingCount > 0) {
+    if (isOrderLocked) {
+      title = 'Bàn đang chốt hóa đơn';
+      icon = <Lock className="w-5 h-5 text-amber-400 animate-pulse" />;
+      iconBg = 'bg-[#2A0808] border-red-500/50';
+    } else if (activeCookingCount > 0) {
       title = 'Bếp đang chế biến';
       icon = <ChefHat className="w-5 h-5 text-amber-400 animate-pulse" />;
       iconBg = 'bg-[#2A1808] border-amber-500/40';
@@ -87,7 +105,9 @@ export default function CustomerBottomCartBar({
     if (activeCookingCount > 0) parts.push(`${activeCookingCount} đang nấu`);
     if (waitingServeCount > 0) parts.push(`${waitingServeCount} chờ phục vụ`);
     if (deliveredCount > 0) parts.push(`${deliveredCount} đã phục vụ`);
-    const statusSubtitle = parts.length > 0 ? parts.join(' • ') : `${orderedCount} món đã lên bàn`;
+    const statusSubtitle = isOrderLocked
+      ? 'Đã đóng băng order để kiểm tra hóa đơn tạm tính'
+      : (parts.length > 0 ? parts.join(' • ') : `${orderedCount} món đã lên bàn`);
 
     return (
       <footer className="lg:hidden fixed bottom-3 left-3 right-3 z-40 max-w-[calc(100%-1.5rem)] sm:max-w-md md:max-w-lg sm:mx-auto sm:left-0 sm:right-0">

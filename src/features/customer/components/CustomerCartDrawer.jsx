@@ -30,6 +30,7 @@ export default function CustomerCartDrawer({
   orderedItems = [],
   tableNumber = '08',
   isHost = true,
+  isOrderLocked = false,
   onUpdateQuantity,
   onRemoveItem,
   onClearCart,
@@ -101,6 +102,10 @@ export default function CustomerCartDrawer({
   };
 
   const handleConfirmSubmit = () => {
+    if (isOrderLocked) {
+      alert('Bàn đang chốt hóa đơn tạm tính, toàn bộ thao tác đặt món đã bị đóng băng.');
+      return;
+    }
     if (cartItems.length === 0 || isSuccess) return;
     setIsSuccess(true);
 
@@ -259,38 +264,46 @@ export default function CustomerCartDrawer({
 
                       {/* Stepper + Remove */}
                       <div className="flex items-center space-x-2">
-                        <div className="flex items-center space-x-1.5 bg-[#141418] px-1.5 py-0.5 rounded-full border border-[rgba(212,175,55,0.25)]">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onUpdateQuantity(item.id, item.quantity - 1)
-                            }
-                            className="w-5 h-5 rounded-full bg-[#2A2A30] text-[#D6D3CD] flex items-center justify-center active:scale-90"
-                          >
-                            <Minus className="w-3 h-3 stroke-[2.5]" />
-                          </button>
-                          <span className="text-xs font-bold text-[#FDFBF7] px-1 min-w-[14px] text-center leading-none">
-                            {item.quantity}
+                        {isOrderLocked ? (
+                          <span className="text-xs font-bold text-[#FFD54F] px-2 py-0.5 rounded bg-zinc-800/80 border border-zinc-700/60">
+                            x{item.quantity}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onUpdateQuantity(item.id, item.quantity + 1)
-                            }
-                            className="w-5 h-5 rounded-full bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white flex items-center justify-center active:scale-90"
-                          >
-                            <Plus className="w-3 h-3 stroke-[2.5]" />
-                          </button>
-                        </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center space-x-1.5 bg-[#141418] px-1.5 py-0.5 rounded-full border border-[rgba(212,175,55,0.25)]">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onUpdateQuantity(item.id, item.quantity - 1)
+                                }
+                                className="w-5 h-5 rounded-full bg-[#2A2A30] text-[#D6D3CD] flex items-center justify-center active:scale-90"
+                              >
+                                <Minus className="w-3 h-3 stroke-[2.5]" />
+                              </button>
+                              <span className="text-xs font-bold text-[#FDFBF7] px-1 min-w-[14px] text-center leading-none">
+                                {item.quantity}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onUpdateQuantity(item.id, item.quantity + 1)
+                                }
+                                className="w-5 h-5 rounded-full bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white flex items-center justify-center active:scale-90"
+                              >
+                                <Plus className="w-3 h-3 stroke-[2.5]" />
+                              </button>
+                            </div>
 
-                        <button
-                          type="button"
-                          onClick={() => onRemoveItem(item.id)}
-                          aria-label="Xóa món"
-                          className="w-7 h-7 rounded-lg text-[#FFB4AB]/70 hover:text-[#FFB4AB] hover:bg-[#3E1118] flex items-center justify-center transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                            <button
+                              type="button"
+                              onClick={() => onRemoveItem(item.id)}
+                              aria-label="Xóa món"
+                              className="w-7 h-7 rounded-lg text-[#FFB4AB]/70 hover:text-[#FFB4AB] hover:bg-[#3E1118] flex items-center justify-center transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -334,7 +347,12 @@ export default function CustomerCartDrawer({
                     Xóa hết
                   </button>
 
-                  {isHost ? (
+                  {isOrderLocked ? (
+                    <div className="flex-1 py-2.5 px-3 rounded-xl bg-red-950/70 border border-red-500/40 text-red-200 font-bold text-xs flex items-center justify-center space-x-1.5 select-none shadow-md">
+                      <Lock className="w-4 h-4 text-red-400 animate-pulse" />
+                      <span>Bàn Đang Chốt Hóa Đơn – Đã Đóng Băng</span>
+                    </div>
+                  ) : isHost ? (
                     <button
                       type="button"
                       onClick={handleConfirmSubmit}

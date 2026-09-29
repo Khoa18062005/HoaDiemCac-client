@@ -50,6 +50,16 @@ export const tableApi = {
     return res?.result !== undefined ? res.result : res;
   },
 
+  // Đóng/khóa order của bàn (hoặc mở khóa) với trạng thái chỉ định
+  setOrderLock: async (tableId, locked = true) => {
+    try {
+      const res = await apiClient.post(`/admin/tables/${tableId}/lock-order?locked=${locked}`);
+      return res?.result !== undefined ? res.result : res;
+    } catch {
+      return tableApi.toggleOrderLock(tableId);
+    }
+  },
+
   // Cập nhật trạng thái bàn
   updateTableStatus: async (tableId, status) => {
     const res = await apiClient.put(`/admin/tables/${tableId}/status?status=${status}`);
@@ -92,9 +102,9 @@ export const tableApi = {
     try {
       const res = await apiClient.get('/customer/tables/validate-session');
       return res?.result !== undefined ? Boolean(res.result) : Boolean(res);
-    } catch {
-      const session = getStoredTableSession();
-      return Boolean(session && session.sessionToken);
+    } catch (err) {
+      console.warn('Lỗi xác thực phiên bàn ăn:', err.message);
+      return false;
     }
   },
 

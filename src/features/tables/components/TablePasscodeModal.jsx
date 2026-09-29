@@ -60,8 +60,14 @@ export default function TablePasscodeModal({ isOpen, onClose, tableCode, onSucce
         deviceToken: res.deviceToken,
         deviceName: res.deviceName,
         isHost: res.isHost ?? true,
+        isOrderLocked: false,
         verifiedAt: new Date().toISOString(),
       });
+      try {
+        const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
+        delete lockedMap[normalizedCode.toUpperCase()];
+        localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
+      } catch {}
       if (onSuccess) onSuccess(res);
       if (onClose) onClose();
     } catch (err) {

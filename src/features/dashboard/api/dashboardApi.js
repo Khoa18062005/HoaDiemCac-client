@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/axios';
+import { getStoredInvoices } from '@/features/invoices/api/invoiceApi';
 
 export const dashboardApi = {
   getSummary: async (period = 'today', startDate = null, endDate = null) => {
@@ -9,10 +10,12 @@ export const dashboardApi = {
       if (endDate) params.append('endDate', endDate);
 
       const res = await apiClient.get(`/admin/dashboard/summary?${params.toString()}`);
-      if (res && res.totalRevenue) return res;
-      if (res?.result) return res.result;
+      const data = res?.totalRevenue !== undefined ? res : res?.result;
+      if (data && data.totalRevenue !== undefined) {
+        return data;
+      }
     } catch (err) {
-      console.warn('Backend dashboard chưa online, sử dụng dữ liệu giả lập:', err.message);
+      console.warn('Backend dashboard chưa online hoặc gặp lỗi:', err.message);
     }
 
     // Realistic fallback analytics data based on selected period
@@ -224,7 +227,12 @@ export const dashboardApi = {
           imageUrl: 'https://images.unsplash.com/photo-1559742811-822873691df8?w=200',
         },
       ],
-      recentInvoices: mockRecentInvoices,
+      recentInvoices: (() => {
+        const localInvoices = getStoredInvoices();
+        const existingCodes = new Set(localInvoices.map((i) => i.invoiceCode));
+        const filteredMock = mockRecentInvoices.filter((i) => !existingCodes.has(i.invoiceCode));
+        return [...localInvoices, ...filteredMock];
+      })(),
     };
   },
 };

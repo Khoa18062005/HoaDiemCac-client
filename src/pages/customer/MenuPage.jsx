@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Loader2, Utensils, ArrowLeftRight, Clock, ArrowRight } from 'lucide-react';
+import { Loader2, Utensils, ArrowLeftRight, Clock, ArrowRight, Lock, Receipt, ShieldAlert, Bell, Check } from 'lucide-react';
 import {
   CustomerHeader,
   CollaborativeBanner,
@@ -50,6 +50,7 @@ export default function MenuPage() {
   };
 
   const tableNumber = normalizeTableNumber(tableId || searchParams.get('table') || 'B01');
+  const currentNormTable = useMemo(() => normalizeTableCode(tableNumber), [tableNumber]);
 
   const [activeCategoryId, setActiveCategoryId] = useState('ban-chay');
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,32 +69,133 @@ export default function MenuPage() {
   const [isDevicesModalOpen, setIsDevicesModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
+  // Trạng thái Bàn bị khóa / Đóng băng order khi nhân viên xem hóa đơn tạm tính hoặc chốt đơn
+  // Khởi tạo mặc định là false để loại bỏ hiện tượng hiển thị chớp giật (flash 1s) modal thanh toán khi khách đang dùng bữa F5 tải lại trang.
+  const [isOrderLocked, setIsOrderLocked] = useState(false);
+
+  const [serverTableTotal, setServerTableTotal] = useState(0);
+  const [calledSupport, setCalledSupport] = useState(false);
+  const [isCallingSupport, setIsCallingSupport] = useState(false);
+
+  const handleCallSupportStaff = async () => {
+    if (isCallingSupport || calledSupport) return;
+    setIsCallingSupport(true);
+    try {
+      await tableApi.callStaff(tableNumber, 'CALL_STAFF', `Bàn ${tableNumber} cần nhân viên hỗ trợ thanh toán`);
+      setCalledSupport(true);
+      setTimeout(() => setCalledSupport(false), 5000);
+    } catch (e) {
+      console.warn('Lỗi gọi nhân viên hỗ trợ:', e);
+    } finally {
+      setIsCallingSupport(false);
+    }
+  };
+
+  const handleKillSession = useCallback(() => {
+    clearTableSession();
+    try {
+      const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
+      delete lockedMap[tableNumber.toUpperCase()];
+      delete lockedMap[currentNormTable.toUpperCase()];
+      localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
+    } catch {}
+    try {
+      useTableSessionStore.getState().clearTableSession();
+    } catch {}
+    try {
+      useCartStore.getState().clearCart();
+    } catch {}
+    // Không dùng alert() của trình duyệt để tránh gây phiền và chặn màn hình khách hàng
+    navigate(`/table/${tableNumber}`, { replace: true });
+  }, [tableNumber, currentNormTable, navigate]);
+
   // Kiểm tra phiên bàn ăn hợp lệ từ localStorage và đồng bộ trạng thái thiết bị
   useEffect(() => {
-    const checkSessionAndDevices = async () => {
-      const session = getStoredTableSession();
+    let isMounted = true;
 
-      // Bắt buộc phải có session VÀ session phải đúng bàn này
-      if (!session || !session.sessionToken || session.tableNumber !== tableNumber) {
-        setIsPasscodeRequired(true);
+    const checkSessionAndDevices = async () => {
+      // 1. Luôn kiểm tra trạng thái và thông tin bàn từ Server trước
+      let isTableLocked = false;
+      try {
+        const info = await tableApi.getTablePublicInfo(tableNumber);
+        if (info) {
+          // CHỈ KHI NHÂN VIÊN ĐÃ HOÀN TẤT THANH TOÁN (Trạng thái chuyển sang CLEANING hoặc AVAILABLE):
+          // Tiến trình bên khách hàng mới bị kết thúc (kill session)!
+          if (info.status === 'CLEANING' || info.status === 'AVAILABLE') {
+            const currentSession = getStoredTableSession();
+            if (
+              currentSession &&
+              (currentSession.tableNumber === tableNumber ||
+                currentSession.tableNumber === currentNormTable)
+            ) {
+              handleKillSession();
+              return;
+            }
+          }
+
+          if (info.isOrderLocked !== undefined) {
+            isTableLocked = Boolean(info.isOrderLocked);
+            if (isMounted) setIsOrderLocked(isTableLocked);
+
+            // Đồng bộ trạng thái khóa order vào localStorage session và dọn sạch dữ liệu cũ
+            const currentSession = getStoredTableSession();
+            if (
+              currentSession &&
+              (currentSession.tableNumber === tableNumber ||
+                currentSession.tableNumber === currentNormTable)
+            ) {
+              saveTableSession({ ...currentSession, isOrderLocked: isTableLocked });
+            }
+            try {
+              const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
+              if (!isTableLocked) {
+                delete lockedMap[tableNumber.toUpperCase()];
+                delete lockedMap[currentNormTable.toUpperCase()];
+              } else {
+                lockedMap[tableNumber.toUpperCase()] = true;
+              }
+              localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
+            } catch {}
+          }
+          if (info.totalAmount !== undefined) {
+            if (isMounted) setServerTableTotal(Number(info.totalAmount) || 0);
+          }
+        }
+      } catch (err) {
+        // Lỗi kết nối mạng tạm thời, không khóa bàn tùy tiện
+      }
+
+      // NẾU BÀN ĐANG TRONG QUÁ TRÌNH THANH TOÁN / KHÓA ORDER:
+      // Khách hàng luôn ở lại màn hình tạm tính (Hình 1) đối soát chi tiết
+      if (isTableLocked || isOrderLocked) {
+        if (isMounted) {
+          setIsPasscodeRequired(false);
+          setIsOrderLocked(true);
+        }
+      }
+
+      // 2. Kiểm tra session tại client
+      const session = getStoredTableSession();
+      const normStoredNum = normalizeTableNumber(session?.tableNumber);
+      const kdsStoredNum = normalizeTableCode(session?.tableNumber);
+      if (
+        !session ||
+        !session.sessionToken ||
+        (normStoredNum !== tableNumber && kdsStoredNum !== currentNormTable && session?.tableNumber !== tableNumber)
+      ) {
+        if (isMounted && !isTableLocked && !isOrderLocked) {
+          setIsPasscodeRequired(true);
+        }
         return;
       }
 
-      // Xác thực session với Backend xem bàn có bị khóa hoặc reset không
-      try {
-        const isValid = await tableApi.validateSession();
-        if (!isValid) {
-          clearTableSession();
-          setIsPasscodeRequired(true);
-          return;
+      if (isMounted) {
+        if (!isTableLocked && !isOrderLocked) {
+          setIsPasscodeRequired(false);
         }
-      } catch (err) {
-        console.warn('Lỗi kiểm tra session bàn ăn:', err.message);
-      }
-
-      setIsPasscodeRequired(false);
-      if (session.isHost !== undefined) {
-        setIsHost(Boolean(session.isHost));
+        if (session.isHost !== undefined) {
+          setIsHost(Boolean(session.isHost));
+        }
       }
 
       // Tải danh sách thiết bị kết nối thời gian thực
@@ -122,7 +224,7 @@ export default function MenuPage() {
     };
 
     checkSessionAndDevices();
-    const interval = setInterval(checkSessionAndDevices, 5000);
+    const interval = setInterval(checkSessionAndDevices, 4000);
     return () => clearInterval(interval);
   }, [tableNumber]);
 
@@ -134,6 +236,111 @@ export default function MenuPage() {
       saveTableSession({ ...curr, isHost: false });
     }
   };
+
+  // Lắng nghe sự kiện Khóa Order / Đóng Băng tức thời 0ms giữa các tab
+  useEffect(() => {
+    // 1. BroadcastChannel (đồng bộ các tab trên cùng máy)
+    let channel;
+    try {
+      if (typeof window !== 'undefined' && window.BroadcastChannel) {
+        channel = new BroadcastChannel('hoadiemcat_table_sync');
+        channel.onmessage = (event) => {
+          const data = event.data;
+          if (!data) return;
+          const targetNum = (data.tableNumber || '').toUpperCase().trim();
+          const targetKds = normalizeTableCode(data.kdsTableCode || data.tableNumber);
+          if (
+            targetNum === tableNumber.toUpperCase().trim() ||
+            targetNum === currentNormTable.toUpperCase().trim() ||
+            targetKds === currentNormTable
+          ) {
+            if (data.type === 'ORDER_LOCKED') {
+              const isLocked = Boolean(data.isOrderLocked);
+              setIsOrderLocked(isLocked);
+              if (isLocked) {
+                setCartTab('all');
+                setIsPasscodeRequired(false);
+                syncTableOrders();
+              }
+            }
+          }
+        };
+      }
+    } catch (err) {
+      console.warn('BroadcastChannel error:', err);
+    }
+
+    // 2. CustomEvent 'table_order_locked'
+    const handleLockEvent = (e) => {
+      const detail = e.detail;
+      if (!detail) return;
+      const targetNum = (detail.tableNumber || '').toUpperCase().trim();
+      const targetKds = normalizeTableCode(detail.kdsTableCode || detail.tableNumber);
+      if (
+        targetNum === tableNumber.toUpperCase().trim() ||
+        targetNum === currentNormTable.toUpperCase().trim() ||
+        targetKds === currentNormTable
+      ) {
+        const isLocked = Boolean(detail.isOrderLocked);
+        setIsOrderLocked(isLocked);
+        if (isLocked) {
+          setCartTab('all');
+          setIsPasscodeRequired(false);
+          syncTableOrders();
+        }
+      }
+    };
+
+    // 3. Storage event
+    const handleStorageChange = (e) => {
+      if (e.key === 'hoadiemcat_locked_tables') {
+        try {
+          const map = JSON.parse(e.newValue || '{}');
+          if (
+            map[tableNumber.toUpperCase()] !== undefined ||
+            map[currentNormTable.toUpperCase()] !== undefined
+          ) {
+            const isLocked = Boolean(
+              map[tableNumber.toUpperCase()] ?? map[currentNormTable.toUpperCase()]
+            );
+            setIsOrderLocked(isLocked);
+            if (isLocked) {
+              setCartTab('all');
+              setIsPasscodeRequired(false);
+              syncTableOrders();
+            }
+          }
+        } catch {}
+      }
+      if (e.key === 'hoadiemcat_table_session') {
+        try {
+          const s = JSON.parse(e.newValue || '{}');
+          const sKds = normalizeTableCode(s.tableNumber);
+          if (
+            (s.tableNumber === tableNumber || sKds === currentNormTable) &&
+            s.isOrderLocked !== undefined
+          ) {
+            const isLocked = Boolean(s.isOrderLocked);
+            setIsOrderLocked(isLocked);
+            if (isLocked) {
+              setCartTab('all');
+              setIsPasscodeRequired(false);
+              syncTableOrders();
+            }
+          }
+        } catch {}
+      }
+    };
+
+    window.addEventListener('table_order_locked', handleLockEvent);
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      if (channel) channel.close();
+      window.removeEventListener('table_order_locked', handleLockEvent);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [tableNumber, currentNormTable]);
 
   // State lưu dữ liệu từ Database
   const [dbItems, setDbItems] = useState([]);
@@ -247,8 +454,6 @@ export default function MenuPage() {
     }
     return [];
   }, [dbItems]);
-
-  const currentNormTable = useMemo(() => normalizeTableCode(tableNumber), [tableNumber]);
 
   // Khởi tạo giỏ hàng từ localStorage (nếu có lưu trước đó) hoặc mảng rỗng
   const [cartItems, setCartItems] = useState(() => {
@@ -401,6 +606,42 @@ export default function MenuPage() {
         return;
       }
 
+      if (
+        payload.status === 'CLEANING' ||
+        payload.status === 'AVAILABLE' ||
+        payload.type === 'TABLE_SESSION_ENDED' ||
+        payload.event === 'SESSION_KILLED'
+      ) {
+        handleKillSession(
+          payload.message ||
+            'Bàn ăn đã hoàn tất thanh toán và chuyển sang trạng thái dọn dẹp. Cảm ơn quý khách!'
+        );
+        return;
+      }
+
+      if (payload.isOrderLocked !== undefined) {
+        const isLocked = Boolean(payload.isOrderLocked);
+        setIsOrderLocked(isLocked);
+        if (isLocked) {
+          setCartTab('all');
+          setIsPasscodeRequired(false);
+          syncTableOrders();
+        }
+        const s = getStoredTableSession();
+        if (s && (s.tableNumber === tableNumber || s.tableNumber === currentNormTable)) {
+          saveTableSession({ ...s, isOrderLocked: isLocked });
+        }
+        try {
+          const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
+          if (!isLocked) {
+            delete lockedMap[tableNumber.toUpperCase()];
+            delete lockedMap[currentNormTable.toUpperCase()];
+          } else {
+            lockedMap[tableNumber.toUpperCase()] = true;
+          }
+          localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
+        } catch {}
+      }
       if (payload.type === 'KITCHEN_ITEM_STATUS_TOGGLED' || payload.type === 'WAITER_ITEM_DELIVERED') {
         useKdsStore.getState().applyRemoteItemStatusUpdate(payload);
       } else if (payload.type === 'WAITER_ALL_ITEMS_DELIVERED') {
@@ -415,10 +656,56 @@ export default function MenuPage() {
       ? wsManager.subscribe(`/topic/table/${currentNormTable}/status`, handleRemoteUpdate)
       : null;
 
-    // Lắng nghe sự kiện chuyển bàn thời gian thực (được kích hoạt khi bàn được chuyển/ghép)
+    // Lắng nghe kênh tổng /topic/tables
+    const unsubTables = wsManager.subscribe('/topic/tables', (tableData) => {
+      if (!tableData) return;
+      const tNum = (tableData.tableNumber || '').toUpperCase().trim();
+      const tKds = normalizeTableCode(tableData.tableNumber || '');
+      if (
+        tNum === tableNumber.toUpperCase().trim() ||
+        tNum === currentNormTable.toUpperCase().trim() ||
+        tKds === currentNormTable
+      ) {
+        if (tableData.status === 'CLEANING' || tableData.status === 'AVAILABLE') {
+          handleKillSession('Bàn ăn đã hoàn tất thanh toán và đang được dọn dẹp. Phiên phục vụ đã kết thúc!');
+          return;
+        }
+
+        if (tableData.isOrderLocked !== undefined) {
+          const isLocked = Boolean(tableData.isOrderLocked);
+          setIsOrderLocked(isLocked);
+          if (isLocked) {
+            setCartTab('all');
+            setIsPasscodeRequired(false);
+            syncTableOrders();
+          }
+          const s = getStoredTableSession();
+          if (s) {
+            saveTableSession({ ...s, isOrderLocked: isLocked });
+          }
+          try {
+            const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
+            if (!isLocked) {
+              delete lockedMap[tableNumber.toUpperCase()];
+              delete lockedMap[currentNormTable.toUpperCase()];
+            } else {
+              lockedMap[tableNumber.toUpperCase()] = true;
+            }
+            localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
+          } catch {}
+        }
+      }
+    });
+
+    // Lắng nghe sự kiện chuyển bàn hoặc kết thúc phiên qua token phiên
     const currentSession = getStoredTableSession();
     const unsubTransferred = currentSession?.sessionToken
       ? wsManager.subscribe(`/topic/table/${currentSession.sessionToken}`, (msg) => {
+          if (msg?.event === 'SESSION_KILLED' || msg?.type === 'TABLE_SESSION_ENDED' || msg?.status === 'CLEANING') {
+            handleKillSession(msg.message || 'Bàn ăn đã hoàn tất thanh toán. Phiên phục vụ đã kết thúc!');
+            return;
+          }
+
           if (msg?.event === 'TABLE_TRANSFERRED') {
             setTransferNotice({
               newTableNumber: msg.newTableNumber,
@@ -511,6 +798,7 @@ export default function MenuPage() {
       isMounted = false;
       if (unsub1) unsub1();
       if (unsub2) unsub2();
+      if (unsubTables) unsubTables();
       if (unsubTransferred) unsubTransferred();
       if (unsubMenu) unsubMenu();
       if (syncChannel) {
@@ -518,7 +806,7 @@ export default function MenuPage() {
       }
       clearInterval(interval);
     };
-  }, [tableNumber, currentNormTable, navigate]);
+  }, [tableNumber, currentNormTable, navigate, handleKillSession]);
 
   // Danh sách toàn bộ các món đã gửi bếp của bàn (đồng bộ thời gian thực từ useKdsStore)
   const orderedItems = useMemo(() => {
@@ -735,6 +1023,30 @@ export default function MenuPage() {
     return cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   }, [cartItems]);
 
+  // Tổng tiền các món đã gọi của bàn phục vụ cho popup đóng băng
+  const totalOrderedAmount = useMemo(() => {
+    return orderedItems.reduce(
+      (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+      0
+    );
+  }, [orderedItems]);
+
+  const freezeSubtotal = useMemo(() => {
+    return totalOrderedAmount || serverTableTotal;
+  }, [totalOrderedAmount, serverTableTotal]);
+
+  const freezeVat = useMemo(() => {
+    return Math.round(freezeSubtotal * 0.08);
+  }, [freezeSubtotal]);
+
+  const freezeFinalTotal = useMemo(() => {
+    return freezeSubtotal + freezeVat;
+  }, [freezeSubtotal, freezeVat]);
+
+  const formatPrice = (val) => {
+    return new Intl.NumberFormat('vi-VN').format(val || 0);
+  };
+
   // Lấy số lượng của từng món trong giỏ hàng (theo id)
   const getDishCartQuantity = (dishId) => {
     const found = cartItems.find((item) => item.id === dishId);
@@ -743,6 +1055,10 @@ export default function MenuPage() {
 
   // Thêm món vào giỏ (Tự động chuyển từ tab 'Tất cả' về 'Chọn món')
   const handleAddToCart = (dish, price) => {
+    if (isOrderLocked) {
+      alert('Bàn đang được chốt hóa đơn tạm tính. Thao tác gọi món tạm thời bị đóng băng.');
+      return;
+    }
     setCartTab('draft');
     setCartItems((prev) => {
       const existingIndex = prev.findIndex((item) => item.id === dish.id);
@@ -770,6 +1086,7 @@ export default function MenuPage() {
 
   // Cập nhật số lượng món (Nếu tăng thêm món -> tự động nhảy về tab 'Chọn món')
   const handleUpdateQuantity = (dishId, newQuantity) => {
+    if (isOrderLocked) return;
     if (newQuantity > 0) {
       setCartTab('draft');
     }
@@ -786,16 +1103,19 @@ export default function MenuPage() {
 
   // Xóa món khỏi giỏ
   const handleRemoveItem = (dishId) => {
+    if (isOrderLocked) return;
     setCartItems((prev) => prev.filter((item) => item.id !== dishId));
   };
 
   // Xóa toàn bộ giỏ
   const handleClearCart = () => {
+    if (isOrderLocked) return;
     setCartItems([]);
   };
 
   // Cập nhật ghi chú riêng cho từng món
   const handleUpdateItemNote = (dishId, note) => {
+    if (isOrderLocked) return;
     setCartItems((prev) =>
       prev.map((item) => (item.id === dishId ? { ...item, note } : item))
     );
@@ -806,6 +1126,10 @@ export default function MenuPage() {
 
   // Xác nhận gửi bếp: Đẩy đơn vào Trạm Bếp KDS và đổi trạng thái món thành 'Đang chế biến'
   const handleSubmitOrder = async (orderData) => {
+    if (isOrderLocked) {
+      alert('Bàn đang được chốt hóa đơn tạm tính. Không thể gửi thêm đơn vào bếp lúc này.');
+      return;
+    }
     if (isSubmittingOrder.current) return;
 
     const itemsToSubmit = (orderData && orderData.items) ? orderData.items : cartItems;
@@ -867,13 +1191,50 @@ export default function MenuPage() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         isHost={isHost}
+        isOrderLocked={isOrderLocked}
         deviceCount={deviceCount}
         onOpenDevices={() => setIsDevicesModalOpen(true)}
         onOpenTransfer={() => setIsTransferModalOpen(true)}
       />
 
-      {/* 2. Thanh Thông Báo Thời Gian Thực Cùng Bàn */}
-      <CollaborativeBanner collaboratorCount={deviceCount} />
+      {/* 2. Thanh Thông Báo Trạng Thái Bàn / Đóng Băng Order */}
+      {isOrderLocked ? (
+        <div className="flex-shrink-0 z-20 bg-gradient-to-r from-[#2F0A0E] via-[#3F1218] to-[#1F080A] border-y border-amber-500/50 px-3 sm:px-5 py-2.5 shadow-lg flex items-center justify-between gap-3 text-white animate-fadeIn">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center flex-shrink-0 animate-pulse shadow-xs">
+              <Lock className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-amber-300" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs sm:text-sm font-extrabold text-[#FFE088] uppercase tracking-wide">
+                  Bàn Đang Được Chốt Hóa Đơn Tạm Tính
+                </span>
+                <span className="px-1.5 py-0.5 rounded text-[9.5px] bg-red-950/90 text-red-300 border border-red-500/50 font-black uppercase tracking-wider">
+                  Đã Đóng Băng Order
+                </span>
+              </div>
+              <p className="text-[10.5px] sm:text-xs text-[#D6D3CD] leading-snug mt-0.5 truncate xs:whitespace-normal">
+                Thu ngân đang kiểm tra hóa đơn và làm thủ tục thanh toán. Mọi thao tác đặt thêm món tạm thời bị khóa để đảm bảo tính tiền chính xác.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setCartTab('all');
+              setIsCartOpen(true);
+            }}
+            className="flex-shrink-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/25 to-amber-600/25 hover:from-amber-500/35 hover:to-amber-600/35 border border-amber-500/50 text-[#FFE088] text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 whitespace-nowrap shadow-xs"
+          >
+            <Receipt className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden xs:inline">Xem Hóa Đơn</span>
+            <span>({orderedItems.length} món)</span>
+          </button>
+        </div>
+      ) : (
+        <CollaborativeBanner collaboratorCount={deviceCount} />
+      )}
 
       {/* 3. Khung Chính: Cột Trái Danh Mục + Cột Giữa Cuộn Món (ScrollSpy) + Cột Phải Giỏ Hàng Desktop */}
       <main className="flex-1 flex overflow-hidden relative">
@@ -932,6 +1293,7 @@ export default function MenuPage() {
                           key={dish.id}
                           dish={dish}
                           cartQuantity={cartQuantity}
+                          isOrderLocked={isOrderLocked}
                           onAddToCart={handleAddToCart}
                           onUpdateQuantity={handleUpdateQuantity}
                         />
@@ -962,6 +1324,7 @@ export default function MenuPage() {
           cartItems={cartItems}
           orderedItems={orderedItems}
           isHost={isHost}
+          isOrderLocked={isOrderLocked}
           activeTab={cartTab}
           onTabChange={setCartTab}
           onUpdateQuantity={handleUpdateQuantity}
@@ -981,6 +1344,7 @@ export default function MenuPage() {
         waitingServeCount={orderedItems.filter((i) => i.status === 'SERVED' || i.status === 'served' || i.status === 'READY' || i.status === 'ready').reduce((sum, i) => sum + (i.quantity || 1), 0)}
         deliveredCount={orderedItems.filter((i) => i.status === 'DELIVERED' || i.status === 'delivered').reduce((sum, i) => sum + (i.quantity || 1), 0)}
         isHost={isHost}
+        isOrderLocked={isOrderLocked}
         onOpenCart={() => setIsCartOpen(true)}
       />
 
@@ -992,6 +1356,7 @@ export default function MenuPage() {
         orderedItems={orderedItems}
         tableNumber={tableNumber}
         isHost={isHost}
+        isOrderLocked={isOrderLocked}
         activeTab={cartTab}
         onTabChange={setCartTab}
         onUpdateQuantity={handleUpdateQuantity}
@@ -1001,9 +1366,9 @@ export default function MenuPage() {
         onUpdateNote={handleUpdateItemNote}
       />
 
-      {/* 6. Modal Xác Thực Mã PIN Bàn Ăn nếu chưa có phiên hợp lệ */}
+      {/* 6. Modal Xác Thực Mã PIN Bàn Ăn nếu chưa có phiên hợp lệ (Chỉ hiển thị khi bàn KHÔNG bị đóng băng/khóa order) */}
       <TablePasscodeModal
-        isOpen={isPasscodeRequired}
+        isOpen={isPasscodeRequired && !isOrderLocked}
         tableCode={tableNumber}
         onClose={() => {
           navigate(`/table/${tableNumber.toLowerCase()}`);
@@ -1013,6 +1378,142 @@ export default function MenuPage() {
           setIsHost(Boolean(res?.isHost));
         }}
       />
+
+      {/* 6.1. Popup Modal Đóng Băng Toàn Bộ Giao Diện: Đang Trong Quá Trình Thanh Toán */}
+      {isOrderLocked && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn select-none">
+          <div className="bg-[#141417] border border-amber-500/40 rounded-2xl w-full max-w-lg sm:max-w-xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.9)] flex flex-col transform-gpu animate-scaleIn">
+            {/* Header: Gọn gàng, giảm chiều cao */}
+            <div className="bg-gradient-to-r from-[#2A050A] via-[#3D0A12] to-[#2A050A] border-b border-amber-500/30 px-4 py-3 sm:py-3.5 text-center relative">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/60 text-amber-300 mx-auto flex items-center justify-center shadow-md shadow-amber-500/10 mb-1.5 animate-pulse">
+                <Receipt className="w-5 h-5 text-amber-300" />
+              </div>
+              <h3 className="text-base sm:text-lg font-black text-[#FFE088] tracking-wide uppercase">
+                Bàn Đang Trong Quá Trình Thanh Toán
+              </h3>
+              <p className="text-[11.5px] text-[#D6D3CD] mt-0.5 max-w-sm mx-auto leading-relaxed">
+                Nhân viên thu ngân đang kiểm tra hóa đơn và làm thủ tục thanh toán cho <span className="text-white font-bold">Bàn {tableNumber}</span>.
+              </p>
+            </div>
+
+            {/* Body */}
+            <div className="p-3.5 sm:p-4 space-y-3 overflow-hidden">
+              {/* 1. DANH SÁCH MÓN ĂN ĐỐI SOÁT (Đưa lên trên tổng số tiền) */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-bold text-[#FFE088] uppercase tracking-wider px-1">
+                  <span>Danh sách món ăn đối soát</span>
+                  <span className="text-[10.5px] text-[#A0A0A5] normal-case font-normal">Chế độ chỉ đọc</span>
+                </div>
+
+                <div className="bg-[#101012] border border-white/10 rounded-xl overflow-hidden shadow-inner">
+                  {/* Table Header: STT, Tên món, Số lượng, Đơn giá, Thành tiền */}
+                  <div className="bg-white/[0.04] border-b border-white/10 px-3 py-2 flex items-center text-[10.5px] font-bold text-amber-200/90 uppercase tracking-wider">
+                    <span className="w-8 text-center flex-shrink-0">STT</span>
+                    <span className="flex-1 min-w-0 px-2">Tên món</span>
+                    <span className="w-12 text-center flex-shrink-0">SL</span>
+                    <span className="w-20 text-right flex-shrink-0">Đơn giá</span>
+                    <span className="w-24 text-right flex-shrink-0">Thành tiền</span>
+                  </div>
+
+                  {/* Table Rows: Cuộn mượt với độ cao vừa đúng kích thước 5 món */}
+                  <div className="divide-y divide-white/5 max-h-[210px] overflow-y-auto custom-scrollbar">
+                    {orderedItems.length > 0 ? (
+                      orderedItems.map((item, idx) => (
+                        <div
+                          key={item.entryId || idx}
+                          className="px-3 py-2 flex items-center text-xs hover:bg-white/[0.02] transition-colors"
+                        >
+                          <span className="w-8 text-center text-[#8E8E93] font-mono text-[11px] flex-shrink-0">
+                            {idx + 1}
+                          </span>
+                          <div className="flex-1 min-w-0 px-2">
+                            <span className="font-medium text-white text-xs leading-snug line-clamp-2 break-words">
+                              {item.name}
+                            </span>
+                          </div>
+                          <span className="w-12 text-center font-bold text-amber-300 font-mono text-xs flex-shrink-0">
+                            {item.quantity || 1}
+                          </span>
+                          <span className="w-20 text-right text-zinc-400 font-mono text-[11px] flex-shrink-0">
+                            {formatPrice(item.price || 0)} ₫
+                          </span>
+                          <span className="w-24 text-right font-mono font-bold text-zinc-100 text-xs flex-shrink-0">
+                            {formatPrice((item.price || 0) * (item.quantity || 1))} ₫
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-4 text-center text-xs text-[#8E8E93]">
+                        Bàn chưa có đơn món nào được gửi vào bếp.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. MỤC TỔNG TIỀN (3 dòng: Tạm tính, Thuế, Tổng cộng thanh toán) */}
+              <div className="bg-[#101012] border border-white/10 rounded-xl p-3 space-y-1.5 shadow-inner">
+                {/* Dòng 1: Tạm tính */}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[#A0A0A5] font-medium">Tạm tính:</span>
+                  <span className="font-mono text-zinc-200 font-semibold">
+                    {formatPrice(freezeSubtotal)} ₫
+                  </span>
+                </div>
+
+                {/* Dòng 2: Thuế (VAT 8%) */}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[#A0A0A5] font-medium">Thuế (VAT 8%):</span>
+                  <span className="font-mono text-zinc-200 font-semibold">
+                    {formatPrice(freezeVat)} ₫
+                  </span>
+                </div>
+
+                {/* Dòng 3: Tổng cộng thanh toán */}
+                <div className="border-t border-white/10 pt-2 mt-1 flex items-center justify-between">
+                  <span className="text-white font-bold text-xs sm:text-sm uppercase tracking-wide">
+                    Tổng cộng thanh toán:
+                  </span>
+                  <span className="text-base sm:text-lg font-mono font-black text-[#FFD54F]">
+                    {formatPrice(freezeFinalTotal)} ₫
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 py-3 bg-[#101012] border-t border-white/10 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                disabled={isCallingSupport}
+                onClick={handleCallSupportStaff}
+                className={`flex-1 py-2.5 px-4 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-98 shadow-sm cursor-pointer ${
+                  calledSupport
+                    ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
+                    : 'bg-[#1e1e24] hover:bg-[#272730] border-amber-500/40 text-amber-300'
+                }`}
+              >
+                {isCallingSupport ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                    <span>Đang gửi yêu cầu...</span>
+                  </>
+                ) : calledSupport ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Đã gọi nhân viên hỗ trợ!</span>
+                  </>
+                ) : (
+                  <>
+                    <Bell className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Gọi Nhân Viên Hỗ Trợ</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 7. Modal Quản Lý Thiết Bị Kết Nối & Nhượng Quyền Chủ Bàn */}
       <TableDevicesModal

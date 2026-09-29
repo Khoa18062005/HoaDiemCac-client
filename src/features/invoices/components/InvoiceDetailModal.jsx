@@ -41,11 +41,11 @@ export default function InvoiceDetailModal({ invoice, isOpen, onClose }) {
         </div>
 
         {/* 80mm Thermal Receipt View (Printable) */}
-        <div className="p-6 bg-[#0E0E10] overflow-y-auto max-h-[72vh] flex justify-center">
+        <div className="p-6 bg-[#0E0E10] overflow-y-auto max-h-[72vh] flex justify-center items-start custom-scrollbar">
           <div
             ref={receiptRef}
             id="printable-bill"
-            className="w-[340px] bg-white text-black p-5 rounded-lg shadow-xl font-mono text-xs border border-gray-200"
+            className="w-[340px] h-fit min-h-fit bg-white text-black p-5 rounded-lg shadow-xl font-mono text-xs border border-gray-200 flex-shrink-0"
           >
             {/* Logo & Header */}
             <div className="text-center pb-3 border-b border-dashed border-gray-400">
