@@ -404,6 +404,7 @@ export default function TableManagePage() {
         <AdminTableDetailModal
           table={selectedTable}
           orders={orders}
+          allTables={rawTables}
           isOpen={Boolean(selectedTable)}
           onClose={() => setSelectedTable(null)}
           onTableUpdated={handleTableUpdated}

@@ -15,6 +15,8 @@ import {
   Sparkles,
   Receipt,
   UtensilsCrossed,
+  ArrowLeftRight,
+  Users2,
 } from 'lucide-react';
 import { tableApi } from '@/features/tables/api/tableApi';
 import { apiClient } from '@/lib/axios';
@@ -27,6 +29,7 @@ export function formatCurrencyVND(amount) {
 export default function AdminTableDetailModal({
   table,
   orders = [],
+  allTables = [],
   isOpen,
   onClose,
   onTableUpdated,
@@ -52,12 +55,45 @@ export default function AdminTableDetailModal({
   const [paymentMethod, setPaymentMethod] = useState('CASH'); // 'CASH' | 'VIETQR'
   const [cashReceived, setCashReceived] = useState('');
 
+  // Trạng thái Chuyển / Ghép bàn trực tiếp từ POS
+  const [isDirectTransferOpen, setIsDirectTransferOpen] = useState(false);
+  const [transferType, setTransferType] = useState('MOVE'); // 'MOVE' | 'MERGE'
+  const [selectedTargetTableId, setSelectedTargetTableId] = useState('');
+  const [transferReason, setTransferReason] = useState('');
+
   if (!isOpen || !table) return null;
 
   // Hiển thị thông báo toast nhỏ trong modal
   const showFeedback = (msg, isError = false) => {
     setFeedback({ msg, isError });
     setTimeout(() => setFeedback(null), 3000);
+  };
+
+  // Thực hiện Chuyển hoặc Ghép bàn trực tiếp từ POS (Admin 1-click)
+  const handleDirectTransfer = async () => {
+    if (!selectedTargetTableId) {
+      showFeedback('Vui lòng chọn bàn đích!', true);
+      return;
+    }
+    setActionLoading('transfer');
+    try {
+      const res = await tableApi.directTransfer(
+        table.id,
+        Number(selectedTargetTableId),
+        transferType,
+        transferReason || 'Nhân viên thực hiện trực tiếp trên POS'
+      );
+      showFeedback(res?.message || 'Chuyển bàn thành công!');
+      setIsDirectTransferOpen(false);
+      if (onTableUpdated) onTableUpdated();
+      setTimeout(() => {
+        onClose();
+      }, 1200);
+    } catch (err) {
+      showFeedback('Lỗi chuyển bàn: ' + (err.message || ''), true);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   // Lấy danh sách món ăn từ các order của bàn này
@@ -350,9 +386,139 @@ export default function AdminTableDetailModal({
                   <QrCode className="w-3 h-3" />
                   <span>In Mã QR</span>
                 </button>
+
+                {/* Nút Đổi / Ghép Bàn Trực Tiếp */}
+                {(currentStatus === 'OCCUPIED' || allItems.length > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDirectTransferOpen((prev) => !prev);
+                      setIsSettling(false);
+                    }}
+                    className={`flex-1 h-8 rounded-lg border text-xs flex items-center justify-center gap-1.5 transition-colors ${
+                      isDirectTransferOpen
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                        : 'bg-surface-card border-surface-border hover:border-amber-400/40 text-[#EDEDED] hover:text-amber-300'
+                    }`}
+                  >
+                    <ArrowLeftRight className="w-3 h-3" />
+                    <span>Đổi/Ghép</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
+
+          {/* E. Khu vực Đổi / Ghép bàn trực tiếp từ POS */}
+          {isDirectTransferOpen && (
+            <div className="border border-amber-500/40 rounded-xl bg-amber-500/5 p-4 space-y-3 animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <ArrowLeftRight className="w-4 h-4" />
+                  Điều Chuyển Bàn Trực Tiếp (POS 1-Click)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsDirectTransferOpen(false)}
+                  className="text-xs text-[#8E8E93] hover:text-white"
+                >
+                  Đóng
+                </button>
+              </div>
+
+              {/* Lựa chọn loại: Chuyển vs Ghép */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTransferType('MOVE');
+                    setSelectedTargetTableId('');
+                  }}
+                  className={`py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-2 transition-colors ${
+                    transferType === 'MOVE'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                      : 'bg-surface-card border-surface-border text-[#8E8E93]'
+                  }`}
+                >
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
+                  <span>Chuyển Bàn (Sang bàn trống)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTransferType('MERGE');
+                    setSelectedTargetTableId('');
+                  }}
+                  className={`py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-2 transition-colors ${
+                    transferType === 'MERGE'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                      : 'bg-surface-card border-surface-border text-[#8E8E93]'
+                  }`}
+                >
+                  <Users2 className="w-3.5 h-3.5" />
+                  <span>Ghép Bàn (Vào bàn đang ăn)</span>
+                </button>
+              </div>
+
+              {/* Dropdown chọn bàn đích */}
+              <div className="space-y-1">
+                <label className="text-xs text-[#A0A0A5]">
+                  Chọn bàn đích tiếp nhận:
+                </label>
+                <select
+                  value={selectedTargetTableId}
+                  onChange={(e) => setSelectedTargetTableId(e.target.value)}
+                  className="w-full h-9 px-3 bg-[#1A1A1E] border border-surface-border rounded-lg text-xs text-white outline-none focus:border-amber-400"
+                >
+                  <option value="">-- Chọn bàn đích ({transferType === 'MOVE' ? 'Bàn trống' : 'Bàn đang ăn'}) --</option>
+                  {allTables
+                    .filter((t) => {
+                      if (String(t.id) === String(table.id)) return false;
+                      if (transferType === 'MOVE') {
+                        return t.status === 'AVAILABLE';
+                      } else {
+                        return t.status === 'OCCUPIED';
+                      }
+                    })
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name || t.tableNumber} ({t.tableNumber}) - {t.status === 'AVAILABLE' ? 'Đang trống' : 'Đang có khách'}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Lý do chuyển */}
+              <div className="space-y-1">
+                <label className="text-xs text-[#A0A0A5]">
+                  Ghi chú / Lý do điều chuyển (tùy chọn):
+                </label>
+                <input
+                  type="text"
+                  value={transferReason}
+                  onChange={(e) => setTransferReason(e.target.value)}
+                  placeholder="VD: Đổi bàn rộng hơn, khách yêu cầu..."
+                  className="w-full h-8 px-3 bg-[#1A1A1E] border border-surface-border rounded-lg text-xs text-white outline-none focus:border-amber-400"
+                />
+              </div>
+
+              {/* Nút thực thi */}
+              <button
+                type="button"
+                disabled={actionLoading === 'transfer' || !selectedTargetTableId}
+                onClick={handleDirectTransfer}
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-110 text-black font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {actionLoading === 'transfer' ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                <span>Xác Nhận {transferType === 'MOVE' ? 'Chuyển Bàn' : 'Ghép Bàn'} Ngay</span>
+              </button>
+            </div>
+          )}
 
 
           {/* D. Khu vực Thanh toán & Đóng bàn */}
