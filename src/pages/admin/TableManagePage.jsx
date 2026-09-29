@@ -280,7 +280,15 @@ export default function TableManagePage() {
           t.tableNumber === selectedTable.tableNumber ||
           t.code === selectedTable.code
       );
-      if (updated) {
+      if (
+        updated &&
+        (updated.status !== selectedTable.status ||
+          updated.amount !== selectedTable.amount ||
+          updated.timeSpent !== selectedTable.timeSpent ||
+          updated.currentPasscode !== selectedTable.currentPasscode ||
+          updated.isOrderLocked !== selectedTable.isOrderLocked ||
+          updated.activeDeviceCount !== selectedTable.activeDeviceCount)
+      ) {
         setSelectedTable(updated);
       }
     }

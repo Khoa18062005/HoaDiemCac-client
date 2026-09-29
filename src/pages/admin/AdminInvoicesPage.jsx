@@ -53,6 +53,11 @@ export default function AdminInvoicesPage() {
 
   useEffect(() => {
     fetchInvoices();
+    const handleInvoiceCreated = () => {
+      fetchInvoices();
+    };
+    window.addEventListener('invoice_created', handleInvoiceCreated);
+    return () => window.removeEventListener('invoice_created', handleInvoiceCreated);
   }, []);
 
   // Lọc danh sách hóa đơn

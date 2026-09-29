@@ -30,7 +30,7 @@ export const orderApi = {
   getTableOrders: async (tableNumber) => {
     try {
       const response = await apiClient.get(`/customer/orders/${encodeURIComponent(tableNumber)}`);
-      return Array.isArray(response) ? response : [];
+      return Array.isArray(response) ? response : (response ? [response] : []);
     } catch (err) {
       console.warn('Lỗi khi lấy danh sách order của bàn:', err);
       return [];

@@ -29,6 +29,7 @@ export default function CustomerCartSidebar({
   cartItems = [],
   orderedItems = [],
   isHost = true,
+  isOrderLocked = false,
   onUpdateQuantity,
   onRemoveItem,
   onClearCart,
@@ -98,6 +99,10 @@ export default function CustomerCartSidebar({
   };
 
   const handleConfirmSubmit = () => {
+    if (isOrderLocked) {
+      alert('Bàn đang chốt hóa đơn tạm tính, toàn bộ thao tác đặt món đã bị đóng băng.');
+      return;
+    }
     if (cartItems.length === 0 || isSuccess) return;
     setIsSuccess(true);
 
@@ -249,38 +254,46 @@ export default function CustomerCartSidebar({
 
                   {/* Stepper + Delete */}
                   <div className="flex items-center space-x-1.5">
-                    <div className="flex items-center space-x-1 bg-[#141418] px-1.5 py-0.5 rounded-full border border-[rgba(212,175,55,0.25)]">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onUpdateQuantity(item.id, item.quantity - 1)
-                        }
-                        className="w-4 h-4 rounded-full bg-[#2A2A30] text-[#D6D3CD] flex items-center justify-center active:scale-90"
-                      >
-                        <Minus className="w-2.5 h-2.5 stroke-[2.5]" />
-                      </button>
-                      <span className="text-xs font-bold text-[#FDFBF7] px-1 min-w-[12px] text-center leading-none">
-                        {item.quantity}
+                    {isOrderLocked ? (
+                      <span className="text-xs font-bold text-[#FFD54F] px-2 py-0.5 rounded bg-zinc-800/80 border border-zinc-700/60">
+                        x{item.quantity}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onUpdateQuantity(item.id, item.quantity + 1)
-                        }
-                        className="w-4 h-4 rounded-full bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white flex items-center justify-center active:scale-90"
-                      >
-                        <Plus className="w-2.5 h-2.5 stroke-[2.5]" />
-                      </button>
-                    </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center space-x-1 bg-[#141418] px-1.5 py-0.5 rounded-full border border-[rgba(212,175,55,0.25)]">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onUpdateQuantity(item.id, item.quantity - 1)
+                            }
+                            className="w-4 h-4 rounded-full bg-[#2A2A30] text-[#D6D3CD] flex items-center justify-center active:scale-90"
+                          >
+                            <Minus className="w-2.5 h-2.5 stroke-[2.5]" />
+                          </button>
+                          <span className="text-xs font-bold text-[#FDFBF7] px-1 min-w-[12px] text-center leading-none">
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onUpdateQuantity(item.id, item.quantity + 1)
+                            }
+                            className="w-4 h-4 rounded-full bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white flex items-center justify-center active:scale-90"
+                          >
+                            <Plus className="w-2.5 h-2.5 stroke-[2.5]" />
+                          </button>
+                        </div>
 
-                    <button
-                      type="button"
-                      onClick={() => onRemoveItem(item.id)}
-                      title="Xóa món"
-                      className="w-6 h-6 rounded-md text-[#FFB4AB]/70 hover:text-[#FFB4AB] hover:bg-[#3E1118] flex items-center justify-center transition-colors"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                        <button
+                          type="button"
+                          onClick={() => onRemoveItem(item.id)}
+                          title="Xóa món"
+                          className="w-6 h-6 rounded-md text-[#FFB4AB]/70 hover:text-[#FFB4AB] hover:bg-[#3E1118] flex items-center justify-center transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -426,7 +439,17 @@ export default function CustomerCartSidebar({
             </div>
           </div>
 
-          {isHost ? (
+          {isOrderLocked ? (
+            <div className="space-y-2">
+              <div className="w-full py-3 px-3 rounded-xl bg-red-950/70 border border-red-500/40 text-red-200 font-bold text-xs flex items-center justify-center space-x-2 select-none shadow-md">
+                <Lock className="w-4 h-4 text-red-400 animate-pulse" />
+                <span>Bàn Đang Chốt Hóa Đơn – Đã Đóng Băng</span>
+              </div>
+              <p className="text-[11px] text-zinc-400 text-center leading-relaxed">
+                Thu ngân đang kiểm tra hóa đơn tạm tính. Tạm thời không thể gửi thêm món.
+              </p>
+            </div>
+          ) : isHost ? (
             <button
               type="button"
               onClick={handleConfirmSubmit}

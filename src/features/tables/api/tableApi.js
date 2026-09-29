@@ -50,6 +50,16 @@ export const tableApi = {
     return res?.result !== undefined ? res.result : res;
   },
 
+  // Đóng/khóa order của bàn (hoặc mở khóa) với trạng thái chỉ định
+  setOrderLock: async (tableId, locked = true) => {
+    try {
+      const res = await apiClient.post(`/admin/tables/${tableId}/lock-order?locked=${locked}`);
+      return res?.result !== undefined ? res.result : res;
+    } catch {
+      return tableApi.toggleOrderLock(tableId);
+    }
+  },
+
   // Cập nhật trạng thái bàn
   updateTableStatus: async (tableId, status) => {
     const res = await apiClient.put(`/admin/tables/${tableId}/status?status=${status}`);

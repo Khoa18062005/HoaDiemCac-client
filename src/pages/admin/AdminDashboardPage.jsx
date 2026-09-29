@@ -123,6 +123,11 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     fetchDashboard('today', todayStr, todayStr);
+    const handleInvoiceCreated = () => {
+      fetchDashboard();
+    };
+    window.addEventListener('invoice_created', handleInvoiceCreated);
+    return () => window.removeEventListener('invoice_created', handleInvoiceCreated);
   }, []);
 
   const handleApplyCustomRange = (e) => {

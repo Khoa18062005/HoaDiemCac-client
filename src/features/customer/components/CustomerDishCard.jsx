@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Minus } from 'lucide-react';
+import { Plus, Minus, Lock } from 'lucide-react';
 
 /**
  * CustomerDishCard
@@ -9,6 +9,7 @@ import { Plus, Minus } from 'lucide-react';
 export default function CustomerDishCard({
   dish,
   cartQuantity = 0,
+  isOrderLocked = false,
   onAddToCart,
   onUpdateQuantity,
 }) {
@@ -73,7 +74,15 @@ export default function CustomerDishCard({
 
           {/* Action: Add Button or Stepper (Fixed Height Container to guarantee identical vertical position) */}
           <div className="h-[34px] flex items-center flex-shrink-0">
-            {cartQuantity === 0 ? (
+            {isOrderLocked ? (
+              <div
+                title="Bàn đang chốt hóa đơn, order đã được đóng băng"
+                className="h-7 px-2.5 rounded-full bg-zinc-800/80 border border-zinc-700/60 text-zinc-400 text-[10px] font-bold flex items-center gap-1 select-none cursor-not-allowed opacity-75 shadow-xs"
+              >
+                <Lock className="w-3 h-3 text-amber-400/80" />
+                <span>Đã Khóa</span>
+              </div>
+            ) : cartQuantity === 0 ? (
               <button
                 type="button"
                 onClick={() => onAddToCart(dish, dish.price)}

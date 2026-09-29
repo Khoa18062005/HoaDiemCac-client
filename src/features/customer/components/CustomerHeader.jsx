@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Search, Bell, X, Check, Crown, Users, Receipt, Loader2, ArrowLeftRight } from 'lucide-react';
+import { ShoppingBag, Search, Bell, X, Check, Crown, Users, Receipt, Loader2, ArrowLeftRight, Lock } from 'lucide-react';
 import { tableApi } from '@/features/tables/api/tableApi';
 
 /**
@@ -15,6 +15,7 @@ export default function CustomerHeader({
   searchQuery = '',
   onSearchChange,
   isHost = true,
+  isOrderLocked = false,
   deviceCount = 1,
   onOpenDevices,
   onOpenTransfer,
@@ -158,13 +159,21 @@ export default function CustomerHeader({
 
           {/* Table Status Pill & Host Badge */}
           <div className="flex items-center gap-1.5">
-            <div className="bg-[#2A1014] text-[#FFB4AB] font-bold px-2.5 py-1 rounded-full border border-[rgba(212,175,55,0.4)] flex items-center gap-1.5 shadow-xs select-none">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
-              </span>
+            <div className={`px-2.5 py-1 rounded-full border flex items-center gap-1.5 shadow-xs select-none ${
+              isOrderLocked
+                ? 'bg-red-950/80 border-red-500/50 text-red-200'
+                : 'bg-[#2A1014] text-[#FFB4AB] border-[rgba(212,175,55,0.4)]'
+            }`}>
+              {isOrderLocked ? (
+                <Lock className="w-2.5 h-2.5 text-red-400" />
+              ) : (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+                </span>
+              )}
               <span className="text-[11px] font-extrabold tracking-tight text-[#FFE699] whitespace-nowrap">
-                Bàn {tableNumber}
+                Bàn {tableNumber} {isOrderLocked ? '(Đã Khóa)' : ''}
               </span>
             </div>
 
@@ -197,8 +206,8 @@ export default function CustomerHeader({
               )}
             </button>
 
-            {/* Nút Đổi/Ghép Bàn (Dành cho Chủ Bàn) */}
-            {onOpenTransfer && isHost && (
+            {/* Nút Đổi/Ghép Bàn (Dành cho Chủ Bàn - Ẩn khi bàn đang bị khóa order) */}
+            {onOpenTransfer && isHost && !isOrderLocked && (
               <button
                 type="button"
                 onClick={onOpenTransfer}
