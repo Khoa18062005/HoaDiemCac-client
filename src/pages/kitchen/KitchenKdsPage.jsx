@@ -22,6 +22,7 @@ export default function KitchenKdsPage() {
   const toggleKitchenItemStatus = useKdsStore((state) => state.toggleKitchenItemStatus);
   const completeAllKitchenItems = useKdsStore((state) => state.completeAllKitchenItems);
   const addNewOrder = useKdsStore((state) => state.addNewOrder);
+  const changeTableOrders = useKdsStore((state) => state.changeTableOrders);
   const simulateNewOrderStore = useKdsStore((state) => state.simulateNewOrder);
 
   // Luôn đồng bộ hàng đợi thực tế từ Backend khi mở màn hình bếp & polling định kỳ
@@ -61,12 +62,19 @@ export default function KitchenKdsPage() {
     addNewOrder(newOrder);
   }, [addNewOrder]);
 
+  const handleTableChanged = useCallback((payload) => {
+    if (payload?.oldTableNumber && payload?.newTableNumber) {
+      changeTableOrders(payload.oldTableNumber, payload.newTableNumber);
+    }
+  }, [changeTableOrders]);
+
   const {
     isAudioMuted,
     toggleAudio,
     simulateNewOrder: simulateSocketOrder,
   } = useKitchenSocket({
     onNewOrder: handleNewOrderReceived,
+    onTableChanged: handleTableChanged,
   });
 
   const handleSimulate = useCallback(() => {

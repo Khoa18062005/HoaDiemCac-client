@@ -41,21 +41,29 @@ export default function WaiterDisplayPage() {
 
     loadQueue();
 
-    // Lắng nghe WebSocket đa máy tính
-    const unsub = wsManager.subscribe('/topic/waiter/orders', (payload) => {
+    // Lắng nghe WebSocket đa máy tính cho nhân viên phục vụ
+    const handleRemoteOrderUpdate = (payload) => {
       if (!payload) return;
-      if (payload.type === 'KITCHEN_ITEM_STATUS_TOGGLED' || payload.type === 'WAITER_ITEM_DELIVERED') {
+      if (payload.event === 'TABLE_CHANGED') {
+        if (payload.oldTableNumber && payload.newTableNumber) {
+          useKdsStore.getState().changeTableOrders(payload.oldTableNumber, payload.newTableNumber);
+        }
+      } else if (payload.type === 'KITCHEN_ITEM_STATUS_TOGGLED' || payload.type === 'WAITER_ITEM_DELIVERED') {
         useKdsStore.getState().applyRemoteItemStatusUpdate(payload);
       } else {
         loadQueue();
       }
-    });
+    };
+
+    const unsubWaiter = wsManager.subscribe('/topic/waiter/orders', handleRemoteOrderUpdate);
+    const unsubKitchen = wsManager.subscribe('/topic/kitchen/orders', handleRemoteOrderUpdate);
 
     const interval = setInterval(loadQueue, 4000);
 
     return () => {
       isMounted = false;
-      if (unsub) unsub();
+      if (unsubWaiter) unsubWaiter();
+      if (unsubKitchen) unsubKitchen();
       clearInterval(interval);
     };
   }, [setOrders]);

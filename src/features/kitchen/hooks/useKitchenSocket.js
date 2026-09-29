@@ -43,7 +43,7 @@ function playDualChime() {
  * Hook kết nối STOMP WebSocket cho trạm Bếp KDS
  * Lắng nghe Topic: /topic/kitchen/orders
  */
-export function useKitchenSocket({ onNewOrder, onOrderCancelled }) {
+export function useKitchenSocket({ onNewOrder, onOrderCancelled, onTableChanged }) {
   const [isAudioMuted, setIsAudioMuted] = useState(() => {
     return localStorage.getItem('kds_audio_muted') === 'true';
   });
@@ -64,12 +64,22 @@ export function useKitchenSocket({ onNewOrder, onOrderCancelled }) {
   }, [isAudioMuted]);
 
   useEffect(() => {
-    // Đăng ký nhận order mới từ WebSocket
+    // Đăng ký nhận order mới và sự kiện đổi bàn từ WebSocket
     const unsubscribe = wsManager.subscribe('/topic/kitchen/orders', (payload) => {
       if (!payload) return;
 
-      // Xử lý đơn mới hoặc cập nhật
-      if (payload.type === 'NEW_ORDER' || payload.orderCode) {
+      // Xử lý sự kiện đổi bàn / ghép bàn thời gian thực
+      if (payload.event === 'TABLE_CHANGED') {
+        setLastNotification({
+          type: 'TABLE_CHANGED',
+          tableCode: payload.newTableNumber,
+          oldTableCode: payload.oldTableNumber,
+          message: payload.message || `Đổi bàn: ${payload.oldTableNumber} ➔ ${payload.newTableNumber}`,
+          time: new Date().toLocaleTimeString('vi-VN'),
+        });
+        triggerChime();
+        if (onTableChanged) onTableChanged(payload);
+      } else if (payload.type === 'NEW_ORDER' || payload.orderCode) {
         setLastNotification({
           type: 'NEW_ORDER',
           tableCode: payload.tableCode || 'BÀN MỚI',
@@ -85,7 +95,7 @@ export function useKitchenSocket({ onNewOrder, onOrderCancelled }) {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [onNewOrder, onOrderCancelled, triggerChime]);
+  }, [onNewOrder, onOrderCancelled, onTableChanged, triggerChime]);
 
   /**
    * Hàm giả lập nhận đơn mới tức thời phục vụ kiểm thử giao diện & âm thanh
