@@ -261,10 +261,15 @@ export default function TableTransferModal({
               {/* Hướng dẫn các bước */}
               <div className="text-left p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-2 text-xs text-zinc-300">
                 <p className="font-bold text-[#FFE699]">Các bước tiếp theo:</p>
-                <ol className="list-decimal list-inside space-y-1 text-[11px] text-zinc-300">
+                <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-zinc-300">
                   <li>Di chuyển sang bàn mới của bạn.</li>
                   <li>Quét mã QR tại bàn mới trên điện thoại.</li>
                   <li>Chọn tab <strong>"Nhận chuyển bàn"</strong> và điền mã <span className="text-[#FFD54F] font-mono font-bold">{transferData.transferCode}</span>.</li>
+                  {transferType === 'MERGE' && (
+                    <li className="text-amber-300 font-medium">
+                      Nhập thêm <strong>mã PIN 4 số của bàn đích</strong> (xin từ bạn bè) để xác thực ghép bàn an toàn.
+                    </li>
+                  )}
                   <li>Toàn bộ giỏ hàng và đơn đã đặt sẽ lập tức xuất hiện tại bàn mới!</li>
                 </ol>
               </div>

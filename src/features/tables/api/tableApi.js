@@ -173,12 +173,13 @@ export const tableApi = {
   },
 
   // Khách hàng xác nhận nhập mã Chuyển/Ghép bàn tại bàn mới
-  confirmTransfer: async (targetTableNumber, transferCode, deviceFingerprint = 'web-client', deviceName = '') => {
+  confirmTransfer: async (targetTableNumber, transferCode, deviceFingerprint = 'web-client', deviceName = '', targetPasscode = '') => {
     const res = await apiClient.post('/customer/tables/transfers/confirm', {
       targetTableNumber,
       transferCode,
       deviceFingerprint,
       deviceName,
+      targetPasscode: targetPasscode || null,
     });
     return res?.result !== undefined ? res.result : res;
   },
@@ -197,6 +198,21 @@ export const tableApi = {
       transferType,
       reason,
     });
+    return res?.result !== undefined ? res.result : res;
+  },
+
+  // Quản trị viên liên kết Cụm bàn tiệc lớn (Master-Slave Table Clustering)
+  linkCluster: async (masterTableId, slaveTableIds) => {
+    const res = await apiClient.post('/admin/tables/clusters/link', {
+      masterTableId,
+      slaveTableIds,
+    });
+    return res?.result !== undefined ? res.result : res;
+  },
+
+  // Quản trị viên tách bàn phụ ra khỏi Cụm bàn tiệc
+  unlinkCluster: async (slaveTableId) => {
+    const res = await apiClient.post(`/admin/tables/clusters/unlink/${slaveTableId}`);
     return res?.result !== undefined ? res.result : res;
   },
 };
