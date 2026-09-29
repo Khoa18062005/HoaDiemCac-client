@@ -255,54 +255,55 @@ export default function AdminTablesQrPage() {
         </div>
       )}
 
-      {/* 1. Header & KPI Bar */}
-      <div className="px-8 py-6 border-b border-surface-border bg-[#121214] flex flex-col gap-5 select-none">
-        <div className="flex items-center justify-between">
+      {/* 1. Header cao đúng h-20 (80px), khớp với đường gạch dưới Logo tại Sidebar */}
+      <div className="h-20 px-8 border-b border-surface-border bg-[#121214] flex items-center justify-between flex-shrink-0 select-none">
+        <div className="flex items-center gap-2.5">
+          <span className="p-2 rounded-xl bg-gold/10 border border-gold/20 text-gold shadow-sm">
+            <QrCode className="w-5 h-5" />
+          </span>
           <div>
-            <div className="flex items-center gap-2.5">
-              <span className="p-2 rounded-xl bg-gold/10 border border-gold/20 text-gold">
-                <QrCode className="w-5 h-5" />
-              </span>
-              <h1 className="text-xl font-bold font-serif text-[#EDEDED] tracking-wide">
-                Quản Lý Bàn Ăn & Mã QR Cố Định
-              </h1>
-            </div>
-            <p className="text-xs text-[#8E8E93] mt-1">
+            <h1 className="text-xl font-bold font-serif text-[#EDEDED] tracking-wide">
+              Quản Lý Bàn Ăn & Mã QR Cố Định
+            </h1>
+            <p className="text-xs text-[#8E8E93] mt-0.5">
               Hệ thống mã QR bàn cố định kết hợp mật khẩu PIN 4 số chống quét phá & tự động làm mới khi thanh toán
             </p>
           </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2.5">
-            {/* Live Realtime Sync Badge */}
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-950/50 border border-emerald-500/30 text-[11px] text-emerald-300 font-medium select-none shadow-xs">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
-              </span>
-              <span>Đồng bộ thời gian thực: WebSocket</span>
-            </div>
-
-            <button
-              onClick={() => fetchTables(true)}
-              className="p-2.5 rounded-xl border border-surface-border hover:bg-surface-hover text-[#A0A0A5] hover:text-[#EDEDED] transition-colors cursor-pointer"
-              title="Tải lại dữ liệu ngay lập tức"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-gold' : ''}`} />
-            </button>
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-crimson to-[#B91C1C] hover:from-[#B91C1C] hover:to-crimson text-white text-xs font-semibold shadow-lg shadow-crimson/20 flex items-center gap-2 transition-all cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Thêm Bàn Mới</span>
-            </button>
-          </div>
         </div>
 
-        {/* 5 Thẻ Chỉ Số Vận Hành */}
-        <div className="grid grid-cols-5 gap-3">
-          <div className="p-3 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between">
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2.5">
+          {/* Live Realtime Sync Badge */}
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-950/50 border border-emerald-500/30 text-[11px] text-emerald-300 font-medium select-none shadow-xs">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+            </span>
+            <span>Đồng bộ thời gian thực: WebSocket</span>
+          </div>
+
+          <button
+            onClick={() => fetchTables(true)}
+            className="p-2.5 rounded-xl border border-surface-border hover:bg-surface-hover text-[#A0A0A5] hover:text-[#EDEDED] transition-colors cursor-pointer"
+            title="Tải lại dữ liệu ngay lập tức"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-gold' : ''}`} />
+          </button>
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-crimson to-[#B91C1C] hover:from-[#B91C1C] hover:to-crimson text-white text-xs font-semibold shadow-lg shadow-crimson/20 flex items-center gap-2 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Thêm Bàn Mới</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2. Vùng cuộn nội dung: 5 Thẻ Chỉ Số Vận Hành -> Toolbar Lọc -> Lưới Thẻ Bàn */}
+      <div className="flex-1 px-8 py-6 overflow-y-auto space-y-6">
+        {/* 5 Thẻ Chỉ Số Vận Hành (Đã chuyển xuống dưới header) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="p-3.5 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between shadow-sm">
             <div>
               <p className="text-[10px] uppercase font-semibold text-[#8E8E93]">Tổng Bàn Ăn</p>
               <p className="text-lg font-bold font-mono text-white mt-0.5">{stats.total}</p>
@@ -310,7 +311,7 @@ export default function AdminTablesQrPage() {
             <Layers className="w-5 h-5 text-[#8E8E93]" />
           </div>
 
-          <div className="p-3 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between">
+          <div className="p-3.5 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between shadow-sm">
             <div>
               <p className="text-[10px] uppercase font-semibold text-emerald-400">Bàn Trống Sẵn Sàng</p>
               <p className="text-lg font-bold font-mono text-emerald-400 mt-0.5">{stats.available}</p>
@@ -320,7 +321,7 @@ export default function AdminTablesQrPage() {
             </span>
           </div>
 
-          <div className="p-3 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between">
+          <div className="p-3.5 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between shadow-sm">
             <div>
               <p className="text-[10px] uppercase font-semibold text-amber-400">Đang Phục Vụ</p>
               <p className="text-lg font-bold font-mono text-amber-400 mt-0.5">{stats.occupied}</p>
@@ -328,7 +329,7 @@ export default function AdminTablesQrPage() {
             <Users className="w-5 h-5 text-amber-400" />
           </div>
 
-          <div className="p-3 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between">
+          <div className="p-3.5 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between shadow-sm">
             <div>
               <p className="text-[10px] uppercase font-semibold text-blue-400">Đang Dọn Dẹp</p>
               <p className="text-lg font-bold font-mono text-blue-400 mt-0.5">{stats.cleaning}</p>
@@ -336,7 +337,7 @@ export default function AdminTablesQrPage() {
             <RefreshCw className="w-5 h-5 text-blue-400" />
           </div>
 
-          <div className="p-3 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between">
+          <div className="p-3.5 rounded-xl bg-surface-card border border-surface-border flex items-center justify-between shadow-sm">
             <div>
               <p className="text-[10px] uppercase font-semibold text-rose-400">Khóa Order Khẩn</p>
               <p className="text-lg font-bold font-mono text-rose-400 mt-0.5">{stats.locked}</p>
@@ -344,61 +345,60 @@ export default function AdminTablesQrPage() {
             <ShieldAlert className="w-5 h-5 text-rose-400" />
           </div>
         </div>
-      </div>
 
-      {/* 2. Toolbar Tìm Kiếm & Bộ Lọc */}
-      <div className="px-8 py-3.5 border-b border-surface-border bg-[#0E0E10] flex items-center justify-between gap-4 select-none">
-        <div className="flex items-center gap-3 flex-1 max-w-md">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-[#8E8E93] absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Tìm kiếm mã bàn (B01, VIP 11), tên bàn..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#18181B] border border-surface-border rounded-xl pl-9 pr-4 py-2 text-xs text-[#EDEDED] placeholder-[#71717A] outline-none focus:border-gold/60 transition-colors"
-            />
+        {/* Toolbar Tìm Kiếm & Bộ Lọc */}
+        <div className="p-3.5 rounded-2xl bg-surface-card border border-surface-border flex flex-wrap items-center justify-between gap-4 select-none shadow-sm">
+          <div className="flex items-center gap-3 flex-1 min-w-[240px] max-w-md">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-[#8E8E93] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Tìm kiếm mã bàn (B01, VIP 11), tên bàn..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#18181B] border border-surface-border rounded-xl pl-9 pr-4 py-2 text-xs text-[#EDEDED] placeholder-[#71717A] outline-none focus:border-gold/60 transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Filter Area Buttons */}
+          <div className="flex items-center flex-wrap gap-2">
+            <div className="flex items-center p-1 bg-[#18181B] border border-surface-border rounded-xl">
+              {[
+                { id: 'ALL', label: 'Tất Cả Khu Vực' },
+                { id: 'COMMON', label: 'Sảnh Chung' },
+                { id: 'VIP', label: 'Phòng VIP' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setAreaFilter(tab.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                    areaFilter === tab.id
+                      ? 'bg-crimson-subtle text-gold border border-crimson-border font-semibold shadow-xs'
+                      : 'text-[#8E8E93] hover:text-[#EDEDED]'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-[#18181B] border border-surface-border text-[#EDEDED] text-xs rounded-xl px-3 py-2 outline-none focus:border-gold/60 cursor-pointer"
+            >
+              <option value="ALL">Tất cả trạng thái</option>
+              <option value="AVAILABLE">Bàn trống</option>
+              <option value="OCCUPIED">Đang có khách</option>
+              <option value="CLEANING">Đang dọn</option>
+            </select>
           </div>
         </div>
 
-        {/* Filter Area Buttons */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center p-1 bg-[#18181B] border border-surface-border rounded-xl">
-            {[
-              { id: 'ALL', label: 'Tất Cả Khu Vực' },
-              { id: 'COMMON', label: 'Sảnh Chung' },
-              { id: 'VIP', label: 'Phòng VIP' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setAreaFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  areaFilter === tab.id
-                    ? 'bg-crimson-subtle text-gold border border-crimson-border shadow-sm'
-                    : 'text-[#8E8E93] hover:text-[#EDEDED]'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-[#18181B] border border-surface-border text-[#EDEDED] text-xs rounded-xl px-3 py-2 outline-none focus:border-gold/60 cursor-pointer"
-          >
-            <option value="ALL">Tất cả trạng thái</option>
-            <option value="AVAILABLE">Bàn trống</option>
-            <option value="OCCUPIED">Đang có khách</option>
-            <option value="CLEANING">Đang dọn</option>
-          </select>
-        </div>
-      </div>
-
-      {/* 3. Lưới Thẻ Bàn Chi Tiết (Scrollable) */}
-      <div className="flex-1 px-8 py-6 overflow-y-auto">
+        {/* 3. Lưới Thẻ Bàn Chi Tiết (Scrollable) */}
+        <div>
         {loading ? (
           <div className="h-64 flex flex-col items-center justify-center gap-3 text-[#8E8E93]">
             <RefreshCw className="w-8 h-8 animate-spin text-gold" />
@@ -422,9 +422,9 @@ export default function AdminTablesQrPage() {
           <div className="h-64 flex flex-col items-center justify-center gap-2 border border-dashed border-surface-border rounded-2xl text-[#8E8E93]">
             <Search className="w-8 h-8 opacity-40 text-gold" />
             <p className="text-sm font-medium">Không tìm thấy bàn nào phù hợp</p>
-            <p className="text-xs text-[#71717A]">Thử đổi từ khóa tìm kiếm hoặc bộ lọc trạng thái</p>
           </div>
         )}
+      </div>
       </div>
 
       {/* Modal In Standee Tem QR Bàn */}
