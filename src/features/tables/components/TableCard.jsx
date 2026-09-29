@@ -53,10 +53,20 @@ export default function TableCard({
         className="bg-[#171A18] rounded-xl p-4 border border-jade/40 hover:border-jade-bright transition-all flex flex-col justify-between min-h-[120px] cursor-pointer group shadow-sm font-sans"
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-sans text-sm font-bold tracking-wide text-white group-hover:text-jade-bright transition-colors whitespace-nowrap">
               {code}
             </span>
+            {table.isMaster && table.linkedTableNumbers?.length > 0 && (
+              <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.5 rounded leading-tight">
+                Cụm (+{table.linkedTableNumbers.join(', ')})
+              </span>
+            )}
+            {table.isLinked && table.masterTableNumber && (
+              <span className="text-[10px] font-bold text-purple-300 bg-purple-500/20 border border-purple-500/40 px-1.5 py-0.5 rounded leading-tight">
+                Ghép {table.masterTableNumber}
+              </span>
+            )}
           </div>
           {renderPinButton()}
         </div>
@@ -78,10 +88,20 @@ export default function TableCard({
         className="bg-surface-card rounded-xl p-4 border border-[#EAB308]/40 hover:border-[#EAB308] transition-all flex flex-col justify-between min-h-[120px] cursor-pointer group shadow-sm font-sans"
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-sans text-sm font-bold tracking-wide text-white group-hover:text-[#EAB308] transition-colors whitespace-nowrap">
               {code}
             </span>
+            {table.isMaster && table.linkedTableNumbers?.length > 0 && (
+              <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.5 rounded leading-tight">
+                Cụm (+{table.linkedTableNumbers.join(', ')})
+              </span>
+            )}
+            {table.isLinked && table.masterTableNumber && (
+              <span className="text-[10px] font-bold text-purple-300 bg-purple-500/20 border border-purple-500/40 px-1.5 py-0.5 rounded leading-tight">
+                Ghép {table.masterTableNumber}
+              </span>
+            )}
           </div>
           {renderPinButton()}
         </div>
@@ -104,10 +124,20 @@ export default function TableCard({
       className={`bg-surface-card rounded-xl p-4 border ${borderClass} transition-all flex flex-col justify-between min-h-[120px] relative cursor-pointer group shadow-sm font-sans`}
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
           <span className="font-sans text-sm font-bold tracking-wide text-white group-hover:text-gold transition-colors whitespace-nowrap">
             {code}
           </span>
+          {table.isMaster && table.linkedTableNumbers?.length > 0 && (
+            <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.5 rounded leading-tight">
+              Cụm (+{table.linkedTableNumbers.join(', ')})
+            </span>
+          )}
+          {table.isLinked && table.masterTableNumber && (
+            <span className="text-[10px] font-bold text-purple-300 bg-purple-500/20 border border-purple-500/40 px-1.5 py-0.5 rounded leading-tight">
+              Ghép {table.masterTableNumber}
+            </span>
+          )}
         </div>
 
         {/* Cụm button Chuông gọi phục vụ, Icon tiền & PIN */}

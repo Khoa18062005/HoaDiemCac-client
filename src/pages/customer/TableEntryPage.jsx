@@ -32,6 +32,7 @@ export default function TableEntryPage() {
   const [failedCount, setFailedCount] = useState(0);
   const [entryMode, setEntryMode] = useState('PIN'); // 'PIN' | 'TRANSFER'
   const [transferCode, setTransferCode] = useState('');
+  const [targetPasscode, setTargetPasscode] = useState('');
 
   const normalizeTableNumber = (raw) => {
     if (!raw) return 'B01';
@@ -163,7 +164,8 @@ export default function TableEntryPage() {
         normalizedTableCode,
         cleanCode,
         'web-client',
-        'Thiết bị chuyển'
+        'Thiết bị chuyển',
+        targetPasscode.trim()
       );
 
       const targetTable = res.newTableNumber || normalizedTableCode;
@@ -385,6 +387,27 @@ export default function TableEntryPage() {
                 maxLength={12}
                 autoFocus
               />
+            </div>
+
+            <div className="space-y-1 text-left">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider">
+                  Mã PIN Bàn Này (Ghép Bàn):
+                </label>
+                <span className="text-[10px] text-zinc-400">Chỉ cần khi ghép bàn</span>
+              </div>
+              <input
+                type="password"
+                inputMode="numeric"
+                value={targetPasscode}
+                onChange={(e) => setTargetPasscode(e.target.value)}
+                placeholder="Mã PIN 4 số của bàn này (nếu ghép)"
+                className="w-full h-11 px-4 rounded-xl bg-[#141417] border border-zinc-700 focus:border-[#D4AF37] text-center font-mono font-bold text-lg text-gold tracking-widest placeholder:text-zinc-600 outline-none transition-all"
+                maxLength={4}
+              />
+              <p className="text-[10px] text-zinc-500 leading-tight">
+                * Chống dồn nhầm bill: Nếu ghép vào bàn bạn bè đang ngồi, vui lòng nhập mã PIN 4 số của bàn này để xác thực 2 chiều.
+              </p>
             </div>
 
             <button

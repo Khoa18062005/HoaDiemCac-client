@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Loader2, Utensils } from 'lucide-react';
+import { Loader2, Utensils, ArrowLeftRight, Clock, ArrowRight } from 'lucide-react';
 import {
   CustomerHeader,
   CollaborativeBanner,
@@ -290,6 +290,55 @@ export default function MenuPage() {
   // Quản lý tab giỏ hàng đang kích hoạt ('draft': Chọn món | 'all': Tất cả)
   const [cartTab, setCartTab] = useState('draft');
 
+  // Modal Thông Báo Điều Chuyển Bàn Tự Động (Smooth Transition Modal - Countdown 5s)
+  const [transferNotice, setTransferNotice] = useState(null);
+
+  const handleProceedTransfer = useCallback((dataToUse) => {
+    const data = dataToUse || transferNotice;
+    if (!data) return;
+
+    const oldTableKey = `hoadiemcat_cart_${currentNormTable}`;
+    const newTableKey = `hoadiemcat_cart_${data.newTableNumber}`;
+
+    if (Array.isArray(data.cartItems)) {
+      try {
+        localStorage.setItem(newTableKey, JSON.stringify(data.cartItems));
+      } catch (e) {
+        console.warn('Lỗi lưu giỏ hàng chuyển bàn:', e);
+      }
+    } else {
+      const oldCart = localStorage.getItem(oldTableKey);
+      if (oldCart) {
+        localStorage.setItem(newTableKey, oldCart);
+      }
+    }
+    localStorage.removeItem(oldTableKey);
+
+    const currentSession = getStoredTableSession() || {};
+    saveTableSession({
+      ...currentSession,
+      tableNumber: data.newTableNumber,
+      tableName: data.newTableName || `Bàn ${data.newTableNumber}`,
+      sessionToken: data.newSessionToken,
+    });
+
+    setTransferNotice(null);
+    navigate(`/menu?table=${data.newTableNumber}`);
+    window.location.reload();
+  }, [currentNormTable, transferNotice, navigate]);
+
+  useEffect(() => {
+    if (!transferNotice) return;
+    if (transferNotice.countdown <= 0) {
+      handleProceedTransfer(transferNotice);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setTransferNotice((prev) => (prev ? { ...prev, countdown: prev.countdown - 1 } : null));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [transferNotice, handleProceedTransfer]);
+
   // Quản lý đơn món thời gian thực từ KDS Store
   const allOrders = useKdsStore((state) => state.orders);
   const submitCustomerOrder = useKdsStore((state) => state.submitCustomerOrder);
@@ -371,33 +420,13 @@ export default function MenuPage() {
     const unsubTransferred = currentSession?.sessionToken
       ? wsManager.subscribe(`/topic/table/${currentSession.sessionToken}`, (msg) => {
           if (msg?.event === 'TABLE_TRANSFERRED') {
-            const oldTableKey = `hoadiemcat_cart_${currentNormTable}`;
-            const newTableKey = `hoadiemcat_cart_${msg.newTableNumber}`;
-
-            // Đồng bộ giỏ hàng nháp sang bàn mới
-            if (Array.isArray(msg.cartItems)) {
-              try {
-                localStorage.setItem(newTableKey, JSON.stringify(msg.cartItems));
-              } catch (e) {
-                console.warn(e);
-              }
-            } else {
-              const oldCart = localStorage.getItem(oldTableKey);
-              if (oldCart) {
-                localStorage.setItem(newTableKey, oldCart);
-              }
-            }
-            localStorage.removeItem(oldTableKey);
-
-            alert(`Bàn ăn của bạn đã được chuyển sang ${msg.newTableNumber}! Hệ thống sẽ tự động cập nhật.`);
-            saveTableSession({
-              ...currentSession,
-              tableNumber: msg.newTableNumber,
-              tableName: msg.newTableName || `Bàn ${msg.newTableNumber}`,
-              sessionToken: msg.newSessionToken,
+            setTransferNotice({
+              newTableNumber: msg.newTableNumber,
+              newTableName: msg.newTableName || `Bàn ${msg.newTableNumber}`,
+              newSessionToken: msg.newSessionToken,
+              cartItems: msg.cartItems,
+              countdown: 5,
             });
-            navigate(`/menu?table=${msg.newTableNumber}`);
-            window.location.reload();
           }
         })
       : null;
@@ -1012,6 +1041,46 @@ export default function MenuPage() {
           setIsTransferModalOpen(false);
         }}
       />
+
+      {/* 10. Modal Thông Báo Điều Chuyển Bàn Tự Động (Smooth Transition Modal - Countdown 5s) */}
+      {transferNotice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-[#18181C] border-2 border-gold/60 rounded-3xl w-full max-w-sm p-6 text-center shadow-2xl relative overflow-hidden">
+            <div className="absolute -top-12 -right-12 w-32 h-32 bg-gold/10 rounded-full blur-2xl pointer-events-none" />
+            
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500/20 to-gold/20 border border-gold/40 flex items-center justify-center mx-auto mb-4 text-gold shadow-lg shadow-gold/20 animate-pulse">
+              <ArrowLeftRight className="w-8 h-8" />
+            </div>
+
+            <h3 className="text-lg font-bold text-gold font-serif mb-1.5">
+              Thông Báo Điều Chuyển Bàn
+            </h3>
+            
+            <p className="text-xs text-zinc-300 leading-relaxed mb-4">
+              Bàn ăn của quý khách đã được chuyển/ghép sang{' '}
+              <span className="text-[#FFD54F] font-bold text-sm font-mono bg-gold/15 px-2 py-0.5 rounded border border-gold/30">
+                {transferNotice.newTableNumber}
+              </span>
+              . Toàn bộ món trong giỏ và các đơn đang nấu đều được lưu giữ nguyên vẹn.
+            </p>
+
+            {/* Countdown Badge */}
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/50 border border-amber-500/40 text-amber-300 text-xs font-mono font-bold mb-5">
+              <Clock className="w-3.5 h-3.5 animate-spin" />
+              <span>Tự động chuyển sau: {transferNotice.countdown}s</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleProceedTransfer(transferNotice)}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C41E3A] to-[#8B0000] text-white font-bold text-xs tracking-wider border border-gold/50 shadow-lg hover:brightness-110 active:scale-98 transition-all flex items-center justify-center gap-2"
+            >
+              <span>Chuyển Sang Bàn Mới Ngay</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

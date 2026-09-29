@@ -61,6 +61,10 @@ export default function AdminTableDetailModal({
   const [selectedTargetTableId, setSelectedTargetTableId] = useState('');
   const [transferReason, setTransferReason] = useState('');
 
+  // Trạng thái Cụm Bàn Tiệc Lớn (Master-Slave Table Clustering)
+  const [isClusterOpen, setIsClusterOpen] = useState(false);
+  const [selectedSlaveIds, setSelectedSlaveIds] = useState([]);
+
   if (!isOpen || !table) return null;
 
   // Hiển thị thông báo toast nhỏ trong modal
@@ -91,6 +95,40 @@ export default function AdminTableDetailModal({
       }, 1200);
     } catch (err) {
       showFeedback('Lỗi chuyển bàn: ' + (err.message || ''), true);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Liên kết các bàn phụ vào Cụm bàn chính này
+  const handleLinkCluster = async () => {
+    if (selectedSlaveIds.length === 0) {
+      showFeedback('Vui lòng chọn ít nhất 1 bàn phụ để liên kết!', true);
+      return;
+    }
+    setActionLoading('cluster');
+    try {
+      const res = await tableApi.linkCluster(table.id, selectedSlaveIds);
+      showFeedback(res?.message || 'Liên kết Cụm bàn tiệc thành công!');
+      setIsClusterOpen(false);
+      setSelectedSlaveIds([]);
+      if (onTableUpdated) onTableUpdated();
+    } catch (err) {
+      showFeedback('Lỗi liên kết cụm: ' + (err.response?.data?.message || err.message || ''), true);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Tách bàn phụ ra khỏi Cụm bàn liên kết
+  const handleUnlinkSlave = async (slaveTableId) => {
+    setActionLoading('unlink_' + slaveTableId);
+    try {
+      const res = await tableApi.unlinkCluster(slaveTableId);
+      showFeedback(res?.message || 'Đã tách bàn phụ ra khỏi cụm bàn!');
+      if (onTableUpdated) onTableUpdated();
+    } catch (err) {
+      showFeedback('Lỗi khi tách bàn: ' + (err.response?.data?.message || err.message || ''), true);
     } finally {
       setActionLoading(null);
     }
@@ -393,6 +431,7 @@ export default function AdminTableDetailModal({
                     type="button"
                     onClick={() => {
                       setIsDirectTransferOpen((prev) => !prev);
+                      setIsClusterOpen(false);
                       setIsSettling(false);
                     }}
                     className={`flex-1 h-8 rounded-lg border text-xs flex items-center justify-center gap-1.5 transition-colors ${
@@ -405,9 +444,151 @@ export default function AdminTableDetailModal({
                     <span>Đổi/Ghép</span>
                   </button>
                 )}
+
+                {/* Nút Cụm Bàn Tiệc (Master-Slave) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsClusterOpen((prev) => !prev);
+                    setIsDirectTransferOpen(false);
+                    setIsSettling(false);
+                  }}
+                  className={`flex-1 h-8 rounded-lg border text-xs flex items-center justify-center gap-1.5 transition-colors ${
+                    isClusterOpen
+                      ? 'bg-purple-500/20 border-purple-500 text-purple-300'
+                      : 'bg-surface-card border-surface-border hover:border-purple-400/40 text-[#EDEDED] hover:text-purple-300'
+                  }`}
+                >
+                  <Users2 className="w-3 h-3" />
+                  <span>{table.isLinked ? 'Cụm Bàn' : (table.isMaster ? 'Cụm Đang Ghép' : 'Tạo Cụm')}</span>
+                </button>
               </div>
             </div>
           </div>
+
+          {/* Cụm Bàn Tiệc: Banner nếu là Bàn Phụ */}
+          {table.isLinked && (
+            <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-500/40 flex items-center justify-between text-xs gap-3">
+              <div className="space-y-0.5">
+                <div className="font-bold text-purple-300 flex items-center gap-1.5">
+                  <Users2 className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                  <span>Bàn phụ thuộc Cụm bàn chính: <strong>{table.masterTableNumber}</strong></span>
+                </div>
+                <p className="text-[11px] text-zinc-400">
+                  Khách quét QR tại bàn này sẽ tự động gọi món vào bàn {table.masterTableNumber}.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={actionLoading === 'unlink_' + table.id}
+                onClick={() => handleUnlinkSlave(table.id)}
+                className="px-3 py-1.5 rounded-lg bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400 text-purple-200 text-xs font-semibold whitespace-nowrap transition-all"
+              >
+                {actionLoading === 'unlink_' + table.id ? 'Đang tách...' : 'Tách Khỏi Cụm'}
+              </button>
+            </div>
+          )}
+
+          {/* Cụm Bàn Tiệc: Bảng điều khiển Quản Lý Cụm Bàn */}
+          {isClusterOpen && !table.isLinked && (
+            <div className="border border-purple-500/40 rounded-xl bg-purple-500/5 p-4 space-y-3 animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Users2 className="w-4 h-4" />
+                  Liên Kết Cụm Bàn Tiệc Lớn (Master-Slave Clustering)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsClusterOpen(false)}
+                  className="text-xs text-[#8E8E93] hover:text-white"
+                >
+                  Đóng
+                </button>
+              </div>
+
+              {table.linkedTableNumbers && table.linkedTableNumbers.length > 0 && (
+                <div className="space-y-1.5 p-3 rounded-lg bg-purple-950/30 border border-purple-500/30">
+                  <span className="text-xs font-semibold text-purple-300 block">Các bàn phụ đang ghép cùng bàn này:</span>
+                  <div className="flex flex-wrap gap-2">
+                    {table.linkedTableNumbers.map((tblNum) => {
+                      const slaveTbl = allTables.find((t) => (t.tableNumber || t.code) === tblNum);
+                      return (
+                        <span
+                          key={tblNum}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-900/60 border border-purple-400/50 text-purple-200 text-xs font-mono font-bold"
+                        >
+                          <span>Bàn {tblNum}</span>
+                          {slaveTbl && (
+                            <button
+                              type="button"
+                              title="Tách bàn này ra khỏi cụm"
+                              onClick={() => handleUnlinkSlave(slaveTbl.id)}
+                              className="hover:text-rose-400 ml-1 text-sm font-bold"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Chọn thêm bàn phụ để ghép vào cụm */}
+              <div className="space-y-2">
+                <label className="text-xs text-[#A0A0A5] block">
+                  Chọn các bàn phụ muốn ghép cùng bàn này (Đoàn 20–50 người):
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto p-2 rounded-lg bg-[#18181C] border border-surface-border custom-scrollbar">
+                  {allTables
+                    .filter((t) => String(t.id) !== String(table.id) && !t.isLinked)
+                    .map((t) => {
+                      const isChecked = selectedSlaveIds.includes(t.id);
+                      return (
+                        <label
+                          key={t.id}
+                          className={`p-2 rounded-lg border text-xs flex items-center gap-2 cursor-pointer transition-colors ${
+                            isChecked
+                              ? 'bg-purple-600/20 border-purple-500 text-purple-200'
+                              : 'bg-surface-card border-surface-border text-zinc-300 hover:border-zinc-600'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedSlaveIds((prev) => [...prev, t.id]);
+                              } else {
+                                setSelectedSlaveIds((prev) => prev.filter((id) => id !== t.id));
+                              }
+                            }}
+                            className="rounded text-purple-600 focus:ring-0"
+                          />
+                          <span className="font-mono font-bold">{t.tableNumber || t.code}</span>
+                          <span className="text-[10px] text-zinc-400">({t.capacity || 4}k)</span>
+                        </label>
+                      );
+                    })}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={actionLoading === 'cluster' || selectedSlaveIds.length === 0}
+                onClick={handleLinkCluster}
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-700 to-purple-600 hover:brightness-110 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {actionLoading === 'cluster' ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Users2 className="w-4 h-4" />
+                )}
+                <span>Ghép {selectedSlaveIds.length} Bàn Vào Cụm {table.tableNumber || table.code}</span>
+              </button>
+            </div>
+          )}
 
           {/* E. Khu vực Đổi / Ghép bàn trực tiếp từ POS */}
           {isDirectTransferOpen && (
