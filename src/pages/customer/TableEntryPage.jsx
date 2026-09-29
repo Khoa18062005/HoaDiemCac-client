@@ -191,7 +191,11 @@ export default function TableEntryPage() {
 
       navigate(`/menu?table=${targetTable}`);
     } catch (err) {
-      setErrorMsg(err.message || 'Mã chuyển bàn không hợp lệ hoặc đã hết hạn.');
+      const serverMsg = err.response?.data?.message || err.message || 'Mã chuyển bàn không hợp lệ hoặc đã hết hạn.';
+      setErrorMsg(serverMsg);
+      if (serverMsg.includes('tạm khóa') || serverMsg.includes('TABLE_LOCKED') || serverMsg.includes('quá 5 lần')) {
+        setIsLockedCountdown(60);
+      }
     } finally {
       setLoading(false);
     }
