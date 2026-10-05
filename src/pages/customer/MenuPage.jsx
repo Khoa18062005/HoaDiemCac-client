@@ -91,7 +91,32 @@ export default function MenuPage() {
     }
   };
 
+  // Lưu trữ dự phòng danh sách đơn của bàn từ Server để chống hiện tượng chớp nháy khi đồng bộ đa tab
+  const [persistedTableOrders, setPersistedTableOrders] = useState([]);
+
+  // Đồng bộ đơn hàng của bàn hiện tại từ Server MySQL (dùng chung cho toàn bộ component)
+  const syncTableOrders = useCallback(async () => {
+    try {
+      let serverOrders = await orderApi.getTableOrders(tableNumber);
+      if ((!serverOrders || serverOrders.length === 0) && currentNormTable !== tableNumber) {
+        serverOrders = await orderApi.getTableOrders(currentNormTable);
+      }
+      if (Array.isArray(serverOrders)) {
+        if (serverOrders.length > 0) {
+          setPersistedTableOrders(serverOrders);
+        }
+        useKdsStore.getState().syncTableOrders(currentNormTable, serverOrders);
+      }
+    } catch (err) {
+      console.warn('Lỗi khi tải đơn hàng của bàn từ server:', err);
+    }
+  }, [tableNumber, currentNormTable]);
+
   const handleKillSession = useCallback(() => {
+    setPersistedTableOrders([]);
+    try {
+      useKdsStore.getState().clearTableOrders?.(currentNormTable);
+    } catch {}
     clearTableSession();
     try {
       const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
@@ -340,7 +365,7 @@ export default function MenuPage() {
       window.removeEventListener('table_order_locked', handleLockEvent);
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [tableNumber, currentNormTable]);
+  }, [tableNumber, currentNormTable, syncTableOrders]);
 
   // State lưu dữ liệu từ Database
   const [dbItems, setDbItems] = useState([]);
@@ -554,20 +579,6 @@ export default function MenuPage() {
     let isMounted = true;
 
     // 1. Tải danh sách đơn từ Server MySQL
-    const syncTableOrders = async () => {
-      try {
-        let serverOrders = await orderApi.getTableOrders(tableNumber);
-        if ((!serverOrders || serverOrders.length === 0) && currentNormTable !== tableNumber) {
-          serverOrders = await orderApi.getTableOrders(currentNormTable);
-        }
-        if (isMounted && Array.isArray(serverOrders)) {
-          useKdsStore.getState().syncTableOrders(currentNormTable, serverOrders);
-        }
-      } catch (err) {
-        console.warn('Lỗi khi tải đơn hàng của bàn từ server:', err);
-      }
-    };
-
     syncTableOrders();
 
     // 2. Lắng nghe WebSocket qua kênh /topic/table/{tableNumber}/status
@@ -806,13 +817,20 @@ export default function MenuPage() {
       }
       clearInterval(interval);
     };
-  }, [tableNumber, currentNormTable, navigate, handleKillSession]);
+  }, [tableNumber, currentNormTable, navigate, handleKillSession, syncTableOrders]);
 
   // Danh sách toàn bộ các món đã gửi bếp của bàn (đồng bộ thời gian thực từ useKdsStore)
   const orderedItems = useMemo(() => {
-    const tableOrders = allOrders.filter(
+    let tableOrders = allOrders.filter(
       (o) => normalizeTableCode(o.tableCode) === currentNormTable
     );
+
+    // BẢO VỆ CHỐNG CHỚP NHÁY (Anti-flicker guard):
+    // Nếu allOrders trong KDS store bị tab khác ghi đè tạm thời hoặc đang đồng bộ
+    // nhưng bàn hiện tại đã có đơn hợp lệ từ server, ưu tiên giữ nguyên
+    if (tableOrders.length === 0 && persistedTableOrders.length > 0) {
+      tableOrders = persistedTableOrders;
+    }
 
     const list = [];
     tableOrders.forEach((order) => {
@@ -872,7 +890,7 @@ export default function MenuPage() {
     });
 
     return result;
-  }, [allOrders, currentNormTable, dishesList]);
+  }, [allOrders, currentNormTable, dishesList, persistedTableOrders]);
 
   // Lắng nghe BroadcastChannel từ tab Bếp sang tab Khách (Đồng bộ đa tab thời gian thực 0ms)
   useEffect(() => {

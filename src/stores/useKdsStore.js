@@ -675,7 +675,17 @@ export const useKdsStore = create((set, get) => ({
 
     const nextOrders = [...otherOrders, ...mappedServerOrders];
     set({ orders: nextOrders });
-    // Không ghi đè localStorage của toàn bộ nhà hàng khi chỉ đồng bộ 1 bàn đơn lẻ của khách
+    saveOrdersToStorage(nextOrders);
+  },
+
+  // 6.3 Xóa sạch đơn của bàn khi hoàn tất thanh toán & chuyển sang dọn dẹp
+  clearTableOrders: (tableCode) => {
+    const norm = normalizeTableCode(tableCode);
+    const currentOrders = get().orders;
+    const remainingOrders = currentOrders.filter((o) => normalizeTableCode(o.tableCode) !== norm);
+    set({ orders: remainingOrders });
+    saveOrdersToStorage(remainingOrders);
+    broadcastUpdate(remainingOrders, { type: 'TABLE_ORDERS_CLEARED', tableCode: norm });
   },
 
   // 7. Cập nhật danh sách orders từ bên ngoài (ví dụ API backend)
@@ -713,8 +723,13 @@ export const useKdsStore = create((set, get) => ({
         })),
       };
     });
-    set({ orders: mapped });
-    saveOrdersToStorage(mapped);
+
+    // Bảo toàn các đơn hàng đã phục vụ (DELIVERED) của các bàn khách hàng không nằm trong hàng đợi bếp mới tải về
+    const currentOrders = get().orders;
+    const nextOrders = mergePreservingDeliveredOrders(currentOrders, mapped);
+
+    set({ orders: nextOrders });
+    saveOrdersToStorage(nextOrders);
   },
 
   // 7.1 Đổi số bàn của các đơn hàng khi bàn được chuyển hoặc ghép (MOVE / MERGE)
@@ -795,6 +810,20 @@ export const useKdsStore = create((set, get) => ({
   },
 }));
 
+/**
+ * Hàm trộn danh sách order đồng bộ từ tab khác nhưng bảo toàn các đơn hàng
+ * có món đã phục vụ (DELIVERED) của các bàn khách hàng
+ */
+function mergePreservingDeliveredOrders(currentOrders, incomingOrders) {
+  if (!Array.isArray(incomingOrders)) return currentOrders;
+  const incomingIds = new Set(incomingOrders.map((o) => String(o.id)));
+  const preserved = currentOrders.filter((o) => {
+    if (incomingIds.has(String(o.id))) return false;
+    return o.items && o.items.some((i) => i.status === 'DELIVERED');
+  });
+  return [...preserved, ...incomingOrders];
+}
+
 // Lắng nghe đồng bộ từ các tab khác qua BroadcastChannel
 if (syncChannel) {
   syncChannel.addEventListener('message', (event) => {
@@ -802,8 +831,11 @@ if (syncChannel) {
     if (!data || data.senderTabId === tabId) return;
 
     if (data.type === 'ORDERS_SYNC' && Array.isArray(data.orders)) {
+      const currentOrders = useKdsStore.getState().orders;
+      const nextOrders = mergePreservingDeliveredOrders(currentOrders, data.orders);
+
       useKdsStore.setState({
-        orders: data.orders,
+        orders: nextOrders,
         lastBroadcastEvent: data.eventData,
       });
 
@@ -825,7 +857,9 @@ if (typeof window !== 'undefined') {
       try {
         const parsed = JSON.parse(event.newValue);
         if (Array.isArray(parsed)) {
-          useKdsStore.setState({ orders: parsed });
+          const currentOrders = useKdsStore.getState().orders;
+          const nextOrders = mergePreservingDeliveredOrders(currentOrders, parsed);
+          useKdsStore.setState({ orders: nextOrders });
         }
       } catch {}
     }
