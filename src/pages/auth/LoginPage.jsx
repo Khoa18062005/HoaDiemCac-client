@@ -68,11 +68,16 @@ export default function LoginPage() {
       }
     } catch (err) {
       const errMsg = err.message || '';
-      const isLockedAccount = 
-        errMsg.toLowerCase().includes('khóa') || 
-        errMsg.toLowerCase().includes('chưa kích hoạt') ||
-        errMsg.toLowerCase().includes('locked') ||
-        errMsg.toLowerCase().includes('disabled');
+      const lower = errMsg.toLowerCase();
+      const isWarningRemaining = lower.includes('lần thử');
+      const isLockedAccount = !isWarningRemaining && (
+        lower.includes('đã bị tạm khóa') || 
+        lower.includes('đã bị khóa') ||
+        lower.includes('bị tạm khóa') ||
+        lower.includes('chưa kích hoạt') ||
+        lower.includes('locked') ||
+        lower.includes('disabled')
+      );
 
       if (isLockedAccount) {
         // Lưu lại email vừa đăng nhập để hiển thị trên pop-up
