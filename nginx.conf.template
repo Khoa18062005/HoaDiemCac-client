@@ -1,0 +1,22 @@
+server {
+    listen ${PORT};
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Cấu hình Single Page Application (SPA):
+    # Khi user truy cập /menu?table=B01 hoặc refresh trang, Nginx sẽ phục vụ index.html thay vì báo lỗi 404
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Gzip nén file JS, CSS, JSON giúp tải trang nhanh hơn
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
+
+    error_page 500 502 503 504 /50x.html;
+    location = /50x.html {
+        root /usr/share/nginx/html;
+    }
+}

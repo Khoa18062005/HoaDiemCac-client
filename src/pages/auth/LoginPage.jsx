@@ -83,6 +83,13 @@ export default function LoginPage() {
         setError('');
       } else if (errMsg.includes('Bad credentials')) {
         setError('Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại!');
+      } else if (
+        errMsg === 'Network Error' || 
+        errMsg.toLowerCase().includes('network error') ||
+        errMsg.toLowerCase().includes('ngắt kết nối') ||
+        errMsg.toLowerCase().includes('kết nối')
+      ) {
+        setError('Hệ thống đã bị ngắt kết nối, vui lòng thử lại sau!');
       } else {
         setError(errMsg || 'Đăng nhập thất bại, vui lòng kiểm tra lại!');
       }
