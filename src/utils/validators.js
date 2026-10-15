@@ -32,3 +32,38 @@ export function clampQuantity(quantity) {
 export function isValidSessionToken(token) {
   return typeof token === 'string' && token.trim().length >= 8;
 }
+
+/**
+ * Ngăn chặn người dùng gõ ký tự chữ cái, chỉ cho phép phím số (0-9) và các phím điều khiển
+ */
+export function handleNumericKeyDown(e) {
+  const allowedKeys = [
+    'Backspace',
+    'Delete',
+    'Tab',
+    'Escape',
+    'Enter',
+    'ArrowLeft',
+    'ArrowRight',
+    'ArrowUp',
+    'ArrowDown',
+    'Home',
+    'End',
+  ];
+  if (allowedKeys.includes(e.key) || e.ctrlKey || e.metaKey) {
+    return;
+  }
+  if (!/^\d$/.test(e.key)) {
+    e.preventDefault();
+  }
+}
+
+/**
+ * Lọc sạch mọi ký tự không phải số và giới hạn độ dài số điện thoại
+ */
+export function sanitizeNumericInput(val, maxLength = 10) {
+  if (!val) return '';
+  const digits = val.toString().replace(/\D/g, '');
+  return maxLength ? digits.slice(0, maxLength) : digits;
+}
+

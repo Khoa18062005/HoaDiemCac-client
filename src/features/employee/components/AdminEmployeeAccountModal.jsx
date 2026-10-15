@@ -30,6 +30,7 @@ import {
 } from '../data/mockEmployees';
 import { apiClient } from '@/lib/axios';
 import { Loader2 } from 'lucide-react';
+import { handleNumericKeyDown, sanitizeNumericInput } from '@/utils/validators';
 
 const ICON_MAP = {
   LayoutGrid: LayoutGrid,
@@ -708,8 +709,12 @@ export default function AdminEmployeeAccountModal({
                       </div>
                       <input
                         type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={11}
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
+                        onKeyDown={handleNumericKeyDown}
+                        onChange={(e) => setPhone(sanitizeNumericInput(e.target.value, 11))}
                         placeholder="09xx xxx xxx"
                         className="input-imperial w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#0D0D11] border border-surface-border text-xs text-[#EDEDED] placeholder-[#5A5A62] outline-none"
                       />
