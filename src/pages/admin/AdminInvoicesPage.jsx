@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { invoiceApi } from '@/features/invoices/api/invoiceApi';
 import InvoiceDetailModal from '@/features/invoices/components/InvoiceDetailModal';
+import { matchesVietnameseSearch } from '@/utils/formatters';
 
 export default function AdminInvoicesPage() {
   const [invoices, setInvoices] = useState([]);
@@ -64,12 +65,11 @@ export default function AdminInvoicesPage() {
   // Lọc danh sách hóa đơn
   const filteredInvoices = useMemo(() => {
     return invoices.filter((inv) => {
-      const q = searchQuery.toLowerCase();
       const matchSearch =
-        (inv.invoiceCode || '').toLowerCase().includes(q) ||
-        (inv.tableName || '').toLowerCase().includes(q) ||
-        (inv.tableNumber || '').toLowerCase().includes(q) ||
-        (inv.cashierName || '').toLowerCase().includes(q);
+        matchesVietnameseSearch(inv.invoiceCode, searchQuery) ||
+        matchesVietnameseSearch(inv.tableName, searchQuery) ||
+        matchesVietnameseSearch(inv.tableNumber, searchQuery) ||
+        matchesVietnameseSearch(inv.cashierName, searchQuery);
 
       const matchMethod = methodFilter === 'ALL' || inv.paymentMethod === methodFilter;
       const matchStatus = statusFilter === 'ALL' || inv.paymentStatus === statusFilter;

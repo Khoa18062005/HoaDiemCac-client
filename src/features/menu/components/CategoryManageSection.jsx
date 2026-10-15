@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Plus, Edit3, Trash2, Layers, CheckCircle, XCircle } from 'lucide-react';
+import { matchesVietnameseSearch } from '@/utils/formatters';
 
 export default function CategoryManageSection({
   categories = [],
@@ -19,12 +20,11 @@ export default function CategoryManageSection({
       if (statusFilter === 'active' && !cat.isActive) return false;
       if (statusFilter === 'hidden' && cat.isActive) return false;
 
-      // 2. Lọc theo từ khóa tìm kiếm
+      // 2. Lọc theo từ khóa tìm kiếm (hỗ trợ tiếng Việt không dấu)
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchName = cat.name?.toLowerCase().includes(q);
-        const matchSlug = cat.slug?.toLowerCase().includes(q);
-        const matchDesc = cat.description?.toLowerCase().includes(q);
+        const matchName = matchesVietnameseSearch(cat.name, searchQuery);
+        const matchSlug = matchesVietnameseSearch(cat.slug, searchQuery);
+        const matchDesc = matchesVietnameseSearch(cat.description, searchQuery);
         return matchName || matchSlug || matchDesc;
       }
       return true;

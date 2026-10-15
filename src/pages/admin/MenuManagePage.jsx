@@ -14,6 +14,7 @@ import {
   KdsToastNotification,
   MenuPagination,
 } from '@/features/menu';
+import { matchesVietnameseSearch } from '@/utils/formatters';
 
 export default function MenuManagePage() {
   // Điều hướng giữa 2 tab: 'dishes' (Quản lý món ăn) và 'categories' (Quản lý danh mục)
@@ -194,10 +195,9 @@ export default function MenuManagePage() {
       if (statusFilter === 'locked' && item.isAvailable) return false;
 
       if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        const matchName = item.name?.toLowerCase().includes(query);
-        const matchCat = item.categoryName?.toLowerCase().includes(query);
-        const matchCode = item.code?.toLowerCase().includes(query);
+        const matchName = matchesVietnameseSearch(item.name, searchQuery);
+        const matchCat = matchesVietnameseSearch(item.categoryName, searchQuery);
+        const matchCode = matchesVietnameseSearch(item.code, searchQuery);
         return matchName || matchCat || matchCode;
       }
       return true;

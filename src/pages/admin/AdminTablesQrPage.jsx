@@ -18,6 +18,7 @@ import TableQrPrintModal from '@/features/tables/components/TableQrPrintModal';
 import AdminTableDevicesModal from '@/features/tables/components/AdminTableDevicesModal';
 import { tableApi } from '@/features/tables/api/tableApi';
 import { wsManager } from '@/lib/websocket';
+import { matchesVietnameseSearch } from '@/utils/formatters';
 
 const CACHE_KEY = 'hoadiemcat_tables_cache';
 
@@ -220,8 +221,8 @@ export default function AdminTablesQrPage() {
   const filteredTables = useMemo(() => {
     return tables.filter((t) => {
       const matchSearch =
-        (t.tableNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (t.name || '').toLowerCase().includes(searchQuery.toLowerCase());
+        matchesVietnameseSearch(t.tableNumber, searchQuery) ||
+        matchesVietnameseSearch(t.name, searchQuery);
       const matchArea = areaFilter === 'ALL' || t.area === areaFilter;
       const matchStatus = statusFilter === 'ALL' || t.status === statusFilter;
       return matchSearch && matchArea && matchStatus;

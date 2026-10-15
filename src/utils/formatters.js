@@ -44,3 +44,52 @@ export function formatTime(dateInput) {
     hour12: false,
   }).format(date);
 }
+
+/**
+ * Loại bỏ dấu tiếng Việt để phục vụ tìm kiếm không phân biệt dấu.
+ * Ví dụ: "Lẩu Cay Tê" -> "lau cay te", "Đĩa Ba Chỉ" -> "dia ba chi"
+ */
+export function removeVietnameseTones(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'd')
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * Kiểm tra xem chuỗi text có khớp với từ khóa tìm kiếm query hay không,
+ * hỗ trợ:
+ * 1. Khớp nguyên bản có dấu (case-insensitive)
+ * 2. Khớp tiếng Việt không dấu (gõ "lau cay" tìm ra "Lẩu Cay")
+ * 3. Khớp các từ phân tách bởi khoảng trắng (gõ "bo a5" tìm ra "Bò Wagyu A5")
+ */
+export function matchesVietnameseSearch(text, query) {
+  if (!query || !query.trim()) return true;
+  if (!text) return false;
+
+  const lowerText = text.toString().toLowerCase();
+  const lowerQuery = query.toString().toLowerCase().trim();
+
+  // 1. Khớp có dấu trực tiếp
+  if (lowerText.includes(lowerQuery)) return true;
+
+  // 2. Khớp không dấu
+  const rawText = removeVietnameseTones(text.toString());
+  const rawQuery = removeVietnameseTones(query.toString());
+
+  if (!rawQuery) return true;
+  if (rawText.includes(rawQuery)) return true;
+
+  // 3. Khớp từng từ khóa nếu gõ nhiều từ cách nhau bởi khoảng trắng
+  const words = rawQuery.split(/\s+/).filter(Boolean);
+  if (words.length > 1) {
+    return words.every((w) => rawText.includes(w));
+  }
+
+  return false;
+}
+

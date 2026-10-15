@@ -26,6 +26,7 @@ import { orderApi } from '@/features/customer/api/orderApi';
 import { cartApi } from '@/features/customer/api/cartApi';
 import useKdsStore, { normalizeTableCode, playChimeSound, syncChannel } from '@/stores/useKdsStore';
 import { wsManager } from '@/lib/websocket';
+import { matchesVietnameseSearch } from '@/utils/formatters';
 
 /**
  * MenuPage (Customer Responsive với ScrollSpy 2 chiều)
@@ -1057,14 +1058,14 @@ export default function MenuPage() {
         });
       }
 
-      // Lọc theo từ khóa tìm kiếm nếu có
+      // Lọc theo từ khóa tìm kiếm nếu có (hỗ trợ tiếng Việt có dấu, không dấu và tìm đa từ)
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
         dishes = dishes.filter(
           (d) =>
-            d.name.toLowerCase().includes(q) ||
-            (d.description && d.description.toLowerCase().includes(q)) ||
-            (d.subTitle && d.subTitle.toLowerCase().includes(q))
+            matchesVietnameseSearch(d.name, searchQuery) ||
+            matchesVietnameseSearch(d.description, searchQuery) ||
+            matchesVietnameseSearch(d.subTitle, searchQuery) ||
+            matchesVietnameseSearch(d.code, searchQuery)
         );
       }
 
