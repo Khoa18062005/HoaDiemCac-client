@@ -129,7 +129,7 @@ export default function AdminTablesQrPage() {
     };
   }, []);
 
-  // Handler đổi mã PIN mới (thanh toán / giải phóng bàn về BÀN TRỐNG, mở khóa order)
+  // Handler đổi mã PIN mới (sinh PIN mới, cấp token phiên mới)
   const handleRegeneratePin = async (tableId) => {
     try {
       const res = await tableApi.regeneratePin(tableId);
@@ -139,15 +139,11 @@ export default function AdminTablesQrPage() {
             ? {
                 ...t,
                 ...res,
-                status: res.status || 'AVAILABLE',
-                isOrderLocked: false,
-                activeDeviceCount: 0,
-                currentPasscode: res.currentPasscode || String(Math.floor(1000 + Math.random() * 9000)),
               }
             : t
         )
       );
-      showToast(`Đã làm mới PIN & giải phóng bàn ${res.tableNumber || ''} về Bàn Trống (Sẵn sàng)`);
+      showToast(`Đã sinh mã PIN mới cho bàn ${res?.tableNumber || ''}: ${res?.currentPasscode || ''}`);
     } catch (err) {
       showToast('Lỗi khi sinh mã PIN mới', 'error');
     }

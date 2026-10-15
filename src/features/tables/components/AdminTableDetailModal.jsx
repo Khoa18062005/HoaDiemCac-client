@@ -206,7 +206,7 @@ export default function AdminTableDetailModal({
     try {
       const res = await tableApi.regeneratePin(table.id);
       showFeedback(`Đã cấp mã PIN mới: ${res?.currentPasscode || 'Thành công'}`);
-      if (onTableUpdated) onTableUpdated();
+      if (onTableUpdated) onTableUpdated(res);
     } catch (err) {
       showFeedback('Lỗi khi sinh PIN: ' + (err.message || ''), true);
     } finally {
