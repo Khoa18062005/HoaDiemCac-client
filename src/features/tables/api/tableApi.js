@@ -38,6 +38,18 @@ export const tableApi = {
     return [];
   },
 
+  // Tạo mới bàn ăn lưu vào Database (Admin)
+  createTable: async (tableData) => {
+    const res = await apiClient.post('/admin/tables', tableData);
+    return res?.result !== undefined ? res.result : res;
+  },
+
+  // Cập nhật thông tin bàn ăn (Admin)
+  updateTable: async (tableId, tableData) => {
+    const res = await apiClient.put(`/admin/tables/${tableId}`, tableData);
+    return res?.result !== undefined ? res.result : res;
+  },
+
   // Sinh lại mã PIN 4 số ngẫu nhiên cho bàn (Admin)
   regeneratePin: async (tableId) => {
     const res = await apiClient.post(`/admin/tables/${tableId}/regenerate-pin`);
