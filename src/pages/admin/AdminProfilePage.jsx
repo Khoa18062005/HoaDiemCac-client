@@ -139,8 +139,8 @@ export default function AdminProfilePage() {
       showToast('Vui lòng nhập mật khẩu mới', 'error');
       return;
     }
-    if (passwordForm.newPassword.length < 6) {
-      showToast('Mật khẩu mới phải có tối thiểu 6 ký tự', 'error');
+    if (passwordForm.newPassword.length < 8) {
+      showToast('Mật khẩu không đủ mạnh: Mật khẩu mới phải có tối thiểu 8 ký tự', 'error');
       return;
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {

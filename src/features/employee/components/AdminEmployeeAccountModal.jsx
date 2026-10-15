@@ -274,6 +274,17 @@ export default function AdminEmployeeAccountModal({
       return false;
     }
 
+    if (password.trim()) {
+      if (password.length < 8) {
+        setErrorMessage('Mật khẩu không đủ mạnh. Mật khẩu phải có tối thiểu 8 ký tự.');
+        return false;
+      }
+      if (!hasLetter || !hasNumber) {
+        setErrorMessage('Mật khẩu không đủ mạnh. Mật khẩu phải bao gồm cả chữ cái và chữ số.');
+        return false;
+      }
+    }
+
     if (selectedPermissions.length === 0) {
       setErrorMessage('Vui lòng chọn ít nhất 1 chức năng phân quyền cho nhân viên ở cột bên trái.');
       return false;
@@ -363,7 +374,11 @@ export default function AdminEmployeeAccountModal({
       onClose();
     } catch (error) {
       console.error('Lỗi khi lưu thông tin nhân viên:', error);
-      setErrorMessage(error.message || 'Đã xảy ra lỗi khi lưu thông tin nhân viên. Vui lòng thử lại sau.');
+      let errMsg = error.message || 'Đã xảy ra lỗi khi lưu thông tin nhân viên. Vui lòng thử lại sau.';
+      if (errMsg === 'Validation failed' || errMsg.toLowerCase().includes('validation fail')) {
+        errMsg = 'Mật khẩu không đủ mạnh. Vui lòng kiểm tra lại độ dài và độ phức tạp của mật khẩu!';
+      }
+      setErrorMessage(errMsg);
     } finally {
       setIsLoading(false);
     }
