@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ShoppingBag,
   Trash2,
@@ -24,6 +24,49 @@ import { tableApi } from '@/features/tables/api/tableApi';
  * - 2 danh mục: "Chọn món" (các món đang chọn chưa gửi bếp) và "Tất cả" (toàn bộ món đã gửi bếp).
  * - Món gửi thêm ở các lần sau hiển thị tách biệt thành từng thẻ riêng (kèm giờ gọi, trạng thái), không gộp vào lần trước.
  */
+function DishNoteInput({ note, dishId, onUpdateNote }) {
+  const [localValue, setLocalValue] = useState(note || '');
+  const isFocusedRef = useRef(false);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    if (!isFocusedRef.current) {
+      setLocalValue(note || '');
+    }
+  }, [note]);
+
+  const handleChange = (e) => {
+    const val = e.target.value;
+    setLocalValue(val);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      if (onUpdateNote) onUpdateNote(dishId, val);
+    }, 350);
+  };
+
+  const handleBlur = () => {
+    isFocusedRef.current = false;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (onUpdateNote) onUpdateNote(dishId, localValue);
+  };
+
+  const handleFocus = () => {
+    isFocusedRef.current = true;
+  };
+
+  return (
+    <input
+      type="text"
+      value={localValue}
+      onChange={handleChange}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      placeholder="Ghi chú cho đầu bếp (VD: ít cay, không hành...)"
+      className="flex-1 bg-[#141418] border border-white/10 rounded-lg px-2 py-1 text-[11px] text-[#FDFBF7] placeholder-[#6A655C] focus:border-[#C41E3A] outline-none transition-colors"
+    />
+  );
+}
+
 export default function CustomerCartSidebar({
   tableNumber = '08',
   cartItems = [],
@@ -300,13 +343,7 @@ export default function CustomerCartSidebar({
                 {/* Ghi chú riêng cho từng món */}
                 <div className="pt-1.5 border-t border-white/5 flex items-center gap-1.5">
                   <ChefHat className="w-3.5 h-3.5 text-[#FFD54F]/70 flex-shrink-0" />
-                  <input
-                    type="text"
-                    value={item.note || ''}
-                    onChange={(e) => onUpdateNote && onUpdateNote(item.id, e.target.value)}
-                    placeholder="Ghi chú cho đầu bếp (VD: ít cay, không hành...)"
-                    className="flex-1 bg-[#141418] border border-white/10 rounded-lg px-2 py-1 text-[11px] text-[#FDFBF7] placeholder-[#6A655C] focus:border-[#C41E3A] outline-none transition-colors"
-                  />
+                  <DishNoteInput note={item.note} dishId={item.id} onUpdateNote={onUpdateNote} />
                 </div>
               </div>
             ))}

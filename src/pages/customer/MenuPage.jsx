@@ -23,6 +23,7 @@ import {
 } from '@/features/tables/api/tableApi';
 import { menuApi } from '@/features/menu';
 import { orderApi } from '@/features/customer/api/orderApi';
+import { cartApi } from '@/features/customer/api/cartApi';
 import useKdsStore, { normalizeTableCode, playChimeSound, syncChannel } from '@/stores/useKdsStore';
 import { wsManager } from '@/lib/websocket';
 
@@ -478,6 +479,78 @@ export default function MenuPage() {
     }
   }, [cartItems, currentNormTable]);
 
+  // Kênh BroadcastChannel đồng bộ giỏ hàng giữa các Tab cùng Profile
+  const cartChannelRef = useRef(null);
+  useEffect(() => {
+    try {
+      cartChannelRef.current = new BroadcastChannel(`hoadiemcat_cart_${currentNormTable}`);
+      const handleChannelMsg = (e) => {
+        if (e.data?.type === 'CART_UPDATED' && Array.isArray(e.data.items)) {
+          setCartItems(e.data.items);
+        }
+      };
+      cartChannelRef.current.addEventListener('message', handleChannelMsg);
+      return () => {
+        cartChannelRef.current?.removeEventListener('message', handleChannelMsg);
+        cartChannelRef.current?.close();
+      };
+    } catch {}
+  }, [currentNormTable]);
+
+  // Đồng bộ giỏ hàng từ Server khi vào bàn ăn (UC04)
+  useEffect(() => {
+    let isMounted = true;
+    const fetchInitialCart = async () => {
+      try {
+        const serverCart = await cartApi.getCart(tableNumber);
+        if (isMounted) {
+          if (Array.isArray(serverCart) && serverCart.length > 0) {
+            setCartItems(serverCart);
+            try {
+              localStorage.setItem(`hoadiemcat_cart_${currentNormTable}`, JSON.stringify(serverCart));
+            } catch {}
+          } else {
+            const localSaved = localStorage.getItem(`hoadiemcat_cart_${currentNormTable}`);
+            if (localSaved) {
+              const parsed = JSON.parse(localSaved);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                cartApi.updateCart(tableNumber, parsed).catch(() => {});
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Lỗi khi tải giỏ hàng từ server:', err);
+      }
+    };
+    fetchInitialCart();
+    return () => {
+      isMounted = false;
+    };
+  }, [tableNumber, currentNormTable]);
+
+  // Hàm phát tán thay đổi giỏ hàng lên Server + WebSocket và BroadcastChannel
+  const syncCartToServer = useCallback(
+    (items) => {
+      try {
+        if (items && items.length > 0) {
+          localStorage.setItem(`hoadiemcat_cart_${currentNormTable}`, JSON.stringify(items));
+        } else {
+          localStorage.removeItem(`hoadiemcat_cart_${currentNormTable}`);
+        }
+      } catch {}
+
+      try {
+        cartChannelRef.current?.postMessage({ type: 'CART_UPDATED', items });
+      } catch {}
+
+      cartApi.updateCart(tableNumber, items).catch((err) => {
+        console.warn('Lỗi đồng bộ giỏ hàng lên server:', err);
+      });
+    },
+    [currentNormTable, tableNumber]
+  );
+
   // Cập nhật lại giỏ hàng nếu bàn ăn thay đổi
   const prevTableRef = useRef(currentNormTable);
   useEffect(() => {
@@ -718,6 +791,31 @@ export default function MenuPage() {
         })
       : null;
 
+    // Lắng nghe kênh giỏ hàng chung của bàn (UC04 Realtime Cart Sync)
+    const handleRemoteCartUpdate = (payload) => {
+      const currentDevToken = getStoredTableSession()?.deviceToken;
+      if (payload?.senderDeviceToken && currentDevToken && payload.senderDeviceToken === currentDevToken) {
+        return; // Bỏ qua gói tin do chính thiết bị này gửi lên để chống lặp đè state
+      }
+      const nextItems = Array.isArray(payload) ? payload : (payload?.items || []);
+      setCartItems(nextItems);
+      try {
+        if (nextItems.length > 0) {
+          localStorage.setItem(`hoadiemcat_cart_${currentNormTable}`, JSON.stringify(nextItems));
+        } else {
+          localStorage.removeItem(`hoadiemcat_cart_${currentNormTable}`);
+        }
+      } catch {}
+    };
+
+    const unsubCart1 = wsManager.subscribe(`/topic/table/${tableNumber}/cart`, handleRemoteCartUpdate);
+    const unsubCart2 = (tableNumber !== currentNormTable)
+      ? wsManager.subscribe(`/topic/table/${currentNormTable}/cart`, handleRemoteCartUpdate)
+      : null;
+    const unsubCartSession = currentSession?.sessionToken
+      ? wsManager.subscribe(`/topic/table/${currentSession.sessionToken}/cart`, handleRemoteCartUpdate)
+      : null;
+
     // Lắng nghe kênh thực đơn toàn hệ thống (Watermark SOLD OUT thời gian thực & Mở bán lại)
     const handleMenuUpdate = (payload) => {
       if (!payload) return;
@@ -800,6 +898,9 @@ export default function MenuPage() {
       if (unsub2) unsub2();
       if (unsubTables) unsubTables();
       if (unsubTransferred) unsubTransferred();
+      if (unsubCart1) unsubCart1();
+      if (unsubCart2) unsubCart2();
+      if (unsubCartSession) unsubCartSession();
       if (unsubMenu) unsubMenu();
       if (syncChannel) {
         syncChannel.removeEventListener('message', handleBroadcast);
@@ -1062,15 +1163,15 @@ export default function MenuPage() {
     setCartTab('draft');
     setCartItems((prev) => {
       const existingIndex = prev.findIndex((item) => item.id === dish.id);
+      let next;
       if (existingIndex > -1) {
-        const next = [...prev];
+        next = [...prev];
         next[existingIndex] = {
           ...next[existingIndex],
-          quantity: next[existingIndex].quantity + 1,
+          quantity: Math.min(next[existingIndex].quantity + 1, 99),
         };
-        return next;
       } else {
-        return [
+        next = [
           ...prev,
           {
             id: dish.id,
@@ -1078,9 +1179,12 @@ export default function MenuPage() {
             price: price || dish.price,
             quantity: 1,
             image: dish.image,
+            unit: dish.unit,
           },
         ];
       }
+      syncCartToServer(next);
+      return next;
     });
   };
 
@@ -1094,31 +1198,44 @@ export default function MenuPage() {
       handleRemoveItem(dishId);
       return;
     }
-    setCartItems((prev) =>
-      prev.map((item) =>
-        item.id === dishId ? { ...item, quantity: newQuantity } : item
-      )
-    );
+    setCartItems((prev) => {
+      const next = prev.map((item) =>
+        item.id === dishId ? { ...item, quantity: Math.min(newQuantity, 99) } : item
+      );
+      syncCartToServer(next);
+      return next;
+    });
   };
 
   // Xóa món khỏi giỏ
   const handleRemoveItem = (dishId) => {
     if (isOrderLocked) return;
-    setCartItems((prev) => prev.filter((item) => item.id !== dishId));
+    setCartItems((prev) => {
+      const next = prev.filter((item) => item.id !== dishId);
+      syncCartToServer(next);
+      return next;
+    });
   };
 
   // Xóa toàn bộ giỏ
   const handleClearCart = () => {
     if (isOrderLocked) return;
     setCartItems([]);
+    cartApi.clearCart(tableNumber).catch(() => {});
+    try {
+      localStorage.removeItem(`hoadiemcat_cart_${currentNormTable}`);
+      cartChannelRef.current?.postMessage({ type: 'CART_UPDATED', items: [] });
+    } catch {}
   };
 
   // Cập nhật ghi chú riêng cho từng món
   const handleUpdateItemNote = (dishId, note) => {
     if (isOrderLocked) return;
-    setCartItems((prev) =>
-      prev.map((item) => (item.id === dishId ? { ...item, note } : item))
-    );
+    setCartItems((prev) => {
+      const next = prev.map((item) => (item.id === dishId ? { ...item, note } : item));
+      syncCartToServer(next);
+      return next;
+    });
   };
 
   // Ref chống gửi trùng lặp đơn hàng (Double submit guard)
@@ -1163,8 +1280,13 @@ export default function MenuPage() {
         serverOrder: serverResponse,
       });
 
-      // 3. Làm rỗng giỏ hàng nháp
+      // 3. Làm rỗng giỏ hàng nháp trên client và server
       setCartItems([]);
+      cartApi.clearCart(tableNumber).catch(() => {});
+      try {
+        localStorage.removeItem(`hoadiemcat_cart_${currentNormTable}`);
+        cartChannelRef.current?.postMessage({ type: 'CART_UPDATED', items: [] });
+      } catch {}
     } catch (err) {
       console.warn('Lỗi khi gửi order lên server, chuyển sang chế độ dự phòng cục bộ:', err);
       // Fallback: Nếu mạng gián đoạn, vẫn lưu cục bộ để không gián đoạn trải nghiệm
@@ -1174,6 +1296,9 @@ export default function MenuPage() {
         totalAmount: (orderData && orderData.totalAmount) || totalAmount,
       });
       setCartItems([]);
+      try {
+        localStorage.removeItem(`hoadiemcat_cart_${currentNormTable}`);
+      } catch {}
     } finally {
       setTimeout(() => {
         isSubmittingOrder.current = false;
