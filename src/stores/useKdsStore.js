@@ -300,6 +300,59 @@ export const useKdsStore = create((set, get) => ({
     return eventData;
   },
 
+  // 3.1 Thao tác từ PHỤC VỤ: Hoàn tác bưng món về trạng thái sẵn sàng (DELIVERED -> SERVED)
+  undeliverItem: (orderId, itemId) => {
+    let affectedItemName = '';
+    let affectedTableCode = '';
+
+    const currentOrders = get().orders;
+    const nextOrders = currentOrders.map((order) => {
+      if (order.id !== orderId) return order;
+      affectedTableCode = order.tableCode;
+
+      const updatedItems = order.items.map((item) => {
+        if (item.id !== itemId) return item;
+        affectedItemName = item.name;
+        return {
+          ...item,
+          status: 'SERVED',
+          deliveredAt: null,
+          servedAt: item.servedAt || new Date().toISOString(),
+        };
+      });
+
+      const allDelivered = updatedItems.every((i) => i.status === 'DELIVERED');
+
+      return {
+        ...order,
+        items: updatedItems,
+        status: allDelivered ? 'DELIVERED' : 'COOKING',
+      };
+    });
+
+    const eventData = {
+      type: 'WAITER_ITEM_UNDELIVERED',
+      orderId,
+      itemId,
+      nextStatus: 'SERVED',
+      affectedItemName,
+      affectedTableCode,
+      message: `↩️ Đã hoàn tác món ${affectedItemName} về Chờ phục vụ (${affectedTableCode})`,
+    };
+
+    set({ orders: nextOrders, lastBroadcastEvent: eventData });
+    broadcastUpdate(nextOrders, eventData);
+
+    // Đồng bộ hoàn tác món xuống Server MySQL
+    if (typeof itemId === 'number' || (!String(itemId).startsWith('oi-') && !isNaN(Number(itemId)))) {
+      waiterApi.undeliverItem(itemId).catch((err) => {
+        console.warn('Lỗi khi xác nhận hoàn tác phục vụ món lên server:', err);
+      });
+    }
+
+    return eventData;
+  },
+
   // 4. Thao tác từ PHỤC VỤ: Bưng tất cả các món đang sẵn sàng của bàn
   deliverAllReadyItems: (orderId) => {
     let affectedTable = '';
@@ -591,15 +644,18 @@ export const useKdsStore = create((set, get) => ({
             ...item,
             status: nextStatus,
             servedAt: nextStatus === 'SERVED' ? (item.servedAt || new Date().toISOString()) : item.servedAt,
-            deliveredAt: nextStatus === 'DELIVERED' ? (item.deliveredAt || new Date().toISOString()) : item.deliveredAt,
+            deliveredAt: nextStatus === 'DELIVERED' ? (item.deliveredAt || new Date().toISOString()) : (nextStatus === 'SERVED' ? null : item.deliveredAt),
           };
         }
         return item;
       });
 
+      const allDelivered = updatedItems.every((i) => i.status === 'DELIVERED');
+
       return {
         ...order,
         items: updatedItems,
+        status: allDelivered ? 'DELIVERED' : (order.status === 'DELIVERED' ? 'COOKING' : order.status),
       };
     });
 
