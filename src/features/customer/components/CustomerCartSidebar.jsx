@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { CATEGORY_ICONS } from './CustomerCategorySidebar';
 import { tableApi } from '@/features/tables/api/tableApi';
+import ConfirmSendOrderModal from './ConfirmSendOrderModal';
 
 /**
  * CustomerCartSidebar
@@ -88,6 +89,7 @@ export default function CustomerCartSidebar({
     setInternalTab(tab);
   };
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
   const [payRequested, setPayRequested] = useState(false);
   const [isCallingStaff, setIsCallingStaff] = useState(false);
@@ -153,7 +155,17 @@ export default function CustomerCartSidebar({
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
   }, [orderedItems]);
 
+  const handleOpenConfirmModal = () => {
+    if (isOrderLocked) {
+      alert('Bàn đang chốt hóa đơn tạm tính, toàn bộ thao tác đặt món đã bị đóng băng.');
+      return;
+    }
+    if (cartItems.length === 0 || isSuccess) return;
+    setIsConfirmModalOpen(true);
+  };
+
   const handleConfirmSubmit = () => {
+    setIsConfirmModalOpen(false);
     if (isOrderLocked) {
       alert('Bàn đang chốt hóa đơn tạm tính, toàn bộ thao tác đặt món đã bị đóng băng.');
       return;
@@ -527,7 +539,7 @@ export default function CustomerCartSidebar({
           ) : isHost ? (
             <button
               type="button"
-              onClick={handleConfirmSubmit}
+              onClick={handleOpenConfirmModal}
               className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#990000] via-[#C41E3A] to-[#E63946] text-white font-extrabold text-xs shadow-[0_4px_16px_rgba(196,30,58,0.5)] active:scale-95 transition-transform flex items-center justify-center space-x-2 border border-[#FFE699]/30 hover:brightness-110"
             >
               <span>Gửi Vào Bếp ({draftCount} món)</span>
@@ -630,6 +642,16 @@ export default function CustomerCartSidebar({
           </p>
         </div>
       )}
+
+      {/* Modal Popup Xác Nhận Gửi Đơn Vào Bếp */}
+      <ConfirmSendOrderModal
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        onConfirm={handleConfirmSubmit}
+        tableNumber={tableNumber}
+        items={cartItems}
+        totalAmount={draftAmount}
+      />
     </aside>
   );
 }

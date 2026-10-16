@@ -16,6 +16,7 @@ import {
   Bell,
 } from 'lucide-react';
 import { tableApi } from '@/features/tables/api/tableApi';
+import ConfirmSendOrderModal from './ConfirmSendOrderModal';
 
 /**
  * CustomerCartDrawer
@@ -89,6 +90,7 @@ export default function CustomerCartDrawer({
     setInternalTab(tab);
   };
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
   const [payRequested, setPayRequested] = useState(false);
   const [isCallingStaff, setIsCallingStaff] = useState(false);
@@ -156,7 +158,17 @@ export default function CustomerCartDrawer({
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
   }, [orderedItems]);
 
+  const handleOpenConfirmModal = () => {
+    if (isOrderLocked) {
+      alert('Bàn đang chốt hóa đơn tạm tính, toàn bộ thao tác đặt món đã bị đóng băng.');
+      return;
+    }
+    if (cartItems.length === 0 || isSuccess) return;
+    setIsConfirmModalOpen(true);
+  };
+
   const handleConfirmSubmit = () => {
+    setIsConfirmModalOpen(false);
     if (isOrderLocked) {
       alert('Bàn đang chốt hóa đơn tạm tính, toàn bộ thao tác đặt món đã bị đóng băng.');
       return;
@@ -404,11 +416,11 @@ export default function CustomerCartDrawer({
                   ) : isHost ? (
                     <button
                       type="button"
-                      onClick={handleConfirmSubmit}
+                      onClick={handleOpenConfirmModal}
                       className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#990000] via-[#C41E3A] to-[#E63946] text-white font-extrabold text-xs shadow-[0_4px_16px_rgba(196,30,58,0.5)] active:scale-95 transition-transform flex items-center justify-center space-x-1.5 border border-[#FFE699]/30 hover:brightness-110 select-none"
                     >
                       <Crown className="w-3.5 h-3.5 text-gold" />
-                      <span>Xác Nhận Gửi Bếp ({draftCount} món)</span>
+                      <span>Gửi Vào Bếp ({draftCount} món)</span>
                     </button>
                   ) : (
                     <div className="flex-1 flex flex-col items-center">
@@ -656,6 +668,16 @@ export default function CustomerCartDrawer({
           </>
         )}
       </div>
+
+      {/* Modal Popup Xác Nhận Gửi Đơn Vào Bếp */}
+      <ConfirmSendOrderModal
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        onConfirm={handleConfirmSubmit}
+        tableNumber={tableNumber}
+        items={cartItems}
+        totalAmount={draftAmount}
+      />
     </div>
   );
 }
