@@ -8,6 +8,9 @@ export { default as CustomerCartDrawer } from './components/CustomerCartDrawer';
 export { default as CustomerCartSidebar } from './components/CustomerCartSidebar';
 export { default as CustomerOutOfStockNoticeModal } from './components/CustomerOutOfStockNoticeModal';
 export { default as ConfirmSendOrderModal } from './components/ConfirmSendOrderModal';
+export { default as ConfirmClearCartModal } from './components/ConfirmClearCartModal';
+export { default as ConfirmRemoveItemModal } from './components/ConfirmRemoveItemModal';
+export { default as CartToastNotification } from './components/CartToastNotification';
 export { default as TableTransferModal } from './components/TableTransferModal';
 
 export * from './data/mockCustomerMenu';

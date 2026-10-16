@@ -10,6 +10,7 @@ import {
   CustomerCartDrawer,
   CustomerCartSidebar,
   CustomerOutOfStockNoticeModal,
+  CartToastNotification,
   TableTransferModal,
   CATEGORY_ICONS,
 } from '@/features/customer';
@@ -1229,14 +1230,35 @@ export default function MenuPage() {
     });
   };
 
+  // Toast thông báo sau khi xóa món / xóa hết giỏ hàng (góc dưới cùng bên phải)
+  const [cartToast, setCartToast] = useState({ isVisible: false, title: '', message: '' });
+  const toastTimerRef = useRef(null);
+
+  const showCartToast = useCallback((message, title = 'Đã Xóa Thành Công') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setCartToast({ isVisible: true, title, message });
+    toastTimerRef.current = setTimeout(() => {
+      setCartToast((prev) => ({ ...prev, isVisible: false }));
+    }, 3200);
+  }, []);
+
   // Xóa món khỏi giỏ
   const handleRemoveItem = (dishId) => {
     if (isOrderLocked) return;
+    const itemToDelete = cartItems.find((item) => item.id === dishId);
+    const itemName = itemToDelete?.name;
+
     setCartItems((prev) => {
       const next = prev.filter((item) => item.id !== dishId);
       syncCartToServer(next);
       return next;
     });
+
+    if (itemName) {
+      showCartToast(`Đã xóa món "${itemName}" khỏi giỏ hàng.`, 'Đã Xóa Món Ăn');
+    } else {
+      showCartToast('Đã xóa món ăn khỏi giỏ hàng.', 'Đã Xóa Món Ăn');
+    }
   };
 
   // Xóa toàn bộ giỏ
@@ -1248,6 +1270,7 @@ export default function MenuPage() {
       localStorage.removeItem(`hoadiemcat_cart_${currentNormTable}`);
       cartChannelRef.current?.postMessage({ type: 'CART_UPDATED', items: [] });
     } catch {}
+    showCartToast('Đã xóa toàn bộ món ăn trong giỏ hàng.', 'Đã Xóa Hết Giỏ Hàng');
   };
 
   // Cập nhật ghi chú riêng cho từng món
@@ -1729,6 +1752,14 @@ export default function MenuPage() {
           </div>
         </div>
       )}
+
+      {/* 11. Toast Thông Báo Góc Dưới Cùng Bên Phải Sau Khi Xóa Món / Xóa Hết */}
+      <CartToastNotification
+        isVisible={cartToast.isVisible}
+        title={cartToast.title}
+        message={cartToast.message}
+        onClose={() => setCartToast((prev) => ({ ...prev, isVisible: false }))}
+      />
     </div>
   );
 }

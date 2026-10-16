@@ -18,6 +18,8 @@ import {
 import { CATEGORY_ICONS } from './CustomerCategorySidebar';
 import { tableApi } from '@/features/tables/api/tableApi';
 import ConfirmSendOrderModal from './ConfirmSendOrderModal';
+import ConfirmClearCartModal from './ConfirmClearCartModal';
+import ConfirmRemoveItemModal from './ConfirmRemoveItemModal';
 
 /**
  * CustomerCartSidebar
@@ -90,6 +92,8 @@ export default function CustomerCartSidebar({
   };
   const [isSuccess, setIsSuccess] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [itemPendingDelete, setItemPendingDelete] = useState(null);
   const [isPaying, setIsPaying] = useState(false);
   const [payRequested, setPayRequested] = useState(false);
   const [isCallingStaff, setIsCallingStaff] = useState(false);
@@ -202,9 +206,9 @@ export default function CustomerCartSidebar({
         {activeTab === 'draft' && cartItems.length > 0 && (
           <button
             type="button"
-            onClick={onClearCart}
+            onClick={() => setIsClearModalOpen(true)}
             title="Xóa tất cả món đang chọn"
-            className="text-[11px] text-[#A39E93] hover:text-[#FFB4AB] transition-colors"
+            className="text-[11px] text-[#A39E93] hover:text-[#FFB4AB] transition-colors cursor-pointer"
           >
             Xóa hết
           </button>
@@ -330,10 +334,15 @@ export default function CustomerCartSidebar({
                         <div className="flex items-center space-x-1 bg-[#141418] px-1.5 py-0.5 rounded-full border border-[rgba(212,175,55,0.25)]">
                           <button
                             type="button"
-                            onClick={() =>
-                              onUpdateQuantity(item.id, item.quantity - 1)
-                            }
-                            className="w-4 h-4 rounded-full bg-[#2A2A30] text-[#D6D3CD] flex items-center justify-center active:scale-90"
+                            onClick={() => {
+                              if (item.quantity <= 1) {
+                                setItemPendingDelete(item);
+                              } else {
+                                onUpdateQuantity(item.id, item.quantity - 1);
+                              }
+                            }}
+                            title={item.quantity <= 1 ? "Xóa món khỏi giỏ" : "Giảm số lượng"}
+                            className="w-4 h-4 rounded-full bg-[#2A2A30] text-[#D6D3CD] flex items-center justify-center active:scale-90 cursor-pointer"
                           >
                             <Minus className="w-2.5 h-2.5 stroke-[2.5]" />
                           </button>
@@ -345,7 +354,8 @@ export default function CustomerCartSidebar({
                             onClick={() =>
                               onUpdateQuantity(item.id, item.quantity + 1)
                             }
-                            className="w-4 h-4 rounded-full bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white flex items-center justify-center active:scale-90"
+                            title="Tăng số lượng"
+                            className="w-4 h-4 rounded-full bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white flex items-center justify-center active:scale-90 cursor-pointer"
                           >
                             <Plus className="w-2.5 h-2.5 stroke-[2.5]" />
                           </button>
@@ -353,9 +363,9 @@ export default function CustomerCartSidebar({
 
                         <button
                           type="button"
-                          onClick={() => onRemoveItem(item.id)}
+                          onClick={() => setItemPendingDelete(item)}
                           title="Xóa món"
-                          className="w-6 h-6 rounded-md text-[#FFB4AB]/70 hover:text-[#FFB4AB] hover:bg-[#3E1118] flex items-center justify-center transition-colors"
+                          className="w-6 h-6 rounded-md text-[#FFB4AB]/70 hover:text-[#FFB4AB] hover:bg-[#3E1118] flex items-center justify-center transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
@@ -651,6 +661,35 @@ export default function CustomerCartSidebar({
         tableNumber={tableNumber}
         items={cartItems}
         totalAmount={draftAmount}
+      />
+
+      {/* 1. Modal Popup Xác Nhận Xóa Hết Giỏ Hàng */}
+      <ConfirmClearCartModal
+        isOpen={isClearModalOpen}
+        onClose={() => setIsClearModalOpen(false)}
+        onConfirm={() => {
+          setIsClearModalOpen(false);
+          if (onClearCart) onClearCart();
+        }}
+        tableNumber={tableNumber}
+        items={cartItems}
+        itemsCount={cartItems.length}
+        totalPortions={draftCount}
+        totalAmount={draftAmount}
+      />
+
+      {/* 2. Modal Popup Xác Nhận Xóa Món Đó Khỏi Giỏ Hàng */}
+      <ConfirmRemoveItemModal
+        isOpen={Boolean(itemPendingDelete)}
+        onClose={() => setItemPendingDelete(null)}
+        onConfirm={() => {
+          if (itemPendingDelete && onRemoveItem) {
+            onRemoveItem(itemPendingDelete.id);
+          }
+          setItemPendingDelete(null);
+        }}
+        tableNumber={tableNumber}
+        item={itemPendingDelete}
       />
     </aside>
   );

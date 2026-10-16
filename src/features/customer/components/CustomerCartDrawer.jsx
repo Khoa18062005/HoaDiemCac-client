@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { tableApi } from '@/features/tables/api/tableApi';
 import ConfirmSendOrderModal from './ConfirmSendOrderModal';
+import ConfirmClearCartModal from './ConfirmClearCartModal';
+import ConfirmRemoveItemModal from './ConfirmRemoveItemModal';
 
 /**
  * CustomerCartDrawer
@@ -91,6 +93,8 @@ export default function CustomerCartDrawer({
   };
   const [isSuccess, setIsSuccess] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [itemPendingDelete, setItemPendingDelete] = useState(null);
   const [isPaying, setIsPaying] = useState(false);
   const [payRequested, setPayRequested] = useState(false);
   const [isCallingStaff, setIsCallingStaff] = useState(false);
@@ -210,14 +214,26 @@ export default function CustomerCartDrawer({
             </h2>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Đóng"
-            className="w-8 h-8 rounded-full bg-white/5 text-[#D6D3CD] flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {activeTab === 'draft' && cartItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsClearModalOpen(true)}
+                title="Xóa tất cả món đang chọn"
+                className="text-[11px] text-[#A39E93] hover:text-[#FFB4AB] transition-colors cursor-pointer px-1.5 py-0.5 rounded"
+              >
+                Xóa hết
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Đóng"
+              className="w-8 h-8 rounded-full bg-white/5 text-[#D6D3CD] flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* 2. Segmented Tab Bar: Chọn món vs Tất cả (Hiệu ứng trượt lướt mượt mà) */}
@@ -340,10 +356,15 @@ export default function CustomerCartDrawer({
                             <div className="flex items-center space-x-1.5 bg-[#141418] px-1.5 py-0.5 rounded-full border border-[rgba(212,175,55,0.25)]">
                               <button
                                 type="button"
-                                onClick={() =>
-                                  onUpdateQuantity(item.id, item.quantity - 1)
-                                }
-                                className="w-5 h-5 rounded-full bg-[#2A2A30] text-[#D6D3CD] flex items-center justify-center active:scale-90"
+                                onClick={() => {
+                                  if (item.quantity <= 1) {
+                                    setItemPendingDelete(item);
+                                  } else {
+                                    onUpdateQuantity(item.id, item.quantity - 1);
+                                  }
+                                }}
+                                title={item.quantity <= 1 ? "Xóa món khỏi giỏ" : "Giảm số lượng"}
+                                className="w-5 h-5 rounded-full bg-[#2A2A30] text-[#D6D3CD] flex items-center justify-center active:scale-90 cursor-pointer"
                               >
                                 <Minus className="w-3 h-3 stroke-[2.5]" />
                               </button>
@@ -355,7 +376,8 @@ export default function CustomerCartDrawer({
                                 onClick={() =>
                                   onUpdateQuantity(item.id, item.quantity + 1)
                                 }
-                                className="w-5 h-5 rounded-full bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white flex items-center justify-center active:scale-90"
+                                title="Tăng số lượng"
+                                className="w-5 h-5 rounded-full bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white flex items-center justify-center active:scale-90 cursor-pointer"
                               >
                                 <Plus className="w-3 h-3 stroke-[2.5]" />
                               </button>
@@ -363,9 +385,10 @@ export default function CustomerCartDrawer({
 
                             <button
                               type="button"
-                              onClick={() => onRemoveItem(item.id)}
+                              onClick={() => setItemPendingDelete(item)}
                               aria-label="Xóa món"
-                              className="w-7 h-7 rounded-lg text-[#FFB4AB]/70 hover:text-[#FFB4AB] hover:bg-[#3E1118] flex items-center justify-center transition-colors"
+                              title="Xóa món"
+                              className="w-7 h-7 rounded-lg text-[#FFB4AB]/70 hover:text-[#FFB4AB] hover:bg-[#3E1118] flex items-center justify-center transition-colors cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -677,6 +700,35 @@ export default function CustomerCartDrawer({
         tableNumber={tableNumber}
         items={cartItems}
         totalAmount={draftAmount}
+      />
+
+      {/* 1. Modal Popup Xác Nhận Xóa Hết Giỏ Hàng */}
+      <ConfirmClearCartModal
+        isOpen={isClearModalOpen}
+        onClose={() => setIsClearModalOpen(false)}
+        onConfirm={() => {
+          setIsClearModalOpen(false);
+          if (onClearCart) onClearCart();
+        }}
+        tableNumber={tableNumber}
+        items={cartItems}
+        itemsCount={cartItems.length}
+        totalPortions={draftCount}
+        totalAmount={draftAmount}
+      />
+
+      {/* 2. Modal Popup Xác Nhận Xóa Món Đó Khỏi Giỏ Hàng */}
+      <ConfirmRemoveItemModal
+        isOpen={Boolean(itemPendingDelete)}
+        onClose={() => setItemPendingDelete(null)}
+        onConfirm={() => {
+          if (itemPendingDelete && onRemoveItem) {
+            onRemoveItem(itemPendingDelete.id);
+          }
+          setItemPendingDelete(null);
+        }}
+        tableNumber={tableNumber}
+        item={itemPendingDelete}
       />
     </div>
   );
