@@ -5,6 +5,7 @@ import { kitchenApi } from '../api/kitchenApi';
 import ConfirmOutOfStockModal from './ConfirmOutOfStockModal';
 import useKdsStore, { syncChannel, broadcastMenuSync } from '@/stores/useKdsStore';
 import { wsManager } from '@/lib/websocket';
+import { matchesVietnameseSearch } from '@/utils/formatters';
 
 export default function OutOfStockModal({ isOpen, onClose, onShowToast }) {
   const [items, setItems] = useState([]);
@@ -103,8 +104,10 @@ export default function OutOfStockModal({ isOpen, onClose, onShowToast }) {
         return false;
       }
       if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        return item.name.toLowerCase().includes(query) || (item.categoryName && item.categoryName.toLowerCase().includes(query));
+        return (
+          matchesVietnameseSearch(item.name, searchQuery) ||
+          matchesVietnameseSearch(item.categoryName, searchQuery)
+        );
       }
       return true;
     });

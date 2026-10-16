@@ -25,6 +25,7 @@ import {
 import { SYSTEM_PERMISSIONS } from '@/features/employee';
 
 import { useAuthStore } from '@/stores/useAuthStore';
+import { handleNumericKeyDown, sanitizeNumericInput } from '@/utils/validators';
 
 export default function AdminProfilePage() {
   const { user } = useAuthStore();
@@ -138,8 +139,8 @@ export default function AdminProfilePage() {
       showToast('Vui lòng nhập mật khẩu mới', 'error');
       return;
     }
-    if (passwordForm.newPassword.length < 6) {
-      showToast('Mật khẩu mới phải có tối thiểu 6 ký tự', 'error');
+    if (passwordForm.newPassword.length < 8) {
+      showToast('Mật khẩu không đủ mạnh: Mật khẩu mới phải có tối thiểu 8 ký tự', 'error');
       return;
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
@@ -316,9 +317,13 @@ export default function AdminProfilePage() {
                       <span className="text-red-400">*</span>
                     </label>
                     <input
-                      type="text"
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={11}
                       value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      onKeyDown={handleNumericKeyDown}
+                      onChange={(e) => setFormData({ ...formData, phone: sanitizeNumericInput(e.target.value, 11) })}
                       className="w-full px-3.5 py-2.5 rounded-lg bg-surface-card border border-surface-border text-white placeholder-[#555] focus:outline-none focus:border-gold transition-colors"
                       placeholder="Chưa cập nhật"
                     />

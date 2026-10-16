@@ -76,7 +76,37 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     const status = error.response?.status;
-    const message = error.response?.data?.message || error.message || 'Lỗi kết nối máy chủ';
+    let message = error.response?.data?.message;
+
+    // Trích xuất chi tiết nếu máy chủ trả về validation errors trong `result`
+    const resultErrors = error.response?.data?.result;
+    if (resultErrors && typeof resultErrors === 'object') {
+      if (resultErrors.password) {
+        message = resultErrors.password.toLowerCase().includes('mật khẩu không đủ mạnh')
+          ? resultErrors.password
+          : `Mật khẩu không đủ mạnh: ${resultErrors.password}`;
+      } else if (resultErrors.newPassword) {
+        message = resultErrors.newPassword.toLowerCase().includes('mật khẩu không đủ mạnh')
+          ? resultErrors.newPassword
+          : `Mật khẩu không đủ mạnh: ${resultErrors.newPassword}`;
+      } else {
+        const firstErrorKey = Object.keys(resultErrors)[0];
+        if (firstErrorKey && resultErrors[firstErrorKey]) {
+          message = resultErrors[firstErrorKey];
+        }
+      }
+    } else if (message === 'Validation failed' || message === 'Validation error') {
+      message = 'Mật khẩu không đủ mạnh hoặc dữ liệu không hợp lệ. Vui lòng kiểm tra lại!';
+    }
+
+    // Nếu không có phản hồi từ máy chủ hoặc gặp lỗi mạng (ERR_NETWORK, Network Error)
+    if (!message) {
+      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error' || !error.response) {
+        message = 'Hệ thống đã bị ngắt kết nối, vui lòng thử lại sau!';
+      } else {
+        message = error.message || 'Hệ thống đã bị ngắt kết nối, vui lòng thử lại sau!';
+      }
+    }
 
     // Xử lý khi token hết hạn hoặc chưa đăng nhập
     if (status === 401) {

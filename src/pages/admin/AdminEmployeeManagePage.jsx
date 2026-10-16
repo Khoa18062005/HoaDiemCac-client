@@ -23,6 +23,7 @@ import {
   generateEmployeePassword,
 } from '@/features/employee';
 import { apiClient } from '@/lib/axios';
+import { matchesVietnameseSearch } from '@/utils/formatters';
 
 export default function AdminEmployeeManagePage() {
   const [employees, setEmployees] = useState([]);
@@ -105,13 +106,12 @@ export default function AdminEmployeeManagePage() {
       if (statusFilter === 'active' && emp.status !== 'ACTIVE') return false;
       if (statusFilter === 'locked' && emp.status === 'ACTIVE') return false;
 
-      // 3. Lọc theo thanh tìm kiếm
+      // 3. Lọc theo thanh tìm kiếm (hỗ trợ tiếng Việt không dấu)
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchName = emp.fullName?.toLowerCase().includes(q);
-        const matchEmail = emp.email?.toLowerCase().includes(q);
-        const matchPhone = emp.phone?.toLowerCase().includes(q);
-        const matchCode = emp.code?.toLowerCase().includes(q);
+        const matchName = matchesVietnameseSearch(emp.fullName, searchQuery);
+        const matchEmail = matchesVietnameseSearch(emp.email, searchQuery);
+        const matchPhone = matchesVietnameseSearch(emp.phone, searchQuery);
+        const matchCode = matchesVietnameseSearch(emp.code, searchQuery);
         if (!matchName && !matchEmail && !matchPhone && !matchCode) return false;
       }
 

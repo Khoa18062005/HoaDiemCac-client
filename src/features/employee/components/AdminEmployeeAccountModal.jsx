@@ -30,6 +30,7 @@ import {
 } from '../data/mockEmployees';
 import { apiClient } from '@/lib/axios';
 import { Loader2 } from 'lucide-react';
+import { handleNumericKeyDown, sanitizeNumericInput } from '@/utils/validators';
 
 const ICON_MAP = {
   LayoutGrid: LayoutGrid,
@@ -273,6 +274,17 @@ export default function AdminEmployeeAccountModal({
       return false;
     }
 
+    if (password.trim()) {
+      if (password.length < 8) {
+        setErrorMessage('Mật khẩu không đủ mạnh. Mật khẩu phải có tối thiểu 8 ký tự.');
+        return false;
+      }
+      if (!hasLetter || !hasNumber) {
+        setErrorMessage('Mật khẩu không đủ mạnh. Mật khẩu phải bao gồm cả chữ cái và chữ số.');
+        return false;
+      }
+    }
+
     if (selectedPermissions.length === 0) {
       setErrorMessage('Vui lòng chọn ít nhất 1 chức năng phân quyền cho nhân viên ở cột bên trái.');
       return false;
@@ -362,7 +374,11 @@ export default function AdminEmployeeAccountModal({
       onClose();
     } catch (error) {
       console.error('Lỗi khi lưu thông tin nhân viên:', error);
-      setErrorMessage(error.message || 'Đã xảy ra lỗi khi lưu thông tin nhân viên. Vui lòng thử lại sau.');
+      let errMsg = error.message || 'Đã xảy ra lỗi khi lưu thông tin nhân viên. Vui lòng thử lại sau.';
+      if (errMsg === 'Validation failed' || errMsg.toLowerCase().includes('validation fail')) {
+        errMsg = 'Mật khẩu không đủ mạnh. Vui lòng kiểm tra lại độ dài và độ phức tạp của mật khẩu!';
+      }
+      setErrorMessage(errMsg);
     } finally {
       setIsLoading(false);
     }
@@ -708,8 +724,12 @@ export default function AdminEmployeeAccountModal({
                       </div>
                       <input
                         type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={11}
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
+                        onKeyDown={handleNumericKeyDown}
+                        onChange={(e) => setPhone(sanitizeNumericInput(e.target.value, 11))}
                         placeholder="09xx xxx xxx"
                         className="input-imperial w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#0D0D11] border border-surface-border text-xs text-[#EDEDED] placeholder-[#5A5A62] outline-none"
                       />

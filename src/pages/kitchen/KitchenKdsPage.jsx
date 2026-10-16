@@ -86,18 +86,53 @@ export default function KitchenKdsPage() {
     simulateNewOrderStore();
   }, [simulateNewOrderStore]);
 
+  // Ref quản lý debounce các thao tác chuyển trạng thái món và đơn (chống spam / duplicate click)
+  const pendingItemsRef = useRef(new Map());
+  const pendingOrdersRef = useRef(new Map());
+
   // 5. Thao tác một chạm (One-tap) cập nhật trạng thái từng món (UC18)
   const handleToggleItemStatus = useCallback(async (orderId, itemId) => {
-    const result = toggleKitchenItemStatus(orderId, itemId);
+    const now = Date.now();
+    const lastTime = pendingItemsRef.current.get(itemId) || 0;
+    // Bỏ qua mọi click spam trong vòng 600ms
+    if (now - lastTime < 600) {
+      return;
+    }
+    pendingItemsRef.current.set(itemId, now);
 
-    // Gửi cập nhật lên Backend
-    await kitchenApi.updateOrderItemStatus(itemId, result.nextStatus);
+    try {
+      toggleKitchenItemStatus(orderId, itemId);
+    } catch (err) {
+      console.error('Lỗi khi cập nhật trạng thái món:', err);
+    } finally {
+      setTimeout(() => {
+        if (pendingItemsRef.current.get(itemId) === now) {
+          pendingItemsRef.current.delete(itemId);
+        }
+      }, 600);
+    }
   }, [toggleKitchenItemStatus]);
 
   // 6. Hoàn thành toàn bộ đợt order của bàn
   const handleCompleteAllItems = useCallback(async (orderId) => {
-    completeAllKitchenItems(orderId);
-    await kitchenApi.updateOrderStatus(orderId, 'COMPLETED');
+    const now = Date.now();
+    const lastTime = pendingOrdersRef.current.get(orderId) || 0;
+    if (now - lastTime < 600) {
+      return;
+    }
+    pendingOrdersRef.current.set(orderId, now);
+
+    try {
+      completeAllKitchenItems(orderId);
+    } catch (err) {
+      console.error('Lỗi khi hoàn thành toàn bộ đợt:', err);
+    } finally {
+      setTimeout(() => {
+        if (pendingOrdersRef.current.get(orderId) === now) {
+          pendingOrdersRef.current.delete(orderId);
+        }
+      }, 600);
+    }
   }, [completeAllKitchenItems]);
 
   // 6.1 Xử lý xác nhận báo hết món khẩn cấp từ thẻ đơn bàn (UC19)

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Clock,
   Check,
@@ -44,6 +44,73 @@ export default function KdsOrderCard({
     }, 1000);
     return () => clearInterval(interval);
   }, [order.createdAt]);
+
+  // Set lưu trữ các itemId đang trong quá trình chuyển trạng thái (để vô hiệu hóa nút và chống spam)
+  const [processingItemIds, setProcessingItemIds] = useState(() => new Set());
+  const lastItemClickRef = useRef({});
+
+  // Debounce cho nút Ra Cả Bàn
+  const [isCompletingAll, setIsCompletingAll] = useState(false);
+  const lastCompleteAllClickRef = useRef(0);
+
+  const handleItemClick = (e, item) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    if (item.status === 'DELIVERED') return;
+
+    const itemId = item.id;
+    const now = Date.now();
+    const lastClick = lastItemClickRef.current[itemId] || 0;
+
+    // Cơ chế Debounce: Bỏ qua mọi click tiếp theo trong vòng 600ms (hoặc khi đang xử lý)
+    if (now - lastClick < 600 || processingItemIds.has(itemId)) {
+      return;
+    }
+
+    lastItemClickRef.current[itemId] = now;
+
+    // Vô hiệu hóa (disabled) ngay lập tức tại cú click đầu tiên
+    setProcessingItemIds((prev) => new Set(prev).add(itemId));
+
+    try {
+      if (onToggleItemStatus) {
+        onToggleItemStatus(order.id, itemId);
+      }
+    } finally {
+      // Giữ trạng thái disabled trong 600ms để triệt để ngăn chặn spam click
+      setTimeout(() => {
+        setProcessingItemIds((prev) => {
+          const next = new Set(prev);
+          next.delete(itemId);
+          return next;
+        });
+      }, 600);
+    }
+  };
+
+  const handleCompleteAllClick = () => {
+    const totalCount = order.items?.length || 0;
+    const completedCount = order.items?.filter(
+      (i) => i.status === 'SERVED' || i.status === 'DELIVERED'
+    ).length || 0;
+    const isCompleted = totalCount > 0 && completedCount === totalCount;
+    if (isCompleted || isCompletingAll) return;
+
+    const now = Date.now();
+    if (now - lastCompleteAllClickRef.current < 600) return;
+    lastCompleteAllClickRef.current = now;
+
+    setIsCompletingAll(true);
+    try {
+      if (onCompleteAllItems) {
+        onCompleteAllItems(order.id);
+      }
+    } finally {
+      setTimeout(() => setIsCompletingAll(false), 600);
+    }
+  };
 
   const minutes = Math.floor(elapsedSeconds / 60);
 
@@ -124,21 +191,29 @@ export default function KdsOrderCard({
           const isServed = item.status === 'SERVED';
           const isDelivered = item.status === 'DELIVERED';
           const isDone = isServed || isDelivered;
+          const isProcessing = processingItemIds.has(item.id);
+          const isButtonDisabled = isDelivered || isProcessing;
 
           return (
             <div
               key={item.id}
-              onClick={() => {
-                if (isDelivered) return; // Món đã bưng cho khách thì không hoàn tác về COOKING
-                onToggleItemStatus(order.id, item.id);
+              onClick={(e) => {
+                if (isButtonDisabled) return;
+                handleItemClick(e, item);
               }}
-              className={`py-2 px-2 rounded-lg cursor-pointer transition-all duration-150 flex items-start justify-between gap-3 group select-none ${
+              className={`py-2 px-2 rounded-lg transition-all duration-150 flex items-start justify-between gap-3 group select-none ${
+                isButtonDisabled
+                  ? 'cursor-not-allowed opacity-80'
+                  : 'cursor-pointer'
+              } ${
                 isDone
                   ? 'bg-surface/40 text-[#8E8E93] line-through'
                   : 'hover:bg-surface-elevated/70 text-white'
               }`}
               title={
-                isDelivered
+                isProcessing
+                  ? 'Đang cập nhật trạng thái món...'
+                  : isDelivered
                   ? 'Món đã được phục vụ bưng lên bàn cho khách'
                   : isServed
                   ? 'Bếp đã nấu xong (Chờ phục vụ bưng). Nhấn để hoàn tác (COOKING)'
@@ -177,12 +252,13 @@ export default function KdsOrderCard({
               <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (isDelivered) return;
-                    onToggleItemStatus(order.id, item.id);
-                  }}
+                  disabled={isButtonDisabled}
+                  onClick={(e) => handleItemClick(e, item)}
                   className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
+                    isButtonDisabled
+                      ? 'cursor-not-allowed opacity-60 pointer-events-none'
+                      : ''
+                  } ${
                     isDelivered
                       ? 'bg-jade/25 border-jade/50 text-jade-bright cursor-default'
                       : isServed
@@ -190,7 +266,9 @@ export default function KdsOrderCard({
                       : 'bg-surface-card border-surface-border text-[#8E8E93] hover:border-gold hover:text-gold hover:bg-surface-elevated'
                   }`}
                   title={
-                    isDelivered
+                    isProcessing
+                      ? 'Đang cập nhật trạng thái...'
+                      : isDelivered
                       ? 'Đã bưng lên bàn'
                       : isServed
                       ? 'Đã nấu xong. Bấm để hoàn tác'
@@ -243,11 +321,11 @@ export default function KdsOrderCard({
         {/* Nút hoàn thành toàn bộ đợt */}
         <button
           type="button"
-          onClick={() => onCompleteAllItems(order.id)}
-          disabled={isAllServed}
+          onClick={handleCompleteAllClick}
+          disabled={isAllServed || isCompletingAll}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
-            isAllServed
-              ? 'bg-jade/10 text-jade-bright border-jade/30 cursor-default'
+            isAllServed || isCompletingAll
+              ? 'bg-jade/10 text-jade-bright border-jade/30 cursor-not-allowed opacity-70'
               : 'bg-gold/15 hover:bg-gold text-gold hover:text-black border-gold/40 active:scale-95'
           }`}
         >

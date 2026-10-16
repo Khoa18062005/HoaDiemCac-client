@@ -68,11 +68,16 @@ export default function LoginPage() {
       }
     } catch (err) {
       const errMsg = err.message || '';
-      const isLockedAccount = 
-        errMsg.toLowerCase().includes('khóa') || 
-        errMsg.toLowerCase().includes('chưa kích hoạt') ||
-        errMsg.toLowerCase().includes('locked') ||
-        errMsg.toLowerCase().includes('disabled');
+      const lower = errMsg.toLowerCase();
+      const isWarningRemaining = lower.includes('lần thử');
+      const isLockedAccount = !isWarningRemaining && (
+        lower.includes('đã bị tạm khóa') || 
+        lower.includes('đã bị khóa') ||
+        lower.includes('bị tạm khóa') ||
+        lower.includes('chưa kích hoạt') ||
+        lower.includes('locked') ||
+        lower.includes('disabled')
+      );
 
       if (isLockedAccount) {
         // Lưu lại email vừa đăng nhập để hiển thị trên pop-up
@@ -83,6 +88,13 @@ export default function LoginPage() {
         setError('');
       } else if (errMsg.includes('Bad credentials')) {
         setError('Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại!');
+      } else if (
+        errMsg === 'Network Error' || 
+        errMsg.toLowerCase().includes('network error') ||
+        errMsg.toLowerCase().includes('ngắt kết nối') ||
+        errMsg.toLowerCase().includes('kết nối')
+      ) {
+        setError('Hệ thống đã bị ngắt kết nối, vui lòng thử lại sau!');
       } else {
         setError(errMsg || 'Đăng nhập thất bại, vui lòng kiểm tra lại!');
       }

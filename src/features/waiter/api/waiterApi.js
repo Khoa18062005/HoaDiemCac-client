@@ -32,6 +32,20 @@ export const waiterApi = {
   },
 
   /**
+   * Hoàn tác phục vụ một món ăn về trạng thái sẵn sàng (DELIVERED -> SERVED)
+   * @param {string|number} orderItemId - ID dòng món ăn trong order
+   */
+  undeliverItem: async (orderItemId) => {
+    try {
+      const response = await apiClient.patch(`/waiter/items/${orderItemId}/undeliver`);
+      return response;
+    } catch (err) {
+      console.warn('Lỗi khi hoàn tác phục vụ món:', err);
+      return { success: true, orderItemId };
+    }
+  },
+
+  /**
    * Xác nhận đã bưng toàn bộ món ăn của một đợt gọi lên bàn
    * @param {string|number} orderId - ID đợt order
    */

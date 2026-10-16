@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { dashboardApi } from '@/features/dashboard/api/dashboardApi';
 import InvoiceDetailModal from '@/features/invoices/components/InvoiceDetailModal';
+import { matchesVietnameseSearch } from '@/utils/formatters';
 
 export default function AdminDashboardPage() {
   // Helper tính chuỗi ngày local YYYY-MM-DD theo giờ Việt Nam
@@ -220,17 +221,16 @@ export default function AdminDashboardPage() {
     }
   }, [period, startDate, endDate]);
 
-  // Lọc lịch sử hóa đơn theo từ khóa tìm kiếm
+  // Lọc lịch sử hóa đơn theo từ khóa tìm kiếm (hỗ trợ tiếng Việt không dấu)
   const filteredInvoices = useMemo(() => {
     const list = data?.recentInvoices || [];
     if (!invoiceSearchQuery.trim()) return list;
-    const q = invoiceSearchQuery.toLowerCase();
     return list.filter(
       (inv) =>
-        (inv.invoiceCode || '').toLowerCase().includes(q) ||
-        (inv.tableName || '').toLowerCase().includes(q) ||
-        (inv.tableNumber || '').toLowerCase().includes(q) ||
-        (inv.cashierName || '').toLowerCase().includes(q)
+        matchesVietnameseSearch(inv.invoiceCode, invoiceSearchQuery) ||
+        matchesVietnameseSearch(inv.tableName, invoiceSearchQuery) ||
+        matchesVietnameseSearch(inv.tableNumber, invoiceSearchQuery) ||
+        matchesVietnameseSearch(inv.cashierName, invoiceSearchQuery)
     );
   }, [data?.recentInvoices, invoiceSearchQuery]);
 

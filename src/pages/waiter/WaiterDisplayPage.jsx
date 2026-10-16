@@ -19,6 +19,7 @@ export default function WaiterDisplayPage() {
   const orders = useKdsStore((state) => state.orders);
   const setOrders = useKdsStore((state) => state.setOrders);
   const deliverItem = useKdsStore((state) => state.deliverItem);
+  const undeliverItem = useKdsStore((state) => state.undeliverItem);
   const deliverAllReadyItems = useKdsStore((state) => state.deliverAllReadyItems);
   const simulateNewOrder = useKdsStore((state) => state.simulateNewOrder);
   const lastBroadcastEvent = useKdsStore((state) => state.lastBroadcastEvent);
@@ -48,7 +49,11 @@ export default function WaiterDisplayPage() {
         if (payload.oldTableNumber && payload.newTableNumber) {
           useKdsStore.getState().changeTableOrders(payload.oldTableNumber, payload.newTableNumber);
         }
-      } else if (payload.type === 'KITCHEN_ITEM_STATUS_TOGGLED' || payload.type === 'WAITER_ITEM_DELIVERED') {
+      } else if (
+        payload.type === 'KITCHEN_ITEM_STATUS_TOGGLED' ||
+        payload.type === 'WAITER_ITEM_DELIVERED' ||
+        payload.type === 'WAITER_ITEM_UNDELIVERED'
+      ) {
         useKdsStore.getState().applyRemoteItemStatusUpdate(payload);
       } else {
         loadQueue();
@@ -118,6 +123,14 @@ export default function WaiterDisplayPage() {
       deliverItem(orderId, itemId);
     },
     [deliverItem]
+  );
+
+  // Thao tác hoàn tác 1 món (DELIVERED -> SERVED)
+  const handleUndeliverItem = useCallback(
+    (orderId, itemId) => {
+      undeliverItem(orderId, itemId);
+    },
+    [undeliverItem]
   );
 
   // Thao tác bưng toàn bộ món sẵn sàng của bàn
@@ -254,6 +267,7 @@ export default function WaiterDisplayPage() {
                 key={order.id}
                 order={order}
                 onDeliverItem={handleDeliverItem}
+                onUndeliverItem={handleUndeliverItem}
                 onDeliverAllReady={handleDeliverAllReady}
               />
             ))}

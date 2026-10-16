@@ -300,6 +300,59 @@ export const useKdsStore = create((set, get) => ({
     return eventData;
   },
 
+  // 3.1 Thao tác từ PHỤC VỤ: Hoàn tác bưng món về trạng thái sẵn sàng (DELIVERED -> SERVED)
+  undeliverItem: (orderId, itemId) => {
+    let affectedItemName = '';
+    let affectedTableCode = '';
+
+    const currentOrders = get().orders;
+    const nextOrders = currentOrders.map((order) => {
+      if (order.id !== orderId) return order;
+      affectedTableCode = order.tableCode;
+
+      const updatedItems = order.items.map((item) => {
+        if (item.id !== itemId) return item;
+        affectedItemName = item.name;
+        return {
+          ...item,
+          status: 'SERVED',
+          deliveredAt: null,
+          servedAt: item.servedAt || new Date().toISOString(),
+        };
+      });
+
+      const allDelivered = updatedItems.every((i) => i.status === 'DELIVERED');
+
+      return {
+        ...order,
+        items: updatedItems,
+        status: allDelivered ? 'DELIVERED' : 'COOKING',
+      };
+    });
+
+    const eventData = {
+      type: 'WAITER_ITEM_UNDELIVERED',
+      orderId,
+      itemId,
+      nextStatus: 'SERVED',
+      affectedItemName,
+      affectedTableCode,
+      message: `↩️ Đã hoàn tác món ${affectedItemName} về Chờ phục vụ (${affectedTableCode})`,
+    };
+
+    set({ orders: nextOrders, lastBroadcastEvent: eventData });
+    broadcastUpdate(nextOrders, eventData);
+
+    // Đồng bộ hoàn tác món xuống Server MySQL
+    if (typeof itemId === 'number' || (!String(itemId).startsWith('oi-') && !isNaN(Number(itemId)))) {
+      waiterApi.undeliverItem(itemId).catch((err) => {
+        console.warn('Lỗi khi xác nhận hoàn tác phục vụ món lên server:', err);
+      });
+    }
+
+    return eventData;
+  },
+
   // 4. Thao tác từ PHỤC VỤ: Bưng tất cả các món đang sẵn sàng của bàn
   deliverAllReadyItems: (orderId) => {
     let affectedTable = '';
@@ -419,45 +472,27 @@ export const useKdsStore = create((set, get) => ({
     });
 
     const currentOrders = get().orders;
-    const existingIndex = currentOrders.findIndex(
-      (o) => normalizeTableCode(o.tableCode) === normTableCode && o.status !== 'DELIVERED'
+    const tableExistingOrders = currentOrders.filter(
+      (o) => normalizeTableCode(o.tableCode) === normTableCode
     );
+    const orderRound = serverOrder?.roundNumber || (tableExistingOrders.length + 1);
+    const targetOrderId = serverOrder?.id || `ord-${Date.now()}`;
 
-    let nextOrders;
-    let targetOrderId = serverOrder?.id ? serverOrder.id : '';
-    let orderRound = serverOrder?.roundNumber || 1;
-
-    if (existingIndex !== -1) {
-      nextOrders = [...currentOrders];
-      const existing = nextOrders[existingIndex];
-      targetOrderId = serverOrder?.id || existing.id;
-      orderRound = serverOrder?.roundNumber || (existing.orderRound || 1) + 1;
-      nextOrders[existingIndex] = {
-        ...existing,
-        id: targetOrderId,
-        orderRound,
-        items: [...existing.items, ...orderItems],
-        status: 'COOKING',
-        totalAmount: (existing.totalAmount || 0) + totalAmount,
-      };
-    } else {
-      targetOrderId = serverOrder?.id || `ord-${Date.now()}`;
-      const newOrder = {
-        id: targetOrderId,
-        orderCode: serverOrder ? `OD-${serverOrder.id}` : `OD-${Math.floor(10000 + Math.random() * 90000)}`,
-        tableCode: normTableCode,
-        tableId,
-        area: isVip ? 'VIP' : 'COMMON',
-        orderRound,
-        createdAt: serverOrder?.createdAt || now.toISOString(),
-        status: serverOrder?.status || 'COOKING',
-        priority: 'NORMAL',
-        note,
-        totalAmount,
-        items: orderItems,
-      };
-      nextOrders = [...currentOrders, newOrder];
-    }
+    const newOrder = {
+      id: targetOrderId,
+      orderCode: serverOrder ? `OD-${serverOrder.id}` : `OD-${Math.floor(10000 + Math.random() * 90000)}`,
+      tableCode: normTableCode,
+      tableId,
+      area: isVip ? 'VIP' : 'COMMON',
+      orderRound,
+      createdAt: serverOrder?.createdAt || now.toISOString(),
+      status: serverOrder?.status || 'COOKING',
+      priority: 'NORMAL',
+      note,
+      totalAmount,
+      items: orderItems,
+    };
+    const nextOrders = [...currentOrders, newOrder];
 
     const eventData = {
       type: 'NEW_ORDER_RECEIVED',
@@ -609,15 +644,18 @@ export const useKdsStore = create((set, get) => ({
             ...item,
             status: nextStatus,
             servedAt: nextStatus === 'SERVED' ? (item.servedAt || new Date().toISOString()) : item.servedAt,
-            deliveredAt: nextStatus === 'DELIVERED' ? (item.deliveredAt || new Date().toISOString()) : item.deliveredAt,
+            deliveredAt: nextStatus === 'DELIVERED' ? (item.deliveredAt || new Date().toISOString()) : (nextStatus === 'SERVED' ? null : item.deliveredAt),
           };
         }
         return item;
       });
 
+      const allDelivered = updatedItems.every((i) => i.status === 'DELIVERED');
+
       return {
         ...order,
         items: updatedItems,
+        status: allDelivered ? 'DELIVERED' : (order.status === 'DELIVERED' ? 'COOKING' : order.status),
       };
     });
 
@@ -675,7 +713,17 @@ export const useKdsStore = create((set, get) => ({
 
     const nextOrders = [...otherOrders, ...mappedServerOrders];
     set({ orders: nextOrders });
-    // Không ghi đè localStorage của toàn bộ nhà hàng khi chỉ đồng bộ 1 bàn đơn lẻ của khách
+    saveOrdersToStorage(nextOrders);
+  },
+
+  // 6.3 Xóa sạch đơn của bàn khi hoàn tất thanh toán & chuyển sang dọn dẹp
+  clearTableOrders: (tableCode) => {
+    const norm = normalizeTableCode(tableCode);
+    const currentOrders = get().orders;
+    const remainingOrders = currentOrders.filter((o) => normalizeTableCode(o.tableCode) !== norm);
+    set({ orders: remainingOrders });
+    saveOrdersToStorage(remainingOrders);
+    broadcastUpdate(remainingOrders, { type: 'TABLE_ORDERS_CLEARED', tableCode: norm });
   },
 
   // 7. Cập nhật danh sách orders từ bên ngoài (ví dụ API backend)
@@ -713,8 +761,13 @@ export const useKdsStore = create((set, get) => ({
         })),
       };
     });
-    set({ orders: mapped });
-    saveOrdersToStorage(mapped);
+
+    // Bảo toàn các đơn hàng đã phục vụ (DELIVERED) của các bàn khách hàng không nằm trong hàng đợi bếp mới tải về
+    const currentOrders = get().orders;
+    const nextOrders = mergePreservingDeliveredOrders(currentOrders, mapped);
+
+    set({ orders: nextOrders });
+    saveOrdersToStorage(nextOrders);
   },
 
   // 7.1 Đổi số bàn của các đơn hàng khi bàn được chuyển hoặc ghép (MOVE / MERGE)
@@ -795,6 +848,20 @@ export const useKdsStore = create((set, get) => ({
   },
 }));
 
+/**
+ * Hàm trộn danh sách order đồng bộ từ tab khác nhưng bảo toàn các đơn hàng
+ * có món đã phục vụ (DELIVERED) của các bàn khách hàng
+ */
+function mergePreservingDeliveredOrders(currentOrders, incomingOrders) {
+  if (!Array.isArray(incomingOrders)) return currentOrders;
+  const incomingIds = new Set(incomingOrders.map((o) => String(o.id)));
+  const preserved = currentOrders.filter((o) => {
+    if (incomingIds.has(String(o.id))) return false;
+    return o.items && o.items.some((i) => i.status === 'DELIVERED');
+  });
+  return [...preserved, ...incomingOrders];
+}
+
 // Lắng nghe đồng bộ từ các tab khác qua BroadcastChannel
 if (syncChannel) {
   syncChannel.addEventListener('message', (event) => {
@@ -802,8 +869,11 @@ if (syncChannel) {
     if (!data || data.senderTabId === tabId) return;
 
     if (data.type === 'ORDERS_SYNC' && Array.isArray(data.orders)) {
+      const currentOrders = useKdsStore.getState().orders;
+      const nextOrders = mergePreservingDeliveredOrders(currentOrders, data.orders);
+
       useKdsStore.setState({
-        orders: data.orders,
+        orders: nextOrders,
         lastBroadcastEvent: data.eventData,
       });
 
@@ -825,7 +895,9 @@ if (typeof window !== 'undefined') {
       try {
         const parsed = JSON.parse(event.newValue);
         if (Array.isArray(parsed)) {
-          useKdsStore.setState({ orders: parsed });
+          const currentOrders = useKdsStore.getState().orders;
+          const nextOrders = mergePreservingDeliveredOrders(currentOrders, parsed);
+          useKdsStore.setState({ orders: nextOrders });
         }
       } catch {}
     }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   X,
   Trash2,
@@ -16,6 +16,9 @@ import {
   Bell,
 } from 'lucide-react';
 import { tableApi } from '@/features/tables/api/tableApi';
+import ConfirmSendOrderModal from './ConfirmSendOrderModal';
+import ConfirmClearCartModal from './ConfirmClearCartModal';
+import ConfirmRemoveItemModal from './ConfirmRemoveItemModal';
 
 /**
  * CustomerCartDrawer
@@ -23,6 +26,49 @@ import { tableApi } from '@/features/tables/api/tableApi';
  * - 2 danh mục: "Chọn món" (các món đang chọn chưa gửi bếp) và "Tất cả" (toàn bộ món đã gửi bếp).
  * - Món gửi thêm ở các lần sau hiển thị tách biệt thành từng thẻ riêng (kèm giờ gọi, trạng thái), không gộp vào lần trước.
  */
+function DishNoteInput({ note, dishId, onUpdateNote }) {
+  const [localValue, setLocalValue] = useState(note || '');
+  const isFocusedRef = useRef(false);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    if (!isFocusedRef.current) {
+      setLocalValue(note || '');
+    }
+  }, [note]);
+
+  const handleChange = (e) => {
+    const val = e.target.value;
+    setLocalValue(val);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      if (onUpdateNote) onUpdateNote(dishId, val);
+    }, 350);
+  };
+
+  const handleBlur = () => {
+    isFocusedRef.current = false;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (onUpdateNote) onUpdateNote(dishId, localValue);
+  };
+
+  const handleFocus = () => {
+    isFocusedRef.current = true;
+  };
+
+  return (
+    <input
+      type="text"
+      value={localValue}
+      onChange={handleChange}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      placeholder="Ghi chú cho đầu bếp (VD: ít cay, không hành...)"
+      className="flex-1 bg-[#141418] border border-white/10 rounded-lg px-2.5 py-1 text-[11px] text-[#FDFBF7] placeholder-[#6A655C] focus:border-[#C41E3A] outline-none transition-colors"
+    />
+  );
+}
+
 export default function CustomerCartDrawer({
   isOpen,
   onClose,
@@ -46,6 +92,9 @@ export default function CustomerCartDrawer({
     setInternalTab(tab);
   };
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [itemPendingDelete, setItemPendingDelete] = useState(null);
   const [isPaying, setIsPaying] = useState(false);
   const [payRequested, setPayRequested] = useState(false);
   const [isCallingStaff, setIsCallingStaff] = useState(false);
@@ -101,7 +150,29 @@ export default function CustomerCartDrawer({
     return new Intl.NumberFormat('vi-VN').format(amount);
   };
 
+  const groupedRounds = useMemo(() => {
+    const map = new Map();
+    orderedItems.forEach((item) => {
+      const round = Number(item.orderRound) || 1;
+      if (!map.has(round)) {
+        map.set(round, []);
+      }
+      map.get(round).push(item);
+    });
+    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
+  }, [orderedItems]);
+
+  const handleOpenConfirmModal = () => {
+    if (isOrderLocked) {
+      alert('Bàn đang chốt hóa đơn tạm tính, toàn bộ thao tác đặt món đã bị đóng băng.');
+      return;
+    }
+    if (cartItems.length === 0 || isSuccess) return;
+    setIsConfirmModalOpen(true);
+  };
+
   const handleConfirmSubmit = () => {
+    setIsConfirmModalOpen(false);
     if (isOrderLocked) {
       alert('Bàn đang chốt hóa đơn tạm tính, toàn bộ thao tác đặt món đã bị đóng băng.');
       return;
@@ -143,14 +214,26 @@ export default function CustomerCartDrawer({
             </h2>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Đóng"
-            className="w-8 h-8 rounded-full bg-white/5 text-[#D6D3CD] flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {activeTab === 'draft' && cartItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsClearModalOpen(true)}
+                title="Xóa tất cả món đang chọn"
+                className="text-[11px] text-[#A39E93] hover:text-[#FFB4AB] transition-colors cursor-pointer px-1.5 py-0.5 rounded"
+              >
+                Xóa hết
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Đóng"
+              className="w-8 h-8 rounded-full bg-white/5 text-[#D6D3CD] flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* 2. Segmented Tab Bar: Chọn món vs Tất cả (Hiệu ứng trượt lướt mượt mà) */}
@@ -273,10 +356,15 @@ export default function CustomerCartDrawer({
                             <div className="flex items-center space-x-1.5 bg-[#141418] px-1.5 py-0.5 rounded-full border border-[rgba(212,175,55,0.25)]">
                               <button
                                 type="button"
-                                onClick={() =>
-                                  onUpdateQuantity(item.id, item.quantity - 1)
-                                }
-                                className="w-5 h-5 rounded-full bg-[#2A2A30] text-[#D6D3CD] flex items-center justify-center active:scale-90"
+                                onClick={() => {
+                                  if (item.quantity <= 1) {
+                                    setItemPendingDelete(item);
+                                  } else {
+                                    onUpdateQuantity(item.id, item.quantity - 1);
+                                  }
+                                }}
+                                title={item.quantity <= 1 ? "Xóa món khỏi giỏ" : "Giảm số lượng"}
+                                className="w-5 h-5 rounded-full bg-[#2A2A30] text-[#D6D3CD] flex items-center justify-center active:scale-90 cursor-pointer"
                               >
                                 <Minus className="w-3 h-3 stroke-[2.5]" />
                               </button>
@@ -288,7 +376,8 @@ export default function CustomerCartDrawer({
                                 onClick={() =>
                                   onUpdateQuantity(item.id, item.quantity + 1)
                                 }
-                                className="w-5 h-5 rounded-full bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white flex items-center justify-center active:scale-90"
+                                title="Tăng số lượng"
+                                className="w-5 h-5 rounded-full bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white flex items-center justify-center active:scale-90 cursor-pointer"
                               >
                                 <Plus className="w-3 h-3 stroke-[2.5]" />
                               </button>
@@ -296,9 +385,10 @@ export default function CustomerCartDrawer({
 
                             <button
                               type="button"
-                              onClick={() => onRemoveItem(item.id)}
+                              onClick={() => setItemPendingDelete(item)}
                               aria-label="Xóa món"
-                              className="w-7 h-7 rounded-lg text-[#FFB4AB]/70 hover:text-[#FFB4AB] hover:bg-[#3E1118] flex items-center justify-center transition-colors"
+                              title="Xóa món"
+                              className="w-7 h-7 rounded-lg text-[#FFB4AB]/70 hover:text-[#FFB4AB] hover:bg-[#3E1118] flex items-center justify-center transition-colors cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -310,13 +400,7 @@ export default function CustomerCartDrawer({
                     {/* Ghi chú riêng cho từng món */}
                     <div className="pt-1.5 border-t border-white/5 flex items-center gap-1.5">
                       <ChefHat className="w-3.5 h-3.5 text-[#FFD54F]/70 flex-shrink-0" />
-                      <input
-                        type="text"
-                        value={item.note || ''}
-                        onChange={(e) => onUpdateNote && onUpdateNote(item.id, e.target.value)}
-                        placeholder="Ghi chú cho đầu bếp (VD: ít cay, không hành...)"
-                        className="flex-1 bg-[#141418] border border-white/10 rounded-lg px-2.5 py-1 text-[11px] text-[#FDFBF7] placeholder-[#6A655C] focus:border-[#C41E3A] outline-none transition-colors"
-                      />
+                      <DishNoteInput note={item.note} dishId={item.id} onUpdateNote={onUpdateNote} />
                     </div>
                   </div>
                 ))
@@ -355,11 +439,11 @@ export default function CustomerCartDrawer({
                   ) : isHost ? (
                     <button
                       type="button"
-                      onClick={handleConfirmSubmit}
+                      onClick={handleOpenConfirmModal}
                       className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#990000] via-[#C41E3A] to-[#E63946] text-white font-extrabold text-xs shadow-[0_4px_16px_rgba(196,30,58,0.5)] active:scale-95 transition-transform flex items-center justify-center space-x-1.5 border border-[#FFE699]/30 hover:brightness-110 select-none"
                     >
                       <Crown className="w-3.5 h-3.5 text-gold" />
-                      <span>Xác Nhận Gửi Bếp ({draftCount} món)</span>
+                      <span>Gửi Vào Bếp ({draftCount} món)</span>
                     </button>
                   ) : (
                     <div className="flex-1 flex flex-col items-center">
@@ -422,75 +506,101 @@ export default function CustomerCartDrawer({
                   </button>
                 </div>
               ) : (
-                orderedItems.map((item) => (
-                  <div
-                    key={item.entryId}
-                    className="bg-[#1D1D22] rounded-xl p-2.5 border border-white/5 space-y-2"
-                  >
-                    <div className="flex gap-2.5 items-center">
-                      <img
-                        src={item.image || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80'}
-                        alt={item.name}
-                        className="w-14 h-14 rounded-lg object-cover flex-shrink-0 bg-[#2A2A2E]"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80';
-                        }}
-                      />
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <h4 className="font-bold text-xs text-[#FDFBF7] truncate">
-                            {item.name}
-                          </h4>
-                          <span className="text-[12px] font-bold text-[#FFD54F] flex-shrink-0">
-                            {formatPrice(item.price * item.quantity)} ₫
+                groupedRounds.map(([roundNumber, itemsInRound]) => {
+                  const roundSubtotal = itemsInRound.reduce(
+                    (sum, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 1),
+                    0
+                  );
+                  return (
+                    <div key={roundNumber} className="space-y-2 mb-3">
+                      {/* Tiêu đề phân tầng từng đợt gọi món */}
+                      <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-red-950/40 via-amber-950/30 to-transparent border border-amber-500/30">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                          <span className="text-xs font-black text-[#FFE088] uppercase tracking-wider">
+                            Đợt {roundNumber}
+                          </span>
+                          <span className="text-[10px] text-[#A39E93]">
+                            ({itemsInRound.reduce((acc, i) => acc + (i.quantity || 1), 0)} món)
                           </span>
                         </div>
+                        <span className="text-xs font-black text-[#FFD54F]">
+                          {formatPrice(roundSubtotal)} ₫
+                        </span>
+                      </div>
 
-                        <div className="flex items-center justify-between mt-1 text-[10.5px]">
-                          <div className="flex items-center gap-1.5 text-[#A39E93]">
-                            <span className="bg-[#2A2A30] text-[#D6D3CD] font-bold px-1.5 py-0.2 rounded text-[10px]">
-                              x{item.quantity}
-                            </span>
-                            {item.orderedAt && (
-                              <span className="flex items-center gap-0.5 text-[#9E9AA0] text-[10px]">
-                                <Clock className="w-2.5 h-2.5" />
-                                {item.orderedAt}
-                              </span>
-                            )}
+                      {itemsInRound.map((item) => (
+                        <div
+                          key={item.entryId || `${item.dishId}-${roundNumber}`}
+                          className="bg-[#1D1D22] rounded-xl p-2.5 border border-white/5 space-y-2"
+                        >
+                          <div className="flex gap-2.5 items-center">
+                            <img
+                              src={item.image || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80'}
+                              alt={item.name}
+                              className="w-14 h-14 rounded-lg object-cover flex-shrink-0 bg-[#2A2A2E]"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80';
+                              }}
+                            />
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <h4 className="font-bold text-xs text-[#FDFBF7] truncate">
+                                  {item.name}
+                                </h4>
+                                <span className="text-[12px] font-bold text-[#FFD54F] flex-shrink-0">
+                                  {formatPrice(item.price * item.quantity)} ₫
+                                </span>
+                              </div>
+
+                              <div className="flex items-center justify-between mt-1 text-[10.5px]">
+                                <div className="flex items-center gap-1.5 text-[#A39E93]">
+                                  <span className="bg-[#2A2A30] text-[#D6D3CD] font-bold px-1.5 py-0.2 rounded text-[10px]">
+                                    x{item.quantity}
+                                  </span>
+                                  {item.orderedAt && (
+                                    <span className="flex items-center gap-0.5 text-[#9E9AA0] text-[10px]">
+                                      <Clock className="w-2.5 h-2.5" />
+                                      {item.orderedAt}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Status Badge: 3 Trạng thái (Đang chế biến -> Chờ phục vụ -> Đã phục vụ) */}
+                                {item.status === 'DELIVERED' || item.status === 'delivered' ? (
+                                  <span className="bg-[#0A2E1D] text-[#59DE9B] border border-[#007448]/60 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#59DE9B]" />
+                                    Đã phục vụ
+                                  </span>
+                                ) : item.status === 'SERVED' || item.status === 'served' || item.status === 'READY' || item.status === 'ready' ? (
+                                  <span className="bg-[#0C233A] text-[#38BDF8] border border-[#0284C7]/60 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse" />
+                                    Chờ phục vụ
+                                  </span>
+                                ) : (
+                                  <span className="bg-[#2A1508] text-[#FFB74D] border border-[#FF9800]/50 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#FFB74D] animate-pulse" />
+                                    Đang chế biến
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
 
-                          {/* Status Badge: 3 Trạng thái (Đang chế biến -> Chờ phục vụ -> Đã phục vụ) */}
-                          {item.status === 'DELIVERED' || item.status === 'delivered' ? (
-                            <span className="bg-[#0A2E1D] text-[#59DE9B] border border-[#007448]/60 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#59DE9B]" />
-                              Đã phục vụ
-                            </span>
-                          ) : item.status === 'SERVED' || item.status === 'served' || item.status === 'READY' || item.status === 'ready' ? (
-                            <span className="bg-[#0C233A] text-[#38BDF8] border border-[#0284C7]/60 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse" />
-                              Chờ phục vụ
-                            </span>
-                          ) : (
-                            <span className="bg-[#2A1508] text-[#FFB74D] border border-[#FF9800]/50 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#FFB74D] animate-pulse" />
-                              Đang chế biến
-                            </span>
+                          {/* Ghi chú riêng nếu có */}
+                          {item.note && (
+                            <div className="pt-1.5 border-t border-white/5 flex items-center gap-1.5 text-[10.5px] text-[#FFE088]">
+                              <ChefHat className="w-3 h-3 text-[#FFD54F]/80 flex-shrink-0" />
+                              <span className="truncate italic">Ghi chú: {item.note}</span>
+                            </div>
                           )}
                         </div>
-                      </div>
+                      ))}
                     </div>
-
-                    {/* Ghi chú riêng nếu có */}
-                    {item.note && (
-                      <div className="pt-1.5 border-t border-white/5 flex items-center gap-1.5 text-[10.5px] text-[#FFE088]">
-                        <ChefHat className="w-3 h-3 text-[#FFD54F]/80 flex-shrink-0" />
-                        <span className="truncate italic">Ghi chú: {item.note}</span>
-                      </div>
-                    )}
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -581,6 +691,45 @@ export default function CustomerCartDrawer({
           </>
         )}
       </div>
+
+      {/* Modal Popup Xác Nhận Gửi Đơn Vào Bếp */}
+      <ConfirmSendOrderModal
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        onConfirm={handleConfirmSubmit}
+        tableNumber={tableNumber}
+        items={cartItems}
+        totalAmount={draftAmount}
+      />
+
+      {/* 1. Modal Popup Xác Nhận Xóa Hết Giỏ Hàng */}
+      <ConfirmClearCartModal
+        isOpen={isClearModalOpen}
+        onClose={() => setIsClearModalOpen(false)}
+        onConfirm={() => {
+          setIsClearModalOpen(false);
+          if (onClearCart) onClearCart();
+        }}
+        tableNumber={tableNumber}
+        items={cartItems}
+        itemsCount={cartItems.length}
+        totalPortions={draftCount}
+        totalAmount={draftAmount}
+      />
+
+      {/* 2. Modal Popup Xác Nhận Xóa Món Đó Khỏi Giỏ Hàng */}
+      <ConfirmRemoveItemModal
+        isOpen={Boolean(itemPendingDelete)}
+        onClose={() => setItemPendingDelete(null)}
+        onConfirm={() => {
+          if (itemPendingDelete && onRemoveItem) {
+            onRemoveItem(itemPendingDelete.id);
+          }
+          setItemPendingDelete(null);
+        }}
+        tableNumber={tableNumber}
+        item={itemPendingDelete}
+      />
     </div>
   );
 }

@@ -18,6 +18,7 @@ import TableQrPrintModal from '@/features/tables/components/TableQrPrintModal';
 import AdminTableDevicesModal from '@/features/tables/components/AdminTableDevicesModal';
 import { tableApi } from '@/features/tables/api/tableApi';
 import { wsManager } from '@/lib/websocket';
+import { matchesVietnameseSearch } from '@/utils/formatters';
 
 const CACHE_KEY = 'hoadiemcat_tables_cache';
 
@@ -49,6 +50,7 @@ export default function AdminTablesQrPage() {
 
   // Modal tạo bàn mới
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [newTableData, setNewTableData] = useState({
     tableNumber: '',
     name: '',
@@ -127,7 +129,7 @@ export default function AdminTablesQrPage() {
     };
   }, []);
 
-  // Handler đổi mã PIN mới (thanh toán / giải phóng bàn về BÀN TRỐNG, mở khóa order)
+  // Handler đổi mã PIN mới (sinh PIN mới, cấp token phiên mới)
   const handleRegeneratePin = async (tableId) => {
     try {
       const res = await tableApi.regeneratePin(tableId);
@@ -137,15 +139,11 @@ export default function AdminTablesQrPage() {
             ? {
                 ...t,
                 ...res,
-                status: res.status || 'AVAILABLE',
-                isOrderLocked: false,
-                activeDeviceCount: 0,
-                currentPasscode: res.currentPasscode || String(Math.floor(1000 + Math.random() * 9000)),
               }
             : t
         )
       );
-      showToast(`Đã làm mới PIN & giải phóng bàn ${res.tableNumber || ''} về Bàn Trống (Sẵn sàng)`);
+      showToast(`Đã sinh mã PIN mới cho bàn ${res?.tableNumber || ''}: ${res?.currentPasscode || ''}`);
     } catch (err) {
       showToast('Lỗi khi sinh mã PIN mới', 'error');
     }
@@ -190,38 +188,56 @@ export default function AdminTablesQrPage() {
   };
 
   // Handler thêm bàn mới
-  const handleCreateTable = (e) => {
+  const handleCreateTable = async (e) => {
     e.preventDefault();
-    if (!newTableData.tableNumber || !newTableData.name) {
+    const rawNumber = newTableData.tableNumber?.trim();
+    const rawName = newTableData.name?.trim();
+
+    if (!rawNumber || !rawName) {
       showToast('Vui lòng điền đầy đủ mã và tên bàn', 'error');
       return;
     }
 
-    const newTable = {
-      id: Date.now(),
-      tableNumber: newTableData.tableNumber.toUpperCase().trim(),
-      name: newTableData.name.trim(),
-      area: newTableData.area,
-      capacity: Number(newTableData.capacity),
-      maxActiveDevices: Number(newTableData.maxActiveDevices) || Math.round(newTableData.capacity * 1.5),
+    const payload = {
+      tableNumber: rawNumber.toUpperCase(),
+      name: rawName,
+      area: newTableData.area || 'COMMON',
+      capacity: Number(newTableData.capacity) || 4,
+      maxActiveDevices: Number(newTableData.maxActiveDevices) || Math.round((Number(newTableData.capacity) || 4) * 1.5),
       status: 'AVAILABLE',
       isOrderLocked: false,
-      currentPasscode: String(Math.floor(1000 + Math.random() * 9000)),
-      activeDeviceCount: 0,
     };
 
-    updateTablesWithCache((prev) => [...prev, newTable]);
-    setIsAddModalOpen(false);
-    setNewTableData({ tableNumber: '', name: '', area: 'COMMON', capacity: 4, maxActiveDevices: 6 });
-    showToast(`Đã thêm bàn mới: ${newTable.name}`);
+    try {
+      setIsSubmitting(true);
+      const createdTable = await tableApi.createTable(payload);
+
+      // Cập nhật danh sách bàn và cache với dữ liệu thực từ Backend
+      updateTablesWithCache((prev) => {
+        const exists = prev.some((t) => t.id === createdTable.id || t.tableNumber === createdTable.tableNumber);
+        if (exists) {
+          return prev.map((t) => (t.id === createdTable.id || t.tableNumber === createdTable.tableNumber ? { ...t, ...createdTable } : t));
+        }
+        return [...prev, createdTable];
+      });
+
+      setIsAddModalOpen(false);
+      setNewTableData({ tableNumber: '', name: '', area: 'COMMON', capacity: 4, maxActiveDevices: 6 });
+      showToast(`Đã thêm bàn mới thành công: ${createdTable.name || payload.name}`);
+    } catch (err) {
+      console.error('Lỗi khi tạo bàn mới:', err);
+      showToast(err.message || 'Lỗi khi tạo bàn mới trên hệ thống', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Lọc danh sách bàn
   const filteredTables = useMemo(() => {
     return tables.filter((t) => {
       const matchSearch =
-        (t.tableNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (t.name || '').toLowerCase().includes(searchQuery.toLowerCase());
+        matchesVietnameseSearch(t.tableNumber, searchQuery) ||
+        matchesVietnameseSearch(t.name, searchQuery);
       const matchArea = areaFilter === 'ALL' || t.area === areaFilter;
       const matchStatus = statusFilter === 'ALL' || t.status === statusFilter;
       return matchSearch && matchArea && matchStatus;
@@ -532,16 +548,25 @@ export default function AdminTablesQrPage() {
               <div className="pt-3 border-t border-[#27272A] flex justify-end gap-2">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-[#3F3F46] hover:bg-[#27272A] text-xs font-medium text-[#A0A0A5]"
+                  className="px-4 py-2 rounded-xl border border-[#3F3F46] hover:bg-[#27272A] disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium text-[#A0A0A5]"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-crimson hover:bg-[#B91C1C] text-white text-xs font-semibold shadow-lg shadow-crimson/20"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 rounded-xl bg-crimson hover:bg-[#B91C1C] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-lg shadow-crimson/20 flex items-center gap-1.5 transition-all"
                 >
-                  Lưu & Cấp Mã PIN
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Đang lưu...</span>
+                    </>
+                  ) : (
+                    'Lưu & Cấp Mã PIN'
+                  )}
                 </button>
               </div>
             </form>
