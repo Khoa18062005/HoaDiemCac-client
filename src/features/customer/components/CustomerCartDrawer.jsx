@@ -233,7 +233,7 @@ export default function CustomerCartDrawer({
                     Chưa có món nào đang chọn
                   </p>
                   <p className="text-xs max-w-xs text-[#9E9AA0]">
-                    Vui lòng duyệt qua thực đơn và nhấn dấu (+) để chọn những món ăn hấp dẫn.
+                    Chọn các món lẩu và thịt bò thượng hạng bằng nút (+) trên thực đơn để thêm vào giỏ.
                   </p>
                 </div>
               ) : (
