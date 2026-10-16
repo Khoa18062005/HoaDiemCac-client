@@ -419,45 +419,27 @@ export const useKdsStore = create((set, get) => ({
     });
 
     const currentOrders = get().orders;
-    const existingIndex = currentOrders.findIndex(
-      (o) => normalizeTableCode(o.tableCode) === normTableCode && o.status !== 'DELIVERED'
+    const tableExistingOrders = currentOrders.filter(
+      (o) => normalizeTableCode(o.tableCode) === normTableCode
     );
+    const orderRound = serverOrder?.roundNumber || (tableExistingOrders.length + 1);
+    const targetOrderId = serverOrder?.id || `ord-${Date.now()}`;
 
-    let nextOrders;
-    let targetOrderId = serverOrder?.id ? serverOrder.id : '';
-    let orderRound = serverOrder?.roundNumber || 1;
-
-    if (existingIndex !== -1) {
-      nextOrders = [...currentOrders];
-      const existing = nextOrders[existingIndex];
-      targetOrderId = serverOrder?.id || existing.id;
-      orderRound = serverOrder?.roundNumber || (existing.orderRound || 1) + 1;
-      nextOrders[existingIndex] = {
-        ...existing,
-        id: targetOrderId,
-        orderRound,
-        items: [...existing.items, ...orderItems],
-        status: 'COOKING',
-        totalAmount: (existing.totalAmount || 0) + totalAmount,
-      };
-    } else {
-      targetOrderId = serverOrder?.id || `ord-${Date.now()}`;
-      const newOrder = {
-        id: targetOrderId,
-        orderCode: serverOrder ? `OD-${serverOrder.id}` : `OD-${Math.floor(10000 + Math.random() * 90000)}`,
-        tableCode: normTableCode,
-        tableId,
-        area: isVip ? 'VIP' : 'COMMON',
-        orderRound,
-        createdAt: serverOrder?.createdAt || now.toISOString(),
-        status: serverOrder?.status || 'COOKING',
-        priority: 'NORMAL',
-        note,
-        totalAmount,
-        items: orderItems,
-      };
-      nextOrders = [...currentOrders, newOrder];
-    }
+    const newOrder = {
+      id: targetOrderId,
+      orderCode: serverOrder ? `OD-${serverOrder.id}` : `OD-${Math.floor(10000 + Math.random() * 90000)}`,
+      tableCode: normTableCode,
+      tableId,
+      area: isVip ? 'VIP' : 'COMMON',
+      orderRound,
+      createdAt: serverOrder?.createdAt || now.toISOString(),
+      status: serverOrder?.status || 'COOKING',
+      priority: 'NORMAL',
+      note,
+      totalAmount,
+      items: orderItems,
+    };
+    const nextOrders = [...currentOrders, newOrder];
 
     const eventData = {
       type: 'NEW_ORDER_RECEIVED',

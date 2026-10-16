@@ -811,6 +811,9 @@ export default function MenuPage() {
       }
       const nextItems = Array.isArray(payload) ? payload : (payload?.items || []);
       setCartItems(nextItems);
+      if (nextItems.length > 0) {
+        setCartTab('draft');
+      }
       try {
         if (nextItems.length > 0) {
           localStorage.setItem(`hoadiemcat_cart_${currentNormTable}`, JSON.stringify(nextItems));

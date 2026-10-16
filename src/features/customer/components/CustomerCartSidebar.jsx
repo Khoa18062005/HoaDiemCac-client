@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   ShoppingBag,
   Trash2,
@@ -140,6 +140,18 @@ export default function CustomerCartSidebar({
   const formatPrice = (amount) => {
     return new Intl.NumberFormat('vi-VN').format(amount);
   };
+
+  const groupedRounds = useMemo(() => {
+    const map = new Map();
+    orderedItems.forEach((item) => {
+      const round = Number(item.orderRound) || 1;
+      if (!map.has(round)) {
+        map.set(round, []);
+      }
+      map.get(round).push(item);
+    });
+    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
+  }, [orderedItems]);
 
   const handleConfirmSubmit = () => {
     if (isOrderLocked) {
@@ -387,76 +399,102 @@ export default function CustomerCartSidebar({
             </button>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-2.5">
-            {orderedItems.map((item) => (
-              <div
-                key={item.entryId}
-                className="bg-[#1D1D22] rounded-xl p-2.5 border border-white/5 space-y-2 hover:border-[rgba(212,175,55,0.3)] transition-all"
-              >
-                <div className="flex gap-2.5 items-center">
-                  <img
-                    src={item.image || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80'}
-                    alt={item.name}
-                    className="w-12 h-12 rounded-lg object-cover flex-shrink-0 bg-[#2A2A2E]"
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80';
-                    }}
-                  />
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <h5 className="font-bold text-xs text-[#FDFBF7] truncate">
-                        {item.name}
-                      </h5>
-                      <span className="text-[11px] font-bold text-[#FFD54F] flex-shrink-0">
-                        {formatPrice(item.price * item.quantity)} ₫
+          <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-3">
+            {groupedRounds.map(([roundNumber, itemsInRound]) => {
+              const roundSubtotal = itemsInRound.reduce(
+                (sum, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 1),
+                0
+              );
+              return (
+                <div key={roundNumber} className="space-y-2 mb-3">
+                  {/* Tiêu đề phân tầng từng đợt gọi món */}
+                  <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-red-950/40 via-amber-950/30 to-transparent border border-amber-500/30">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                      <span className="text-xs font-black text-[#FFE088] uppercase tracking-wider">
+                        Đợt {roundNumber}
+                      </span>
+                      <span className="text-[10px] text-[#A39E93]">
+                        ({itemsInRound.reduce((acc, i) => acc + (i.quantity || 1), 0)} món)
                       </span>
                     </div>
+                    <span className="text-xs font-black text-[#FFD54F]">
+                      {formatPrice(roundSubtotal)} ₫
+                    </span>
+                  </div>
 
-                    <div className="flex items-center justify-between mt-1 text-[10px]">
-                      <div className="flex items-center gap-1.5 text-[#A39E93]">
-                        <span className="bg-[#2A2A30] text-[#D6D3CD] font-bold px-1.5 py-0.2 rounded">
-                          x{item.quantity}
-                        </span>
-                        {item.orderedAt && (
-                          <span className="flex items-center gap-0.5 text-[#9E9AA0]">
-                            <Clock className="w-2.5 h-2.5" />
-                            {item.orderedAt}
-                          </span>
-                        )}
+                  {itemsInRound.map((item) => (
+                    <div
+                      key={item.entryId || `${item.dishId}-${roundNumber}`}
+                      className="bg-[#1D1D22] rounded-xl p-2.5 border border-white/5 space-y-2 hover:border-[rgba(212,175,55,0.3)] transition-all"
+                    >
+                      <div className="flex gap-2.5 items-center">
+                        <img
+                          src={item.image || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80'}
+                          alt={item.name}
+                          className="w-12 h-12 rounded-lg object-cover flex-shrink-0 bg-[#2A2A2E]"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80';
+                          }}
+                        />
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <h5 className="font-bold text-xs text-[#FDFBF7] truncate">
+                              {item.name}
+                            </h5>
+                            <span className="text-[11px] font-bold text-[#FFD54F] flex-shrink-0">
+                              {formatPrice(item.price * item.quantity)} ₫
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between mt-1 text-[10px]">
+                            <div className="flex items-center gap-1.5 text-[#A39E93]">
+                              <span className="bg-[#2A2A30] text-[#D6D3CD] font-bold px-1.5 py-0.2 rounded">
+                                x{item.quantity}
+                              </span>
+                              {item.orderedAt && (
+                                <span className="flex items-center gap-0.5 text-[#9E9AA0]">
+                                  <Clock className="w-2.5 h-2.5" />
+                                  {item.orderedAt}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Status Badge: 3 Trạng thái (Đang chế biến -> Chờ phục vụ -> Đã phục vụ) */}
+                            {item.status === 'DELIVERED' || item.status === 'delivered' ? (
+                              <span className="bg-[#0A2E1D] text-[#59DE9B] border border-[#007448]/60 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#59DE9B]" />
+                                Đã phục vụ
+                              </span>
+                            ) : item.status === 'SERVED' || item.status === 'served' || item.status === 'READY' || item.status === 'ready' ? (
+                              <span className="bg-[#0C233A] text-[#38BDF8] border border-[#0284C7]/60 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse" />
+                                Chờ phục vụ
+                              </span>
+                            ) : (
+                              <span className="bg-[#2A1508] text-[#FFB74D] border border-[#FF9800]/50 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#FFB74D] animate-pulse" />
+                                Đang chế biến
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Status Badge: 3 Trạng thái (Đang chế biến -> Chờ phục vụ -> Đã phục vụ) */}
-                      {item.status === 'DELIVERED' || item.status === 'delivered' ? (
-                        <span className="bg-[#0A2E1D] text-[#59DE9B] border border-[#007448]/60 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#59DE9B]" />
-                          Đã phục vụ
-                        </span>
-                      ) : item.status === 'SERVED' || item.status === 'served' || item.status === 'READY' || item.status === 'ready' ? (
-                        <span className="bg-[#0C233A] text-[#38BDF8] border border-[#0284C7]/60 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse" />
-                          Chờ phục vụ
-                        </span>
-                      ) : (
-                        <span className="bg-[#2A1508] text-[#FFB74D] border border-[#FF9800]/50 px-2 py-0.5 rounded-full font-bold text-[9.5px] flex items-center gap-1 shadow-xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#FFB74D] animate-pulse" />
-                          Đang chế biến
-                        </span>
+                      {/* Ghi chú riêng nếu có */}
+                      {item.note && (
+                        <div className="pt-1.5 border-t border-white/5 flex items-center gap-1.5 text-[10.5px] text-[#FFE088]">
+                          <ChefHat className="w-3 h-3 text-[#FFD54F]/80 flex-shrink-0" />
+                          <span className="truncate italic">Ghi chú: {item.note}</span>
+                        </div>
                       )}
                     </div>
-                  </div>
+                  ))}
                 </div>
-
-                {/* Ghi chú riêng nếu có */}
-                {item.note && (
-                  <div className="pt-1.5 border-t border-white/5 flex items-center gap-1.5 text-[10.5px] text-[#FFE088]">
-                    <ChefHat className="w-3 h-3 text-[#FFD54F]/80 flex-shrink-0" />
-                    <span className="truncate italic">Ghi chú: {item.note}</span>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )
       )}
