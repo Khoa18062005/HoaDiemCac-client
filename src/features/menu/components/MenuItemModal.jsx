@@ -159,8 +159,13 @@ export default function MenuItemModal({
       setError('Vui lòng nhập tên món ăn');
       return;
     }
+    const MAX_PRICE = 1_000_000_000_000; // 1.000 tỷ VNĐ (ngưỡng trần an toàn tròn số theo Decimal(15,2) MySQL)
     if (!formData.price || Number(formData.price) <= 0) {
       setError('Giá món ăn phải lớn hơn 0 ₫');
+      return;
+    }
+    if (Number(formData.price) > MAX_PRICE) {
+      setError('Giá món ăn không được vượt quá 1.000.000.000.000 ₫ (1.000 tỷ VNĐ)');
       return;
     }
 
@@ -280,17 +285,34 @@ export default function MenuItemModal({
 
           {/* Giá bán */}
           <div className="space-y-1.5">
-            <label className="text-[#A0A0A5] font-semibold">Giá bán (VNĐ) *</label>
+            <div className="flex items-center justify-between">
+              <label className="text-[#A0A0A5] font-semibold">Giá bán (VNĐ) *</label>
+              {Number(formData.price) > 1_000_000_000_000 && (
+                <span className="text-[10px] text-[#ff8080] font-semibold animate-pulse">
+                  ⚠️ Vượt quá tối đa 1.000 tỷ ₫
+                </span>
+              )}
+            </div>
             <input
               type="number"
               required
-              min="0"
-              step="1000"
+              min="1"
+              max="1000000000000"
+              step="any"
               value={formData.price}
               onChange={(e) => setFormData({ ...formData, price: e.target.value })}
               placeholder="VD: 389000"
-              className="w-full px-3 py-2 bg-surface rounded-lg border border-surface-border text-gold font-bold placeholder:text-[#656569] focus:border-gold/60 focus:outline-none transition-all"
+              className={`w-full px-3 py-2 bg-surface rounded-lg border text-gold font-bold placeholder:text-[#656569] focus:outline-none transition-all ${
+                Number(formData.price) > 1_000_000_000_000
+                  ? 'border-crimson text-crimson focus:border-crimson'
+                  : 'border-surface-border focus:border-gold/60'
+              }`}
             />
+            {Number(formData.price) > 1_000_000_000_000 && (
+              <p className="text-[11px] text-[#ff8080] font-medium">
+                ⚠️ Giá món ăn không được vượt quá 1.000.000.000.000 ₫ (1.000 tỷ VNĐ)
+              </p>
+            )}
           </div>
 
           {/* ========================================================================= */}
