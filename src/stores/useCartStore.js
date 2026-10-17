@@ -20,6 +20,9 @@ export const useCartStore = create(
 
         let newItems;
         if (existingIndex > -1) {
+          if (items[existingIndex].quantity >= ORDER_QUANTITY_LIMIT.MAX) {
+            return;
+          }
           newItems = [...items];
           const newQty = Math.min(
             newItems[existingIndex].quantity + quantity,
@@ -56,14 +59,15 @@ export const useCartStore = create(
        */
       updateQuantity: (itemId, quantity) => {
         const { items } = get();
-        if (quantity <= 0) {
+        const num = parseInt(quantity, 10);
+        if (isNaN(num) || num <= 0) {
           // Nếu giảm về 0 -> xóa món khỏi giỏ
           set({ items: items.filter((i) => i.id !== itemId) });
           return;
         }
 
         const safeQty = Math.min(
-          Math.max(quantity, ORDER_QUANTITY_LIMIT.MIN),
+          Math.max(num, ORDER_QUANTITY_LIMIT.MIN),
           ORDER_QUANTITY_LIMIT.MAX
         );
 

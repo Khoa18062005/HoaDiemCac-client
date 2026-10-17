@@ -581,10 +581,14 @@ export default function AdminOrderAdjustmentModal({
                                 </span>
                                 <button
                                   type="button"
-                                  disabled={actionLoading === `qty_${item.id}`}
+                                  disabled={actionLoading === `qty_${item.id}` || item.quantity >= 99}
                                   onClick={() => handleUpdateQuantity(item, 1)}
-                                  className="w-7 h-7 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all disabled:opacity-40"
-                                  title="Thêm 1 phần"
+                                  className={`w-7 h-7 flex items-center justify-center transition-all ${
+                                    item.quantity >= 99
+                                      ? 'text-zinc-600 cursor-not-allowed opacity-20'
+                                      : 'text-zinc-400 hover:text-white hover:bg-white/10 active:scale-90 disabled:opacity-40'
+                                  }`}
+                                  title={item.quantity >= 99 ? 'Đã đạt số lượng tối đa 99 phần' : 'Thêm 1 phần'}
                                 >
                                   <Plus className="w-3.5 h-3.5" />
                                 </button>

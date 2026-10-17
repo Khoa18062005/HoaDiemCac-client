@@ -13,6 +13,8 @@ export default function CustomerDishCard({
   onAddToCart,
   onUpdateQuantity,
 }) {
+  const isMaxReached = cartQuantity >= 99;
+
   const formatPrice = (amount) => {
     return new Intl.NumberFormat('vi-VN').format(amount);
   };
@@ -124,14 +126,23 @@ export default function CustomerDishCard({
                 >
                   <Minus className="w-4 h-4 stroke-[2.5]" />
                 </button>
-                <span className="text-xs font-bold text-[#FDFBF7] px-1 min-w-[16px] text-center leading-none">
+                <span className="text-xs font-bold text-[#FDFBF7] px-1 min-w-[16px] text-center leading-none select-none">
                   {cartQuantity}
                 </span>
                 <button
                   type="button"
-                  onClick={() => onUpdateQuantity(dish.id, cartQuantity + 1)}
+                  disabled={isMaxReached}
+                  onClick={() => {
+                    if (isMaxReached) return;
+                    onUpdateQuantity(dish.id, cartQuantity + 1);
+                  }}
                   aria-label="Tăng"
-                  className="w-7 h-7 rounded-full bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white flex items-center justify-center shadow-[0_0_8px_rgba(196,30,58,0.4)] active:scale-90 hover:brightness-110 transition-transform"
+                  title={isMaxReached ? "Đã đạt số lượng tối đa (99 phần)" : "Tăng"}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                    isMaxReached
+                      ? 'bg-[#2A2A30] text-zinc-600 cursor-not-allowed opacity-40 shadow-none'
+                      : 'bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white shadow-[0_0_8px_rgba(196,30,58,0.4)] active:scale-90 hover:brightness-110'
+                  }`}
                 >
                   <Plus className="w-4 h-4 stroke-[2.5]" />
                 </button>

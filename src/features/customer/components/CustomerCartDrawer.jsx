@@ -69,6 +69,61 @@ function DishNoteInput({ note, dishId, onUpdateNote }) {
   );
 }
 
+/**
+ * CartQuantityStepper
+ * Bộ điều khiển số lượng món ăn trong giỏ hàng:
+ * - Chỉ cho phép điều chỉnh số lượng thông qua nút cộng (+) và trừ (-).
+ * - Chặn số lượng gọi tối đa là 99 món (Quy định QĐ9).
+ * - Khi đạt mức 99, nút dấu cộng (+) sẽ bị vô hiệu hóa hoàn toàn, không thể nhấn được nữa.
+ */
+function CartQuantityStepper({ item, onUpdateQuantity, onRequestDelete, size = 'md' }) {
+  const isMaxReached = (item.quantity || 1) >= 99;
+  const isSm = size === 'sm';
+
+  return (
+    <div className={`flex items-center ${isSm ? 'space-x-1' : 'space-x-1.5'} bg-[#141418] px-1.5 py-0.5 rounded-full border border-[rgba(212,175,55,0.25)] select-none`}>
+      {/* Nút Giảm (-) */}
+      <button
+        type="button"
+        onClick={() => {
+          if (item.quantity <= 1) {
+            onRequestDelete(item);
+          } else {
+            onUpdateQuantity(item.id, item.quantity - 1);
+          }
+        }}
+        title={item.quantity <= 1 ? "Xóa món khỏi giỏ" : "Giảm số lượng"}
+        className={`${isSm ? 'w-4 h-4' : 'w-5 h-5'} rounded-full bg-[#2A2A30] text-[#D6D3CD] flex items-center justify-center active:scale-90 cursor-pointer hover:bg-[#3A3A42] transition-colors`}
+      >
+        <Minus className={`${isSm ? 'w-2.5 h-2.5' : 'w-3 h-3'} stroke-[2.5]`} />
+      </button>
+
+      {/* Hiển thị số lượng (chỉ hiển thị, không nhập trực tiếp) */}
+      <span className={`text-xs font-bold text-[#FDFBF7] ${isSm ? 'px-1 min-w-[12px]' : 'px-1 min-w-[14px]'} text-center leading-none select-none`}>
+        {item.quantity}
+      </span>
+
+      {/* Nút Tăng (+) - Khóa không cho nhấn khi đã đạt trần 99 */}
+      <button
+        type="button"
+        disabled={isMaxReached}
+        onClick={() => {
+          if (isMaxReached) return;
+          onUpdateQuantity(item.id, item.quantity + 1);
+        }}
+        title={isMaxReached ? "Đã đạt số lượng tối đa (99 phần)" : "Tăng số lượng"}
+        className={`${isSm ? 'w-4 h-4' : 'w-5 h-5'} rounded-full flex items-center justify-center transition-all ${
+          isMaxReached
+            ? 'bg-[#2A2A30] text-zinc-600 cursor-not-allowed opacity-40 shadow-none'
+            : 'bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white active:scale-90 cursor-pointer hover:brightness-110'
+        }`}
+      >
+        <Plus className={`${isSm ? 'w-2.5 h-2.5' : 'w-3 h-3'} stroke-[2.5]`} />
+      </button>
+    </div>
+  );
+}
+
 export default function CustomerCartDrawer({
   isOpen,
   onClose,
@@ -406,35 +461,12 @@ export default function CustomerCartDrawer({
                           </span>
                         ) : (
                           <>
-                            <div className="flex items-center space-x-1.5 bg-[#141418] px-1.5 py-0.5 rounded-full border border-[rgba(212,175,55,0.25)]">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (item.quantity <= 1) {
-                                    setItemPendingDelete(item);
-                                  } else {
-                                    onUpdateQuantity(item.id, item.quantity - 1);
-                                  }
-                                }}
-                                title={item.quantity <= 1 ? "Xóa món khỏi giỏ" : "Giảm số lượng"}
-                                className="w-5 h-5 rounded-full bg-[#2A2A30] text-[#D6D3CD] flex items-center justify-center active:scale-90 cursor-pointer"
-                              >
-                                <Minus className="w-3 h-3 stroke-[2.5]" />
-                              </button>
-                              <span className="text-xs font-bold text-[#FDFBF7] px-1 min-w-[14px] text-center leading-none">
-                                {item.quantity}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  onUpdateQuantity(item.id, item.quantity + 1)
-                                }
-                                title="Tăng số lượng"
-                                className="w-5 h-5 rounded-full bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white flex items-center justify-center active:scale-90 cursor-pointer"
-                              >
-                                <Plus className="w-3 h-3 stroke-[2.5]" />
-                              </button>
-                            </div>
+                            <CartQuantityStepper
+                              item={item}
+                              onUpdateQuantity={onUpdateQuantity}
+                              onRequestDelete={setItemPendingDelete}
+                              size="md"
+                            />
 
                             <button
                               type="button"

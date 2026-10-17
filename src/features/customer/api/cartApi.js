@@ -30,7 +30,7 @@ export const cartApi = {
         menuItemId: typeof item.id === 'number' ? item.id : (item.numericId || null),
         name: item.name,
         price: item.price,
-        quantity: item.quantity || 1,
+        quantity: Math.min(Math.max(parseInt(item.quantity, 10) || 1, 1), 99),
         note: item.note || '',
         image: item.image,
         unit: item.unit,

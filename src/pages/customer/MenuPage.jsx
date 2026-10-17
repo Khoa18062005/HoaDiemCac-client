@@ -1214,6 +1214,9 @@ export default function MenuPage() {
       const existingIndex = prev.findIndex((item) => item.id === dish.id);
       let next;
       if (existingIndex > -1) {
+        if (prev[existingIndex].quantity >= 99) {
+          return prev; // Đã đạt mức tối đa 99 phần, không tăng thêm
+        }
         next = [...prev];
         next[existingIndex] = {
           ...next[existingIndex],
@@ -1240,16 +1243,17 @@ export default function MenuPage() {
   // Cập nhật số lượng món (Nếu tăng thêm món -> tự động nhảy về tab 'Chọn món')
   const handleUpdateQuantity = (dishId, newQuantity) => {
     if (isOrderLocked) return;
-    if (newQuantity > 0) {
-      setCartTab('draft');
-    }
-    if (newQuantity <= 0) {
+    const num = parseInt(newQuantity, 10);
+    if (isNaN(num)) return;
+    if (num <= 0) {
       handleRemoveItem(dishId);
       return;
     }
+    const safeQty = Math.min(Math.max(num, 1), 99);
+    setCartTab('draft');
     setCartItems((prev) => {
       const next = prev.map((item) =>
-        item.id === dishId ? { ...item, quantity: Math.min(newQuantity, 99) } : item
+        item.id === dishId ? { ...item, quantity: safeQty } : item
       );
       syncCartToServer(next);
       return next;
