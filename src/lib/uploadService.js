@@ -132,6 +132,12 @@ export async function uploadImageToCDN(file) {
     };
   } catch (err) {
     console.error('Lỗi khi tải ảnh lên máy chủ:', err);
+    if (err.response?.status === 401) {
+      throw new Error('Phiên đăng nhập đã hết hạn hoặc bạn chưa đăng nhập. Vui lòng đăng nhập với tài khoản Quản trị viên hoặc Quản lý.');
+    }
+    if (err.response?.status === 403) {
+      throw new Error('Bạn không có quyền tải ảnh lên CDN nhà hàng. Chức năng này chỉ dành riêng cho Quản trị viên (ADMIN) và Quản lý (MANAGER).');
+    }
     const serverMessage = err.response?.data?.message || err.message || '';
     if (serverMessage.toLowerCase().includes('invalid image') || serverMessage.toLowerCase().includes('cloudinary') || serverMessage.toLowerCase().includes('không tương thích') || serverMessage.toLowerCase().includes('không hợp lệ')) {
       throw new Error(
