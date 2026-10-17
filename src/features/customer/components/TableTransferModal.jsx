@@ -12,6 +12,7 @@ import {
   Users2
 } from 'lucide-react';
 import { tableApi } from '@/features/tables/api/tableApi';
+import { env } from '@/config/env';
 
 export default function TableTransferModal({
   isOpen,
@@ -31,6 +32,22 @@ export default function TableTransferModal({
   // Dữ liệu mã chuyển hiện tại
   const [transferData, setTransferData] = useState(null);
   const [countdown, setCountdown] = useState(0);
+
+  // Popup xác nhận hủy tiến trình chuyển bàn (thay thế window.confirm để đảm bảo thẩm mỹ theme Hỏa Diệm Các)
+  const [isConfirmCancelOpen, setIsConfirmCancelOpen] = useState(false);
+  const [confirmCancelSource, setConfirmCancelSource] = useState(null); // 'CLOSE_BUTTON' | 'CANCEL_BUTTON'
+
+  // Phím Escape để đóng popup xác nhận
+  useEffect(() => {
+    if (!isConfirmCancelOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsConfirmCancelOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isConfirmCancelOpen]);
 
   // Thông báo ra component cha khi có mã chuyển bàn đang active
   useEffect(() => {
@@ -55,13 +72,55 @@ export default function TableTransferModal({
     return () => clearInterval(interval);
   }, [transferData, countdown]);
 
-  if (!isOpen) return null;
-
   const formatCountdown = (secs) => {
     const mins = Math.floor(secs / 60);
     const remaining = secs % 60;
     return `${String(mins).padStart(2, '0')}:${String(remaining).padStart(2, '0')}`;
   };
+
+  // Lắng nghe sự kiện F5 / Rời trang để cảnh báo khi tiến trình chuyển bàn đang hoạt động
+  useEffect(() => {
+    if (!transferData?.transferCode) return;
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = 'Tiến trình chuyển bàn đang diễn ra. Bạn có chắc chắn muốn rời khỏi trang?';
+      return e.returnValue;
+    };
+
+    const handlePageHide = () => {
+      if (transferData?.transferCode) {
+        let deviceToken = '';
+        try {
+          const stored = localStorage.getItem('hoadiemcat_table_session');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            deviceToken = parsed?.deviceToken || '';
+          }
+        } catch (e) {}
+
+        const url = `${env.API_URL}/customer/tables/transfers/cancel?transferCode=${encodeURIComponent(transferData.transferCode)}`;
+        const headers = { 'Content-Type': 'application/json' };
+        if (deviceToken) {
+          headers['X-Device-Token'] = deviceToken;
+        }
+
+        try {
+          fetch(url, {
+            method: 'POST',
+            headers,
+            keepalive: true,
+          }).catch(() => {});
+        } catch (err) {}
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+  }, [transferData]);
 
   const handleRequestTransfer = async () => {
     if (loading) return;
@@ -80,7 +139,7 @@ export default function TableTransferModal({
   };
 
   const handleCancelTransfer = async () => {
-    if (!transferData?.transferCode || loading) return;
+    if (!transferData?.transferCode || loading) return false;
     setLoading(true);
     setErrorMsg('');
     try {
@@ -88,10 +147,37 @@ export default function TableTransferModal({
       setTransferData(null);
       setCountdown(0);
       if (onTransferSuccess) onTransferSuccess();
+      return true;
     } catch (err) {
       setErrorMsg(err.message || 'Không thể hủy yêu cầu chuyển bàn.');
+      return false;
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Mở popup xác nhận hủy trước khi gọi API hủy (dùng cho nút Hủy Yêu Cầu Chuyển Bàn)
+  const handleCancelWithConfirm = () => {
+    setConfirmCancelSource('CANCEL_BUTTON');
+    setIsConfirmCancelOpen(true);
+  };
+
+  // Đóng modal bằng nút 'X' kèm xác nhận hủy nếu có mã đang active
+  const handleCloseWithConfirm = () => {
+    if (transferData) {
+      setConfirmCancelSource('CLOSE_BUTTON');
+      setIsConfirmCancelOpen(true);
+    } else {
+      onClose();
+    }
+  };
+
+  // Xử lý khi người dùng chọn "Đồng ý hủy" trên popup xác nhận
+  const handleConfirmCancelAction = async () => {
+    setIsConfirmCancelOpen(false);
+    const success = await handleCancelTransfer();
+    if (success && confirmCancelSource === 'CLOSE_BUTTON') {
+      onClose();
     }
   };
 
@@ -101,6 +187,8 @@ export default function TableTransferModal({
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -120,8 +208,9 @@ export default function TableTransferModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleCloseWithConfirm}
             className="text-[#9E9AA0] hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+            title="Đóng hộp thoại chuyển bàn"
           >
             <X className="w-5 h-5" />
           </button>
@@ -285,7 +374,7 @@ export default function TableTransferModal({
               {/* Nút hủy chuyển bàn */}
               <button
                 type="button"
-                onClick={handleCancelTransfer}
+                onClick={handleCancelWithConfirm}
                 disabled={loading}
                 className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs tracking-wider border border-zinc-700 active:scale-98 transition-all flex items-center justify-center gap-2"
               >
@@ -295,6 +384,91 @@ export default function TableTransferModal({
           )}
         </div>
       </div>
+
+      {/* Popup Xác Nhận Hủy Chuyển Bàn (Theme Hỏa Diệm Các) */}
+      {isConfirmCancelOpen && (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 select-none"
+          onClick={() => !loading && setIsConfirmCancelOpen(false)}
+        >
+          <div
+            className="bg-[#18181C] border border-[rgba(212,175,55,0.4)] w-full max-w-sm rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col relative text-[#FDFBF7] animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Hiệu ứng ánh sáng nền */}
+            <div className="absolute top-0 right-0 w-36 h-36 bg-gradient-to-bl from-red-600/20 via-[#D4AF37]/15 to-transparent rounded-bl-full pointer-events-none" />
+
+            {/* Header */}
+            <div className="p-4 sm:p-5 pb-3 flex items-start gap-3.5 relative z-10 border-b border-white/10 bg-[#16161A]">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#7A0C16] to-[#C41E3A] border border-red-500/50 flex items-center justify-center text-[#FFD54F] shadow-lg flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-[#FFD54F]" />
+              </div>
+              <div className="flex-1 min-w-0 pr-6">
+                <span className="text-[10px] font-mono tracking-widest uppercase text-[#FFD54F] font-bold block mb-0.5">
+                  HỎA DIỆM CÁC • BÀN {tableNumber}
+                </span>
+                <h3 className="text-base font-serif font-bold text-white leading-tight">
+                  Xác Nhận Hủy Chuyển Bàn
+                </h3>
+                <p className="text-[11px] text-[#A39E93] mt-0.5">
+                  {confirmCancelSource === 'CLOSE_BUTTON' ? 'Đóng hộp thoại chuyển bàn' : 'Hủy tiến trình đổi/ghép bàn'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !loading && setIsConfirmCancelOpen(false)}
+                className="absolute top-4 right-4 p-1.5 rounded-full text-[#9E9AA0] hover:text-white hover:bg-white/10 transition-colors"
+                title="Đóng"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 sm:p-5 space-y-3 relative z-10 text-xs sm:text-[13px] leading-relaxed">
+              <div className="p-3.5 rounded-2xl bg-red-950/30 border border-red-500/30 text-red-200/90 flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                <p>
+                  Bạn có chắc chắn muốn hủy yêu cầu chuyển bàn này không?
+                </p>
+              </div>
+
+              {transferData?.transferCode && (
+                <div className="p-3 rounded-xl bg-black/40 border border-white/10 space-y-1">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-zinc-400">Mã chuyển hiện tại:</span>
+                    <span className="font-mono font-bold text-amber-300">{transferData.transferCode}</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400">
+                    Mã sẽ bị hủy bỏ ngay lập tức và bàn sẽ mở lại quyền gọi món bình thường.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="p-4 bg-[#141416] border-t border-white/10 flex items-center justify-end gap-2.5 relative z-10">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => setIsConfirmCancelOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-white/10 text-[#D6D3CD] font-bold text-xs hover:bg-white/5 active:scale-95 transition-all"
+              >
+                Quay lại
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancelAction}
+                disabled={loading}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 text-white font-bold text-xs shadow-lg shadow-red-950/50 active:scale-95 transition-all flex items-center gap-1.5"
+              >
+                {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Đồng ý hủy</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
