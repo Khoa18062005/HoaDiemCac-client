@@ -460,7 +460,7 @@ export default function AdminTableDetailModal({
       {/* 1. Modal Chi Tiết Bàn Ăn Chính (Chỉ hiển thị khi chưa mở modal thanh toán) */}
       {!isPaymentStepperOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-fadeIn">
-          <div className="bg-[#141417] border border-surface-border rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] transform-gpu">
+          <div className="bg-[#141417] border border-surface-border rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] transform-gpu">
             {/* Header */}
             <div className="px-6 py-4 border-b border-surface-border flex items-center justify-between bg-[#101012]">
               <div className="flex items-center gap-3">
@@ -537,7 +537,7 @@ export default function AdminTableDetailModal({
                     <button
                       type="button"
                       onClick={() => setIsOrderAdjustmentOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 -translate-y-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-gold/60 text-gold text-xs font-semibold transition-all active:scale-95 shadow-sm group"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 -translate-y-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-gold/60 text-gold text-xs font-semibold transition-all active:scale-95 shadow-sm group"
                       title="Xem giỏ hàng"
                     >
                       <ShoppingCart className="w-3.5 h-3.5 group-hover:scale-105 transition-transform text-amber-300" />
@@ -582,9 +582,9 @@ export default function AdminTableDetailModal({
               </div>
 
               {/* B. Thông tin bảo mật PIN & Quản lý thiết bị */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                 {/* PIN & Khóa gọi món */}
-                <div className="bg-[#18181C] border border-surface-border rounded-xl pt-2 pb-3 px-3.5 flex flex-col justify-between space-y-3">
+                <div className="md:col-span-5 bg-[#18181C] border border-surface-border rounded-xl pt-2 pb-3 px-3.5 flex flex-col justify-between space-y-3">
                   <div className="flex items-center justify-between h-7">
                     <span className="text-xs text-[#A0A0A5] font-medium flex items-center gap-1.5">
                       <KeyRound className="w-3.5 h-3.5 text-gold" />
@@ -600,10 +600,10 @@ export default function AdminTableDetailModal({
                       type="button"
                       disabled={actionLoading === 'pin'}
                       onClick={handleRegeneratePin}
-                      className="flex-1 h-8 rounded-lg bg-surface-card border border-surface-border hover:border-gold/40 text-xs text-[#EDEDED] hover:text-gold flex items-center justify-center gap-1.5 transition-colors"
+                      className="flex-1 h-8 px-2 rounded-lg bg-surface-card border border-surface-border hover:border-gold/40 text-xs whitespace-nowrap text-[#EDEDED] hover:text-gold flex items-center justify-center gap-1.5 transition-colors"
                       title="Sinh lại mã PIN mới cho lượt khách mới"
                     >
-                      <RefreshCw className={`w-3 h-3 ${actionLoading === 'pin' ? 'animate-spin' : ''}`} />
+                      <RefreshCw className={`w-3 h-3 flex-shrink-0 ${actionLoading === 'pin' ? 'animate-spin' : ''}`} />
                       <span>Sinh PIN Mới</span>
                     </button>
 
@@ -611,7 +611,7 @@ export default function AdminTableDetailModal({
                       type="button"
                       disabled={actionLoading === 'lock'}
                       onClick={handleToggleOrderLock}
-                      className={`flex-1 h-8 rounded-lg border text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                      className={`flex-1 h-8 px-2 rounded-lg border text-xs whitespace-nowrap font-medium flex items-center justify-center gap-1.5 transition-colors ${
                         actionLoading === 'lock'
                           ? 'opacity-50 cursor-not-allowed bg-zinc-800 text-zinc-500 border-zinc-700'
                           : table.isOrderLocked
@@ -621,11 +621,11 @@ export default function AdminTableDetailModal({
                       title={actionLoading === 'lock' ? 'Đang xử lý...' : 'Khóa/mở quyền đặt món khẩn cấp'}
                     >
                       {actionLoading === 'lock' ? (
-                        <RefreshCw className="w-3 h-3 animate-spin text-zinc-300" />
+                        <RefreshCw className="w-3 h-3 flex-shrink-0 animate-spin text-zinc-300" />
                       ) : table.isOrderLocked ? (
-                        <Lock className="w-3 h-3" />
+                        <Lock className="w-3 h-3 flex-shrink-0" />
                       ) : (
-                        <Unlock className="w-3 h-3" />
+                        <Unlock className="w-3 h-3 flex-shrink-0" />
                       )}
                       <span>
                         {actionLoading === 'lock' ? 'Đang lưu...' : table.isOrderLocked ? 'Đang Khóa' : 'Khóa Order'}
@@ -635,7 +635,7 @@ export default function AdminTableDetailModal({
                 </div>
 
                 {/* Thiết bị & Standee QR */}
-                <div className="bg-[#18181C] border border-surface-border rounded-xl pt-2 pb-3 px-3.5 flex flex-col justify-between space-y-3">
+                <div className="md:col-span-7 bg-[#18181C] border border-surface-border rounded-xl pt-2 pb-3 px-3.5 flex flex-col justify-between space-y-3">
                   <div className="flex items-center justify-between h-7">
                     <span className="text-xs text-[#A0A0A5] font-medium flex items-center gap-1.5">
                       <Smartphone className="w-3.5 h-3.5 text-blue-400" />
@@ -646,22 +646,22 @@ export default function AdminTableDetailModal({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 overflow-x-auto">
                     <button
                       type="button"
                       onClick={() => onOpenDevices && onOpenDevices(table)}
-                      className="flex-1 h-8 rounded-lg bg-surface-card border border-surface-border hover:border-blue-400/40 text-xs text-[#EDEDED] hover:text-blue-400 flex items-center justify-center gap-1.5 transition-colors"
+                      className="flex-1 h-8 px-2 rounded-lg bg-surface-card border border-surface-border hover:border-blue-400/40 text-xs whitespace-nowrap text-[#EDEDED] hover:text-blue-400 flex items-center justify-center gap-1.5 transition-colors"
                     >
-                      <Smartphone className="w-3 h-3" />
+                      <Smartphone className="w-3.5 h-3.5 flex-shrink-0" />
                       <span>Quản Lý Máy</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => onOpenPrint && onOpenPrint(table)}
-                      className="flex-1 h-8 rounded-lg bg-surface-card border border-surface-border hover:border-gold/40 text-xs text-[#EDEDED] hover:text-gold flex items-center justify-center gap-1.5 transition-colors"
+                      className="flex-1 h-8 px-2 rounded-lg bg-surface-card border border-surface-border hover:border-gold/40 text-xs whitespace-nowrap text-[#EDEDED] hover:text-gold flex items-center justify-center gap-1.5 transition-colors"
                     >
-                      <QrCode className="w-3 h-3" />
+                      <QrCode className="w-3.5 h-3.5 flex-shrink-0" />
                       <span>In Mã QR</span>
                     </button>
 
@@ -673,13 +673,13 @@ export default function AdminTableDetailModal({
                           setIsDirectTransferOpen((prev) => !prev);
                           setIsClusterOpen(false);
                         }}
-                        className={`flex-1 h-8 rounded-lg border text-xs flex items-center justify-center gap-1.5 transition-colors ${
+                        className={`flex-1 h-8 px-2 rounded-lg border text-xs whitespace-nowrap flex items-center justify-center gap-1.5 transition-colors ${
                           isDirectTransferOpen
                             ? 'bg-amber-500/20 border-amber-500 text-amber-300'
                             : 'bg-surface-card border-surface-border hover:border-amber-400/40 text-[#EDEDED] hover:text-amber-300'
                         }`}
                       >
-                        <ArrowLeftRight className="w-3 h-3" />
+                        <ArrowLeftRight className="w-3.5 h-3.5 flex-shrink-0" />
                         <span>Đổi/Ghép</span>
                       </button>
                     )}
@@ -691,13 +691,13 @@ export default function AdminTableDetailModal({
                         setIsClusterOpen((prev) => !prev);
                         setIsDirectTransferOpen(false);
                       }}
-                      className={`flex-1 h-8 rounded-lg border text-xs flex items-center justify-center gap-1.5 transition-colors ${
+                      className={`flex-1 h-8 px-2 rounded-lg border text-xs whitespace-nowrap flex items-center justify-center gap-1.5 transition-colors ${
                         isClusterOpen
                           ? 'bg-purple-500/20 border-purple-500 text-purple-300'
                           : 'bg-surface-card border-surface-border hover:border-purple-400/40 text-[#EDEDED] hover:text-purple-300'
                       }`}
                     >
-                      <Users2 className="w-3 h-3" />
+                      <Users2 className="w-3.5 h-3.5 flex-shrink-0" />
                       <span>{table.isLinked ? 'Cụm Bàn' : (table.isMaster ? 'Cụm Đang Ghép' : 'Tạo Cụm')}</span>
                     </button>
                   </div>

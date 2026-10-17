@@ -159,6 +159,29 @@ export default function CustomerCartSidebar({
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
   }, [orderedItems]);
 
+  // Thống kê tất cả các món của tất cả các đợt (chỉ gồm hình minh họa, tên món, tổng số lượng, thành tiền đã nhân)
+  const aggregatedAllItems = useMemo(() => {
+    const map = new Map();
+    orderedItems.forEach((item) => {
+      const key = item.dishId ? String(item.dishId) : (item.name || '').trim().toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, {
+          dishId: item.dishId,
+          name: item.name,
+          image: item.image,
+          price: Number(item.price) || 0,
+          quantity: 0,
+        });
+      }
+      const existing = map.get(key);
+      existing.quantity += Number(item.quantity) || 1;
+      if (!existing.image && item.image) {
+        existing.image = item.image;
+      }
+    });
+    return Array.from(map.values());
+  }, [orderedItems]);
+
   const handleOpenConfirmModal = () => {
     if (isOrderLocked) {
       alert('Bàn đang chốt hóa đơn tạm tính, toàn bộ thao tác đặt món đã bị đóng băng.');
@@ -176,6 +199,8 @@ export default function CustomerCartSidebar({
     }
     if (cartItems.length === 0 || isSuccess) return;
     setIsSuccess(true);
+    // Khi người dùng vừa ấn nút gửi món ăn vào bếp sẽ chuyển từ tab chọn món sang tab Xem đợt
+    setActiveTab('rounds');
 
     setTimeout(() => {
       if (onSubmitOrder) {
@@ -186,7 +211,7 @@ export default function CustomerCartSidebar({
         });
       }
       setIsSuccess(false);
-      setActiveTab('all');
+      setActiveTab('rounds');
     }, 1200);
   };
 
@@ -215,13 +240,14 @@ export default function CustomerCartSidebar({
         )}
       </div>
 
-      {/* 2. Segmented Tab Bar: Chọn món vs Tất cả (Hiệu ứng trượt lướt mượt mà) */}
-      <div className="relative border-b border-white/10 bg-[#18181C] px-3 pt-2 flex-shrink-0">
+      {/* 2. Segmented Tab Bar: Chọn món vs Xem đợt vs Tất cả (Hiệu ứng trượt lướt mượt mà) */}
+      <div className="relative border-b border-white/10 bg-[#18181C] px-2.5 pt-2 flex-shrink-0">
         <div className="flex">
+          {/* Tab 1: Chọn món */}
           <button
             type="button"
             onClick={() => setActiveTab('draft')}
-            className={`w-1/2 pb-2.5 text-xs font-bold transition-colors duration-200 flex items-center justify-center gap-1.5 ${
+            className={`w-1/3 pb-2 text-[11px] xl:text-xs font-bold transition-colors duration-200 flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap ${
               activeTab === 'draft'
                 ? 'text-[#FFE088]'
                 : 'text-[#9E9AA0] hover:text-[#D6D3CD]'
@@ -229,7 +255,7 @@ export default function CustomerCartSidebar({
           >
             <span>Chọn món</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold transition-colors ${
+              className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-bold transition-colors ${
                 activeTab === 'draft'
                   ? 'bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white shadow-xs'
                   : 'bg-white/10 text-[#A39E93]'
@@ -239,10 +265,33 @@ export default function CustomerCartSidebar({
             </span>
           </button>
 
+          {/* Tab 2: Xem đợt */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('rounds')}
+            className={`w-1/3 pb-2 text-[11px] xl:text-xs font-bold transition-colors duration-200 flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap ${
+              activeTab === 'rounds'
+                ? 'text-[#FFE088]'
+                : 'text-[#9E9AA0] hover:text-[#D6D3CD]'
+            }`}
+          >
+            <span>Xem đợt</span>
+            <span
+              className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-bold transition-colors ${
+                activeTab === 'rounds'
+                  ? 'bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white shadow-xs'
+                  : 'bg-white/10 text-[#A39E93]'
+              }`}
+            >
+              {totalOrderedCount}
+            </span>
+          </button>
+
+          {/* Tab 3: Tất cả (Thống kê tổng hợp các món) */}
           <button
             type="button"
             onClick={() => setActiveTab('all')}
-            className={`w-1/2 pb-2.5 text-xs font-bold transition-colors duration-200 flex items-center justify-center gap-1.5 ${
+            className={`w-1/3 pb-2 text-[11px] xl:text-xs font-bold transition-colors duration-200 flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap ${
               activeTab === 'all'
                 ? 'text-[#FFE088]'
                 : 'text-[#9E9AA0] hover:text-[#D6D3CD]'
@@ -250,7 +299,7 @@ export default function CustomerCartSidebar({
           >
             <span>Tất cả</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold transition-colors ${
+              className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-bold transition-colors ${
                 activeTab === 'all'
                   ? 'bg-gradient-to-r from-[#990000] to-[#C41E3A] text-white shadow-xs'
                   : 'bg-white/10 text-[#A39E93]'
@@ -261,11 +310,15 @@ export default function CustomerCartSidebar({
           </button>
         </div>
 
-        {/* Thanh ngang trượt qua trượt lại mượt mà (Smooth Sliding Indicator) */}
+        {/* Thanh ngang trượt qua trượt lại mượt mà (Smooth Sliding Indicator cho 3 Tab) */}
         <div className="relative w-full h-0.5">
           <div
-            className={`absolute top-0 bottom-0 w-1/2 px-3 transition-transform duration-300 ease-out ${
-              activeTab === 'draft' ? 'translate-x-0' : 'translate-x-full'
+            className={`absolute top-0 bottom-0 w-1/3 px-2 transition-transform duration-300 ease-out ${
+              activeTab === 'draft'
+                ? 'translate-x-0'
+                : activeTab === 'rounds'
+                ? 'translate-x-full'
+                : 'translate-x-[200%]'
             }`}
           >
             <div className="w-full h-full bg-gradient-to-r from-[#C41E3A] via-[#FFD54F] to-[#C41E3A] shadow-[0_0_8px_rgba(255,213,79,0.6)] rounded-full" />
@@ -383,8 +436,8 @@ export default function CustomerCartSidebar({
             ))}
           </div>
         )
-      ) : (
-        /* TAB 2: TẤT CẢ (Toàn bộ món đã gửi bếp, tách biệt từng lần gọi) */
+      ) : activeTab === 'rounds' ? (
+        /* TAB 2: XEM ĐỢT (Toàn bộ món đã gửi bếp, phân tầng theo từng đợt gọi) */
         orderedItems.length === 0 ? (
           <div className="flex-1 p-6 flex flex-col items-center justify-center text-center text-[#9E9AA0] space-y-3">
             <UtensilsCrossed className="w-12 h-12 text-[#D4AF37]/40 stroke-[1.5]" />
@@ -519,6 +572,58 @@ export default function CustomerCartSidebar({
             })}
           </div>
         )
+      ) : (
+        /* TAB 3: TẤT CẢ (Thống kê tất cả các món của tất cả các đợt - Chỉ gồm hình minh họa, tên món, số lượng, thành tiền đã nhân) */
+        orderedItems.length === 0 ? (
+          <div className="flex-1 p-6 flex flex-col items-center justify-center text-center text-[#9E9AA0] space-y-3">
+            <UtensilsCrossed className="w-12 h-12 text-[#D4AF37]/40 stroke-[1.5]" />
+            <p className="text-sm font-medium text-[#D6D3CD]">Chưa có món nào được gửi bếp</p>
+            <p className="text-xs max-w-xs text-[#9E9AA0]">
+              Các món sau khi nhấn "Gửi Vào Bếp" sẽ hiển thị thống kê tại đây.
+            </p>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-2.5">
+            {aggregatedAllItems.map((item, idx) => {
+              const itemTotal = (Number(item.price) || 0) * (Number(item.quantity) || 1);
+              return (
+                <div
+                  key={item.dishId ? `${item.dishId}-${idx}` : idx}
+                  className="bg-[#1D1D22] rounded-xl p-2.5 border border-white/5 space-y-2 hover:border-[rgba(212,175,55,0.3)] transition-all"
+                >
+                  <div className="flex gap-2.5 items-center">
+                    <img
+                      src={item.image || 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80'}
+                      alt={item.name}
+                      className="w-12 h-12 rounded-lg object-cover flex-shrink-0 bg-[#2A2A2E]"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80';
+                      }}
+                    />
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <h5 className="font-bold text-xs text-[#FDFBF7] truncate">
+                          {item.name}
+                        </h5>
+                        <span className="text-[11px] font-bold text-[#FFD54F] flex-shrink-0">
+                          {formatPrice(itemTotal)} ₫
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between mt-1 text-[10px]">
+                        <span className="bg-[#2A2A30] text-[#FFE088] font-bold px-2 py-0.5 rounded border border-white/5">
+                          x{item.quantity}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
       )}
 
       {/* 4. Footer */}
@@ -569,7 +674,7 @@ export default function CustomerCartSidebar({
         </div>
       )}
 
-      {activeTab === 'all' && orderedItems.length > 0 && (
+      {(activeTab === 'rounds' || activeTab === 'all') && orderedItems.length > 0 && (
         <div className="p-3.5 border-t border-white/10 bg-[#18181C] space-y-2.5">
           <div className="flex items-baseline justify-between">
             <span className="text-xs text-[#D6D3CD] uppercase tracking-wider font-semibold">

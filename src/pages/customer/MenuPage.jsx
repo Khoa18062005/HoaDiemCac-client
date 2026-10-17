@@ -163,48 +163,46 @@ export default function MenuPage() {
           }
 
           if (info.isOrderLocked !== undefined) {
-            isTableLocked = Boolean(info.isOrderLocked);
-            if (isMounted) setIsOrderLocked(isTableLocked);
+            const nextLocked = Boolean(info.isOrderLocked);
+            if (isMounted) {
+              setIsOrderLocked((prev) => (prev !== nextLocked ? nextLocked : prev));
+              if (nextLocked) {
+                setIsPasscodeRequired((prev) => (prev ? false : prev));
+              }
+            }
 
-            // Đồng bộ trạng thái khóa order vào localStorage session và dọn sạch dữ liệu cũ
+            // Đồng bộ trạng thái khóa order vào localStorage session nếu có thay đổi
             const currentSession = getStoredTableSession();
             if (
               currentSession &&
               (currentSession.tableNumber === tableNumber ||
-                currentSession.tableNumber === currentNormTable)
+                currentSession.tableNumber === currentNormTable) &&
+              currentSession.isOrderLocked !== nextLocked
             ) {
-              saveTableSession({ ...currentSession, isOrderLocked: isTableLocked });
+              saveTableSession({ ...currentSession, isOrderLocked: nextLocked });
             }
             try {
               const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
-              if (!isTableLocked) {
+              const hasKey = Boolean(lockedMap[tableNumber.toUpperCase()] || lockedMap[currentNormTable.toUpperCase()]);
+              if (!nextLocked && hasKey) {
                 delete lockedMap[tableNumber.toUpperCase()];
                 delete lockedMap[currentNormTable.toUpperCase()];
-              } else {
+                localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
+              } else if (nextLocked && !hasKey) {
                 lockedMap[tableNumber.toUpperCase()] = true;
+                localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
               }
-              localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
             } catch {}
           }
           if (info.totalAmount !== undefined) {
-            if (isMounted) setServerTableTotal(Number(info.totalAmount) || 0);
+            const nextTotal = Number(info.totalAmount) || 0;
+            if (isMounted) {
+              setServerTableTotal((prev) => (prev !== nextTotal ? nextTotal : prev));
+            }
           }
         }
       } catch (err) {
         // Lỗi kết nối mạng tạm thời, không khóa bàn tùy tiện
-      }
-
-      // NẾU BÀN ĐANG TRONG QUÁ TRÌNH THANH TOÁN / KHÓA ORDER:
-      // Khách hàng luôn ở lại màn hình tạm tính (Hình 1) đối soát chi tiết
-      if (isTableLocked) {
-        if (isMounted) {
-          setIsPasscodeRequired(false);
-          setIsOrderLocked(true);
-        }
-      } else {
-        if (isMounted) {
-          setIsOrderLocked(false);
-        }
       }
 
       // 2. Kiểm tra session tại client
@@ -216,19 +214,14 @@ export default function MenuPage() {
         !session.sessionToken ||
         (normStoredNum !== tableNumber && kdsStoredNum !== currentNormTable && session?.tableNumber !== tableNumber)
       ) {
-        if (isMounted && !isTableLocked) {
-          setIsPasscodeRequired(true);
+        if (isMounted) {
+          setIsPasscodeRequired((prev) => (!prev ? true : prev));
         }
         return;
       }
 
       if (isMounted) {
-        if (!isTableLocked) {
-          setIsPasscodeRequired(false);
-        }
-        if (session.isHost !== undefined) {
-          setIsHost(Boolean(session.isHost));
-        }
+        setIsPasscodeRequired((prev) => (prev ? false : prev));
       }
 
       // Tải danh sách thiết bị kết nối thời gian thực
@@ -236,18 +229,33 @@ export default function MenuPage() {
         const devices = await tableApi.getDevices(tableNumber);
         if (Array.isArray(devices) && devices.length > 0) {
           const activeList = devices.filter((d) => d.isActive);
-          setDeviceCount(activeList.length);
+          setDeviceCount((prev) => (prev !== activeList.length ? activeList.length : prev));
 
           const currentToken = session?.deviceToken;
-          if (currentToken) {
-            const currentDev = devices.find((d) => d.deviceToken === currentToken);
-            if (currentDev) {
-              setIsHost(Boolean(currentDev.isHost));
-              if (!currentDev.isActive) {
-                alert('Thiết bị của bạn đã bị Chủ Bàn hoặc Quản Trị Viên ngắt kết nối khỏi bàn.');
-                clearTableSession();
-                window.location.reload();
-              }
+          const currentDev = devices.find(
+            (d) => (currentToken && d.deviceToken === currentToken) || d.isCurrentDevice
+          );
+          if (currentDev) {
+            const serverIsHost = Boolean(currentDev.isHost);
+            setIsHost((prev) => (prev !== serverIsHost ? serverIsHost : prev));
+
+            // Đồng bộ ngay lại vào localStorage để lần sau getStoredTableSession() không bị lệch
+            const curr = getStoredTableSession();
+            if (curr && curr.isHost !== serverIsHost) {
+              saveTableSession({ ...curr, isHost: serverIsHost });
+            }
+
+            if (!currentDev.isActive) {
+              alert('Thiết bị của bạn đã bị Chủ Bàn hoặc Quản Trị Viên ngắt kết nối khỏi bàn.');
+              clearTableSession();
+              window.location.reload();
+            }
+          } else if (devices.length === 1 && devices[0].isActive) {
+            const serverIsHost = Boolean(devices[0].isHost);
+            setIsHost((prev) => (prev !== serverIsHost ? serverIsHost : prev));
+            const curr = getStoredTableSession();
+            if (curr && curr.isHost !== serverIsHost) {
+              saveTableSession({ ...curr, isHost: serverIsHost });
             }
           }
         }
@@ -291,7 +299,7 @@ export default function MenuPage() {
               const isLocked = Boolean(data.isOrderLocked);
               setIsOrderLocked(isLocked);
               if (isLocked) {
-                setCartTab('all');
+                setCartTab('rounds');
                 setIsPasscodeRequired(false);
                 syncTableOrders();
               }
@@ -319,7 +327,7 @@ export default function MenuPage() {
         const isLocked = Boolean(detail.isOrderLocked);
         setIsOrderLocked(isLocked);
         if (isLocked) {
-          setCartTab('all');
+          setCartTab('rounds');
           setIsPasscodeRequired(false);
           syncTableOrders();
         }
@@ -337,7 +345,7 @@ export default function MenuPage() {
           );
           setIsOrderLocked(isLocked);
           if (isLocked) {
-            setCartTab('all');
+            setCartTab('rounds');
             setIsPasscodeRequired(false);
             syncTableOrders();
           }
@@ -354,7 +362,7 @@ export default function MenuPage() {
             const isLocked = Boolean(s.isOrderLocked);
             setIsOrderLocked(isLocked);
             if (isLocked) {
-              setCartTab('all');
+              setCartTab('rounds');
               setIsPasscodeRequired(false);
               syncTableOrders();
             }
@@ -712,7 +720,7 @@ export default function MenuPage() {
         const isLocked = Boolean(payload.isOrderLocked);
         setIsOrderLocked(isLocked);
         if (isLocked) {
-          setCartTab('all');
+          setCartTab('rounds');
           setIsPasscodeRequired(false);
           syncTableOrders();
         }
@@ -770,7 +778,7 @@ export default function MenuPage() {
           const isLocked = Boolean(tableData.isOrderLocked);
           setIsOrderLocked(isLocked);
           if (isLocked) {
-            setCartTab('all');
+            setCartTab('rounds');
             setIsPasscodeRequired(false);
             syncTableOrders();
           }
@@ -1315,6 +1323,9 @@ export default function MenuPage() {
     const itemsToSubmit = (orderData && orderData.items) ? orderData.items : cartItems;
     if (itemsToSubmit.length === 0) return;
 
+    // Khi người dùng vừa ấn nút gửi món ăn vào bếp sẽ chuyển từ tab chọn món sang tab Xem đợt
+    setCartTab('rounds');
+
     isSubmittingOrder.current = true;
 
     // Chuẩn bị payload gửi lên Spring Boot / MySQL
@@ -1410,7 +1421,7 @@ export default function MenuPage() {
           <button
             type="button"
             onClick={() => {
-              setCartTab('all');
+              setCartTab('rounds');
               setIsCartOpen(true);
             }}
             className="flex-shrink-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/25 to-amber-600/25 hover:from-amber-500/35 hover:to-amber-600/35 border border-amber-500/50 text-[#FFE088] text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 whitespace-nowrap shadow-xs"

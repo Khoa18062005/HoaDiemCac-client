@@ -83,6 +83,12 @@ export default function AdminOrderAdjustmentModal({
   const [actionLoading, setActionLoading] = useState(null);
   const [feedback, setFeedback] = useState(null);
 
+  // Ref lưu danh sách orders mới nhất để callback WebSocket luôn đọc được mà không re-subscribe effect
+  const ordersRef = useRef(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+
   // State chỉnh sửa ghi chú inline: { [itemId]: newNote }
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [tempNote, setTempNote] = useState('');
@@ -104,45 +110,138 @@ export default function AdminOrderAdjustmentModal({
     setTimeout(() => setFeedback(null), 3500);
   };
 
-  // Tải danh sách đơn hàng của bàn
+  // Quản lý trạng thái nạp dữ liệu: Chỉ hiển thị spinner ở LẦN MỞ ĐẦU TIÊN
+  const isInitialLoadRef = useRef(true);
+  const syncTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      isInitialLoadRef.current = true;
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    }
+  }, [isOpen]);
+
+  // Tải danh sách đơn hàng của bàn (hoàn toàn êm dịu, không giật lag)
   const fetchTableOrders = useCallback(async (showSpinner = false) => {
     if (!tableIdentifier) return;
-    if (showSpinner) setLoading(true);
+    if (showSpinner && isInitialLoadRef.current) {
+      setLoading(true);
+    }
     try {
       const res = await orderApi.getAdminTableOrders(tableIdentifier);
       const list = Array.isArray(res) ? res : (res ? [res] : []);
       setOrders(list);
+      isInitialLoadRef.current = false;
     } catch (err) {
       console.warn('Lỗi khi nạp danh sách order của bàn:', err);
     } finally {
-      if (showSpinner) setLoading(false);
+      setLoading(false);
     }
   }, [tableIdentifier]);
 
-  // Nạp dữ liệu khi mở modal & lắng nghe WebSocket realtime
+  // Nạp dữ liệu khi mở modal & lắng nghe WebSocket realtime êm ái
   useEffect(() => {
-    if (isOpen && tableIdentifier) {
-      fetchTableOrders(true);
+    if (!isOpen || !tableIdentifier) return;
 
-      const tableNum = (table?.tableNumber || table?.code || '').trim();
-      const unsub = wsManager.subscribe(`/topic/table/${tableNum}/status`, (event) => {
-        if (!event) return;
-        if (
-          event.type === 'ORDER_ITEMS_UPDATED' ||
-          event.type === 'ORDER_ITEM_CANCELLED' ||
-          event.type === 'ORDER_ITEM_UPDATED' ||
-          event.type === 'KITCHEN_ITEM_STATUS_TOGGLED' ||
-          event.type === 'WAITER_ITEM_DELIVERED'
-        ) {
-          fetchTableOrders(false);
-        }
+    // 1. Tải dữ liệu ban đầu
+    fetchTableOrders(true);
+
+    const tableNum = (table?.tableNumber || '').toString().trim();
+    const tableName = (table?.name || '').toString().trim();
+    const tableCode = (table?.code || '').toString().trim();
+    const tableIdStr = table?.id ? String(table.id) : '';
+
+    // Hàm đồng bộ ngầm debounced 300ms, không gây re-render giật UI
+    const triggerSync = () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = setTimeout(() => {
+        fetchTableOrders(false);
+      }, 300);
+    };
+
+    // Callback xử lý tín hiệu trực tiếp từ topic của bàn
+    const handleDirectTableEvent = (payload) => {
+      if (!payload) return;
+      triggerSync();
+    };
+
+    // Callback xử lý tín hiệu từ KDS/Bếp và Phục Vụ (chuyển trạng thái nấu, chờ phục vụ, đã phục vụ, gửi order mới)
+    const handleKitchenWaiterEvent = (payload) => {
+      if (!payload) return;
+
+      // 1. Nếu payload chứa orderId trùng với các đơn hàng hiện có của bàn
+      if (payload.orderId && ordersRef.current.some((o) => o.id === payload.orderId || String(o.id) === String(payload.orderId))) {
+        triggerSync();
+        return;
+      }
+
+      // 2. Nếu payload chứa thông tin bàn đích
+      const pTable = (payload.affectedTable || payload.affectedTableCode || payload.tableName || payload.tableNumber || '').toString().toUpperCase().trim();
+      const pTableId = payload.tableId ? String(payload.tableId) : '';
+
+      if (pTableId && tableIdStr && pTableId === tableIdStr) {
+        triggerSync();
+        return;
+      }
+
+      const idents = [tableNum, tableName, tableCode].filter(Boolean);
+      const isMatch = idents.some((ident) => {
+        const norm = ident.toUpperCase().trim();
+        return pTable === norm || pTable.includes(norm) || norm.includes(pTable);
       });
 
-      return () => {
-        if (typeof unsub === 'function') unsub();
-      };
+      if (isMatch) {
+        triggerSync();
+      }
+    };
+
+    // Callback xử lý tín hiệu cập nhật bàn chung (/topic/tables)
+    const handleTablesEvent = (tableUpdate) => {
+      if (!tableUpdate) return;
+      if (
+        (tableUpdate.id && String(tableUpdate.id) === tableIdStr) ||
+        (tableUpdate.tableNumber && tableUpdate.tableNumber === tableNum)
+      ) {
+        triggerSync();
+      }
+    };
+
+    // 2. Đăng ký các kênh WebSocket Realtime
+    const unsubs = [];
+
+    // A. Kênh riêng của bàn
+    if (tableNum) {
+      unsubs.push(wsManager.subscribe(`/topic/table/${tableNum}/status`, handleDirectTableEvent));
+      unsubs.push(wsManager.subscribe(`/topic/table/${tableNum}/cart`, handleDirectTableEvent));
     }
-  }, [isOpen, tableIdentifier, table?.tableNumber, table?.code, fetchTableOrders]);
+    if (tableName && tableName !== tableNum) {
+      unsubs.push(wsManager.subscribe(`/topic/table/${tableName}/status`, handleDirectTableEvent));
+      unsubs.push(wsManager.subscribe(`/topic/table/${tableName}/cart`, handleDirectTableEvent));
+    }
+    if (tableCode && tableCode !== tableNum && tableCode !== tableName) {
+      unsubs.push(wsManager.subscribe(`/topic/table/${tableCode}/status`, handleDirectTableEvent));
+    }
+
+    // B. Kênh Bếp (KDS) & Phục Vụ: Bắt chuyển trạng thái món (chờ phục vụ, đã phục vụ, hủy món, gửi món mới)
+    unsubs.push(wsManager.subscribe('/topic/kitchen/orders', handleKitchenWaiterEvent));
+    unsubs.push(wsManager.subscribe('/topic/waiter/orders', handleKitchenWaiterEvent));
+
+    // C. Kênh thông tin bàn
+    unsubs.push(wsManager.subscribe('/topic/tables', handleTablesEvent));
+
+    // 3. Polling dự phòng nhẹ nhàng mỗi 12 giây
+    const pollInterval = setInterval(() => {
+      fetchTableOrders(false);
+    }, 12000);
+
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      unsubs.forEach((unsub) => {
+        if (typeof unsub === 'function') unsub();
+      });
+      clearInterval(pollInterval);
+    };
+  }, [isOpen, tableIdentifier, table?.tableNumber, table?.name, table?.code, table?.id, fetchTableOrders]);
 
   // Thao tác chỉnh số lượng món
   const handleUpdateQuantity = async (item, delta) => {
@@ -180,7 +279,6 @@ export default function AdminOrderAdjustmentModal({
     setActionLoading(`note_${item.id}`);
     try {
       await orderApi.updateItemNote(item.id, tempNote.trim());
-      showFeedback(`Đã cập nhật ghi chú cho "${item.name}"`);
       setEditingNoteId(null);
       await fetchTableOrders(false);
       if (onOrderChanged) onOrderChanged();
@@ -260,7 +358,8 @@ export default function AdminOrderAdjustmentModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-surface-card border border-surface-border text-[#8E8E93] hover:text-white hover:bg-white/5 flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-lg bg-red-600 text-white border border-red-500/50 flex items-center justify-center hover:scale-110 active:scale-95 transition-transform duration-200 shadow-sm shadow-red-950/50"
+            title="Đóng giao diện"
           >
             <X className="w-4 h-4" />
           </button>
@@ -369,16 +468,18 @@ export default function AdminOrderAdjustmentModal({
 
                             <div className="min-w-0 flex-1 flex flex-col justify-between min-h-[76px] py-0.5">
                               <div>
-                                <div className="flex items-center gap-2 flex-wrap">
+                                <div className="text-xs font-bold leading-snug line-clamp-1">
                                   <span
-                                    className={`text-xs font-bold leading-snug line-clamp-1 ${
+                                    className={
                                       isCancelled ? 'line-through text-zinc-500' : 'text-zinc-100'
-                                    }`}
+                                    }
                                   >
                                     {item.name}
                                   </span>
+                                </div>
 
-                                  {/* Badge trạng thái theo QĐ8 */}
+                                {/* Badge trạng thái theo QĐ8 - Thống nhất luôn nằm ở hàng bên dưới tên món */}
+                                <div className="mt-1 flex items-center">
                                   {isCancelled ? (
                                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
                                       Đã Hủy
@@ -401,7 +502,7 @@ export default function AdminOrderAdjustmentModal({
                                   )}
                                 </div>
 
-                                <div className="text-[11px] text-zinc-400 font-mono mt-0.5">
+                                <div className="text-[11px] text-zinc-400 font-mono mt-1.5">
                                   Đơn giá: <span className="text-zinc-300 font-semibold">{formatCurrency(item.price)}</span>
                                 </div>
                               </div>
@@ -532,7 +633,7 @@ export default function AdminOrderAdjustmentModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-surface-card border border-surface-border hover:bg-white/5 text-zinc-200 font-bold text-xs transition-all active:scale-95"
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-red-600 text-white font-bold text-xs border border-red-500/50 shadow-md shadow-red-950/50 hover:scale-105 active:scale-95 transition-transform duration-200"
           >
             Đóng Giao Diện
           </button>
@@ -558,14 +659,37 @@ export default function AdminOrderAdjustmentModal({
               </div>
 
               {/* Chi tiết món bị hủy */}
-              <div className="p-3 rounded-xl bg-black/40 border border-surface-border text-xs space-y-1">
-                <div className="font-bold text-zinc-100">{cancellingItem.name}</div>
-                <div className="text-zinc-400 flex items-center justify-between">
-                  <span>Số lượng: {cancellingItem.quantity} phần</span>
-                  <span className="text-gold font-mono font-bold">
-                    {formatCurrency(cancellingItem.totalPrice || cancellingItem.price * cancellingItem.quantity)}
-                  </span>
+              <div className="p-3 rounded-xl bg-black/40 border border-surface-border text-xs space-y-2">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={
+                      cancellingItem.imageUrl ||
+                      cancellingItem.image ||
+                      'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80'
+                    }
+                    alt={cancellingItem.name}
+                    className="w-14 h-14 rounded-xl object-cover border border-surface-border flex-shrink-0 shadow-sm bg-zinc-800"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80';
+                    }}
+                  />
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="font-bold text-zinc-100 line-clamp-1">{cancellingItem.name}</div>
+                    <div className="text-zinc-400 flex items-center justify-between">
+                      <span>Số lượng: {cancellingItem.quantity} phần</span>
+                      <span className="text-gold font-mono font-bold">
+                        {formatCurrency(cancellingItem.totalPrice || cancellingItem.price * cancellingItem.quantity)}
+                      </span>
+                    </div>
+                    {cancellingItem.note && (
+                      <div className="text-[11px] text-amber-300/80 italic truncate">
+                        Ghi chú: "{cancellingItem.note}"
+                      </div>
+                    )}
+                  </div>
                 </div>
+
                 {cancellingItem.status === 'DELIVERED' && (
                   <div className="mt-2 p-2 rounded bg-amber-950/40 border border-amber-500/30 text-amber-300 text-[11px] flex items-start gap-1.5">
                     <Info className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
