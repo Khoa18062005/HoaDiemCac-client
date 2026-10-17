@@ -1,7 +1,34 @@
-import React, { useMemo } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Layers, Clock, Check, Utensils, AlertTriangle } from 'lucide-react';
 
 export default function KdsAggregatedView({ orders, onToggleItemStatus }) {
+  // Set lưu trữ các itemId đang xử lý ra món để chống spam click
+  const [processingItems, setProcessingItems] = useState(() => new Set());
+  const lastClickRef = useRef({});
+
+  const handleToggle = (orderId, itemId) => {
+    const now = Date.now();
+    const last = lastClickRef.current[itemId] || 0;
+    if (now - last < 600 || processingItems.has(itemId)) return;
+
+    lastClickRef.current[itemId] = now;
+    setProcessingItems((prev) => new Set(prev).add(itemId));
+
+    try {
+      if (onToggleItemStatus) {
+        onToggleItemStatus(orderId, itemId);
+      }
+    } finally {
+      setTimeout(() => {
+        setProcessingItems((prev) => {
+          const next = new Set(prev);
+          next.delete(itemId);
+          return next;
+        });
+      }, 600);
+    }
+  };
+
   // Gom nhóm các món đang ở trạng thái 'COOKING' theo menuItemId hoặc tên món
   const aggregatedItems = useMemo(() => {
     const itemMap = new Map();
@@ -141,9 +168,14 @@ export default function KdsAggregatedView({ orders, onToggleItemStatus }) {
                       {/* Nút ra món cho riêng bàn này */}
                       <button
                         type="button"
-                        onClick={() => onToggleItemStatus(t.orderId, t.itemId)}
-                        className="px-2.5 py-1 rounded bg-jade/15 hover:bg-jade text-jade-bright hover:text-white border border-jade/30 text-xs font-semibold transition-all active:scale-95 flex items-center gap-1"
-                        title="Đánh dấu ra món cho bàn này"
+                        disabled={processingItems.has(t.itemId)}
+                        onClick={() => handleToggle(t.orderId, t.itemId)}
+                        className={`px-2.5 py-1 rounded border text-xs font-semibold transition-all flex items-center gap-1 ${
+                          processingItems.has(t.itemId)
+                            ? 'bg-jade/10 text-jade-bright/50 border-jade/20 cursor-not-allowed opacity-60 pointer-events-none'
+                            : 'bg-jade/15 hover:bg-jade text-jade-bright hover:text-white border-jade/30 active:scale-95'
+                        }`}
+                        title={processingItems.has(t.itemId) ? 'Đang cập nhật...' : 'Đánh dấu ra món cho bàn này'}
                       >
                         <Check className="w-3 h-3" />
                         <span>Xong</span>

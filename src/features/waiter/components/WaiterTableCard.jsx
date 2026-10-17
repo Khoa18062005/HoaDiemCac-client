@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Clock,
   Check,
   CheckCheck,
+  RotateCcw,
 } from 'lucide-react';
 
 /**
@@ -23,6 +24,7 @@ function formatElapsed(seconds) {
 export default function WaiterTableCard({
   order,
   onDeliverItem,
+  onUndeliverItem,
   onDeliverAllReady,
 }) {
   // Bộ đếm thời gian trôi qua thực tế
@@ -38,6 +40,75 @@ export default function WaiterTableCard({
     }, 1000);
     return () => clearInterval(interval);
   }, [order.createdAt]);
+
+  // Set lưu trữ các itemId đang trong quá trình chuyển trạng thái (debounce & disable)
+  const [processingItemIds, setProcessingItemIds] = useState(() => new Set());
+  const lastItemClickRef = useRef({});
+
+  // Debounce cho nút Bưng Cả Bàn
+  const [isDeliveringAll, setIsDeliveringAll] = useState(false);
+  const lastDeliverAllRef = useRef(0);
+
+  const handleItemClick = (e, item) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const isReady = item.status === 'SERVED';
+    const isDelivered = item.status === 'DELIVERED';
+    if (!isReady && !isDelivered) return; // Món đang nấu COOKING thì không làm gì
+
+    const itemId = item.id;
+    const now = Date.now();
+    const lastClick = lastItemClickRef.current[itemId] || 0;
+
+    // Cơ chế Debounce: Bỏ qua click dồn dập trong 600ms
+    if (now - lastClick < 600 || processingItemIds.has(itemId)) {
+      return;
+    }
+
+    lastItemClickRef.current[itemId] = now;
+    setProcessingItemIds((prev) => new Set(prev).add(itemId));
+
+    try {
+      if (isReady && onDeliverItem) {
+        // SERVED -> DELIVERED (Đánh dấu đã bưng)
+        onDeliverItem(order.id, itemId);
+      } else if (isDelivered && onUndeliverItem) {
+        // DELIVERED -> SERVED (Hoàn tác món bưng nhầm về sẵn sàng)
+        onUndeliverItem(order.id, itemId);
+      }
+    } finally {
+      setTimeout(() => {
+        setProcessingItemIds((prev) => {
+          const next = new Set(prev);
+          next.delete(itemId);
+          return next;
+        });
+      }, 600);
+    }
+  };
+
+  const handleDeliverAllClick = () => {
+    const readyCount = order.items?.filter((i) => i.status === 'SERVED').length || 0;
+    const totalCount = order.items?.length || 0;
+    const deliveredCount = order.items?.filter((i) => i.status === 'DELIVERED').length || 0;
+    const isCompleted = totalCount > 0 && deliveredCount === totalCount;
+    if (isCompleted || readyCount === 0 || isDeliveringAll) return;
+
+    const now = Date.now();
+    if (now - lastDeliverAllRef.current < 600) return;
+    lastDeliverAllRef.current = now;
+
+    setIsDeliveringAll(true);
+    try {
+      if (onDeliverAllReady) {
+        onDeliverAllReady(order.id);
+      }
+    } finally {
+      setTimeout(() => setIsDeliveringAll(false), 600);
+    }
+  };
 
   const minutes = Math.floor(elapsedSeconds / 60);
 
@@ -126,23 +197,29 @@ export default function WaiterTableCard({
         {sortedItems.map((item) => {
           const isReady = item.status === 'SERVED';
           const isDelivered = item.status === 'DELIVERED';
+          const isProcessing = processingItemIds.has(item.id);
+          const isClickable = isReady || isDelivered;
+          const isButtonDisabled = !isClickable || isProcessing;
 
           return (
             <div
               key={item.id}
-              onClick={() => isReady && onDeliverItem(order.id, item.id)}
-              className={`py-2 px-2 rounded-lg cursor-pointer transition-all duration-150 flex items-start justify-between gap-3 group select-none ${
+              onClick={(e) => {
+                if (isButtonDisabled) return;
+                handleItemClick(e, item);
+              }}
+              className={`py-2 px-2 rounded-lg transition-all duration-150 flex items-start justify-between gap-3 group select-none ${
                 isDelivered
-                  ? 'bg-surface/40 text-[#8E8E93] line-through'
+                  ? 'bg-surface/30 hover:bg-surface-elevated/40 border border-transparent hover:border-amber-500/30 cursor-pointer'
                   : isReady
-                  ? 'animate-dish-glow-ready text-white'
-                  : 'hover:bg-surface-elevated/70 text-white'
+                  ? 'animate-dish-glow-ready text-white cursor-pointer hover:bg-surface-elevated/70'
+                  : 'hover:bg-surface-elevated/70 text-white cursor-default'
               }`}
               title={
                 isReady
                   ? 'Bếp đã làm xong! Bấm một chạm để xác nhận ĐÃ BƯNG BÀN'
                   : isDelivered
-                  ? 'Đã giao cho khách'
+                  ? 'Đã bưng cho khách. Bấm dòng món hoặc nút Hoàn tác để khôi phục về Chờ phục vụ (SERVED)'
                   : 'Bếp đang chế biến...'
               }
             >
@@ -165,7 +242,7 @@ export default function WaiterTableCard({
                 <div className="flex-1 min-w-0">
                   <p
                     className={`text-xs sm:text-sm font-medium leading-tight ${
-                      isDelivered ? 'text-[#707075]' : isReady ? 'text-white font-bold' : 'text-[#EDEDED]'
+                      isDelivered ? 'text-[#707075] line-through' : isReady ? 'text-white font-bold' : 'text-[#EDEDED]'
                     }`}
                   >
                     {item.name}
@@ -175,7 +252,7 @@ export default function WaiterTableCard({
                   {item.note && (
                     <p
                       className={`text-[11px] mt-0.5 leading-tight break-words font-medium ${
-                        isDelivered ? 'text-[#707075]' : 'text-amber-300'
+                        isDelivered ? 'text-[#707075] line-through' : 'text-amber-300'
                       }`}
                     >
                       {item.note}
@@ -185,35 +262,47 @@ export default function WaiterTableCard({
               </div>
 
               {/* Bên phải: Nút thao tác một chạm (One-tap action) */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (isReady) onDeliverItem(order.id, item.id);
-                }}
-                className={`p-1.5 rounded-lg border transition-all flex items-center justify-center flex-shrink-0 ${
-                  isDelivered
-                    ? 'bg-jade/20 border-jade/40 text-jade-bright'
-                    : isReady
-                    ? 'bg-jade hover:bg-jade-bright text-white border-jade shadow-[0_0_10px_rgba(52,168,83,0.6)] active:scale-95'
-                    : 'bg-surface-card border-surface-border text-[#444] cursor-default'
-                }`}
-                title={
-                  isReady
-                    ? 'Bếp đã làm xong! Bấm để xác nhận ĐÃ BƯNG BÀN'
-                    : isDelivered
-                    ? 'Đã bưng cho khách'
-                    : 'Bếp đang nấu...'
-                }
-              >
-                {isDelivered ? (
+              {isDelivered ? (
+                <button
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isProcessing) handleItemClick(e, item);
+                  }}
+                  className={`px-2 py-1 rounded-lg border border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 hover:text-amber-200 transition-all flex items-center gap-1 text-[11px] font-semibold active:scale-95 shadow-2xs flex-shrink-0 ${
+                    isProcessing ? 'cursor-not-allowed opacity-60 pointer-events-none' : 'cursor-pointer'
+                  }`}
+                  title="Chạm nhầm? Bấm để HOÀN TÁC về trạng thái Sẵn sàng bưng (SERVED)"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Hoàn tác</span>
+                </button>
+              ) : isReady ? (
+                <button
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isProcessing) handleItemClick(e, item);
+                  }}
+                  className={`p-1.5 rounded-lg border transition-all flex items-center justify-center flex-shrink-0 bg-jade hover:bg-jade-bright text-white border-jade shadow-[0_0_10px_rgba(52,168,83,0.6)] active:scale-95 ${
+                    isProcessing ? 'cursor-not-allowed opacity-60 pointer-events-none' : 'cursor-pointer'
+                  }`}
+                  title="Bếp đã làm xong! Bấm để xác nhận ĐÃ BƯNG BÀN"
+                >
                   <Check className="w-4 h-4 stroke-[2.5]" />
-                ) : isReady ? (
-                  <Check className="w-4 h-4 stroke-[2.5]" />
-                ) : (
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="p-1.5 rounded-lg border transition-all flex items-center justify-center flex-shrink-0 bg-surface-card border-surface-border text-[#444] cursor-default"
+                  title="Bếp đang nấu..."
+                >
                   <Check className="w-4 h-4 text-[#444]" />
-                )}
-              </button>
+                </button>
+              )}
             </div>
           );
         })}
@@ -233,13 +322,13 @@ export default function WaiterTableCard({
         {/* Nút bưng cả bàn */}
         <button
           type="button"
-          onClick={() => onDeliverAllReady(order.id)}
-          disabled={isAllDelivered || readyItemsCount === 0}
+          onClick={handleDeliverAllClick}
+          disabled={isAllDelivered || readyItemsCount === 0 || isDeliveringAll}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
             isAllDelivered
               ? 'bg-jade/10 text-jade-bright border-jade/30 cursor-default'
               : readyItemsCount > 0
-              ? 'bg-jade/20 hover:bg-jade text-jade-bright hover:text-white border-jade/40 shadow-sm active:scale-95'
+              ? 'bg-jade/20 hover:bg-jade text-jade-bright hover:text-white border-jade/40 shadow-sm active:scale-95 cursor-pointer'
               : 'bg-gold/15 text-gold/50 border-gold/20 cursor-default'
           }`}
         >
@@ -259,3 +348,4 @@ export default function WaiterTableCard({
     </div>
   );
 }
+

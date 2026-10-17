@@ -45,6 +45,37 @@ class WebSocketManager {
         },
         onConnect: (frame) => {
           this.isConnected = true;
+
+          // Tự động tái đăng ký (re-subscribe) toàn bộ các topic đang có listeners khi kết nối lại
+          this.subscriptions.forEach((entry, destination) => {
+            if (entry.callbacks.size > 0 && this.client?.connected) {
+              try {
+                if (entry.stompSub) {
+                  try {
+                    entry.stompSub.unsubscribe();
+                  } catch (e) {}
+                }
+                entry.stompSub = this.client.subscribe(destination, (message) => {
+                  let payload;
+                  try {
+                    payload = JSON.parse(message.body);
+                  } catch (err) {
+                    payload = message.body;
+                  }
+                  entry.callbacks.forEach((cb) => {
+                    try {
+                      cb(payload);
+                    } catch (cbErr) {
+                      console.warn(`[STOMP]: Lỗi trong callback topic ${destination}:`, cbErr);
+                    }
+                  });
+                });
+              } catch (reSubErr) {
+                console.warn('[STOMP]: Re-subscribe error:', destination, reSubErr);
+              }
+            }
+          });
+
           // Thực thi toàn bộ callbacks đang chờ
           const callbacks = [...this.connectCallbacks];
           this.connectCallbacks = [];
@@ -74,59 +105,111 @@ class WebSocketManager {
 
   /**
    * Đăng ký lắng nghe một Topic (Subscription)
+   * Hỗ trợ đa components cùng lắng nghe 1 topic mà không đè hay hủy của nhau.
    * @param {string} destination - Ví dụ: /topic/kitchen/orders
    * @param {function} callback - Nhận dữ liệu parsed JSON
-   * @returns {function} unsubscribe function
+   * @returns {function} unsubscribe function dành riêng cho callback này
    */
   subscribe(destination, callback) {
+    if (!callback) return () => {};
+
     if (!this.isConnected || !this.client?.connected) {
-      // Hẹn khi có kết nối thật sự thì mới thực hiện subscribe
+      let active = true;
+      let cleanup = null;
       this.connect(() => {
-        this.doSubscribe(destination, callback);
+        if (active) {
+          cleanup = this.doSubscribe(destination, callback);
+        }
       });
-      return () => this.unsubscribe(destination);
+      return () => {
+        active = false;
+        if (typeof cleanup === 'function') {
+          cleanup();
+        } else {
+          this.removeCallback(destination, callback);
+        }
+      };
     }
 
     return this.doSubscribe(destination, callback);
   }
 
   doSubscribe(destination, callback) {
+    if (!callback) return () => {};
+
+    // Nếu đã có subscription trên destination này -> Thêm callback vào Set
     if (this.subscriptions.has(destination)) {
-      try {
-        this.subscriptions.get(destination).unsubscribe();
-      } catch (e) {}
+      const entry = this.subscriptions.get(destination);
+      entry.callbacks.add(callback);
+      return () => this.removeCallback(destination, callback);
     }
 
+    const callbacks = new Set([callback]);
+
     if (!this.client || !this.client.connected) {
-      return () => this.unsubscribe(destination);
+      this.subscriptions.set(destination, { stompSub: null, callbacks });
+      return () => this.removeCallback(destination, callback);
     }
 
     try {
-      const sub = this.client.subscribe(destination, (message) => {
+      const stompSub = this.client.subscribe(destination, (message) => {
+        let payload;
         try {
-          const payload = JSON.parse(message.body);
-          callback(payload);
+          payload = JSON.parse(message.body);
         } catch (err) {
-          callback(message.body);
+          payload = message.body;
+        }
+
+        const currentEntry = this.subscriptions.get(destination);
+        if (currentEntry) {
+          currentEntry.callbacks.forEach((cb) => {
+            try {
+              cb(payload);
+            } catch (cbErr) {
+              console.warn(`[STOMP]: Lỗi trong callback topic ${destination}:`, cbErr);
+            }
+          });
         }
       });
 
-      this.subscriptions.set(destination, sub);
+      this.subscriptions.set(destination, { stompSub, callbacks });
     } catch (err) {
       console.warn('[STOMP]: Lỗi khi subscribe topic:', destination, err.message);
+      this.subscriptions.set(destination, { stompSub: null, callbacks });
     }
 
-    return () => this.unsubscribe(destination);
+    return () => this.removeCallback(destination, callback);
   }
 
   /**
-   * Hủy đăng ký một Topic
+   * Hủy một callback cụ thể khỏi topic, chỉ đóng STOMP sub khi không còn ai nghe
+   */
+  removeCallback(destination, callback) {
+    if (!this.subscriptions.has(destination)) return;
+    const entry = this.subscriptions.get(destination);
+    entry.callbacks.delete(callback);
+
+    if (entry.callbacks.size === 0) {
+      if (entry.stompSub) {
+        try {
+          entry.stompSub.unsubscribe();
+        } catch (e) {}
+      }
+      this.subscriptions.delete(destination);
+    }
+  }
+
+  /**
+   * Hủy đăng ký toàn bộ một Topic
    */
   unsubscribe(destination) {
     if (this.subscriptions.has(destination)) {
-      try {
-        this.subscriptions.get(destination).unsubscribe();
-      } catch (e) {}
+      const entry = this.subscriptions.get(destination);
+      if (entry.stompSub) {
+        try {
+          entry.stompSub.unsubscribe();
+        } catch (e) {}
+      }
       this.subscriptions.delete(destination);
     }
   }

@@ -10,6 +10,7 @@ import {
   CustomerCartDrawer,
   CustomerCartSidebar,
   CustomerOutOfStockNoticeModal,
+  CartToastNotification,
   TableTransferModal,
   CATEGORY_ICONS,
 } from '@/features/customer';
@@ -70,6 +71,7 @@ export default function MenuPage() {
   const [deviceCount, setDeviceCount] = useState(1);
   const [isDevicesModalOpen, setIsDevicesModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [hasActiveTransfer, setHasActiveTransfer] = useState(false);
 
   // Trạng thái Bàn bị khóa / Đóng băng order khi nhân viên xem hóa đơn tạm tính hoặc chốt đơn
   // Khởi tạo mặc định là false để loại bỏ hiện tượng hiển thị chớp giật (flash 1s) modal thanh toán khi khách đang dùng bữa F5 tải lại trang.
@@ -161,44 +163,46 @@ export default function MenuPage() {
           }
 
           if (info.isOrderLocked !== undefined) {
-            isTableLocked = Boolean(info.isOrderLocked);
-            if (isMounted) setIsOrderLocked(isTableLocked);
+            const nextLocked = Boolean(info.isOrderLocked);
+            if (isMounted) {
+              setIsOrderLocked((prev) => (prev !== nextLocked ? nextLocked : prev));
+              if (nextLocked) {
+                setIsPasscodeRequired((prev) => (prev ? false : prev));
+              }
+            }
 
-            // Đồng bộ trạng thái khóa order vào localStorage session và dọn sạch dữ liệu cũ
+            // Đồng bộ trạng thái khóa order vào localStorage session nếu có thay đổi
             const currentSession = getStoredTableSession();
             if (
               currentSession &&
               (currentSession.tableNumber === tableNumber ||
-                currentSession.tableNumber === currentNormTable)
+                currentSession.tableNumber === currentNormTable) &&
+              currentSession.isOrderLocked !== nextLocked
             ) {
-              saveTableSession({ ...currentSession, isOrderLocked: isTableLocked });
+              saveTableSession({ ...currentSession, isOrderLocked: nextLocked });
             }
             try {
               const lockedMap = JSON.parse(localStorage.getItem('hoadiemcat_locked_tables') || '{}');
-              if (!isTableLocked) {
+              const hasKey = Boolean(lockedMap[tableNumber.toUpperCase()] || lockedMap[currentNormTable.toUpperCase()]);
+              if (!nextLocked && hasKey) {
                 delete lockedMap[tableNumber.toUpperCase()];
                 delete lockedMap[currentNormTable.toUpperCase()];
-              } else {
+                localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
+              } else if (nextLocked && !hasKey) {
                 lockedMap[tableNumber.toUpperCase()] = true;
+                localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
               }
-              localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
             } catch {}
           }
           if (info.totalAmount !== undefined) {
-            if (isMounted) setServerTableTotal(Number(info.totalAmount) || 0);
+            const nextTotal = Number(info.totalAmount) || 0;
+            if (isMounted) {
+              setServerTableTotal((prev) => (prev !== nextTotal ? nextTotal : prev));
+            }
           }
         }
       } catch (err) {
         // Lỗi kết nối mạng tạm thời, không khóa bàn tùy tiện
-      }
-
-      // NẾU BÀN ĐANG TRONG QUÁ TRÌNH THANH TOÁN / KHÓA ORDER:
-      // Khách hàng luôn ở lại màn hình tạm tính (Hình 1) đối soát chi tiết
-      if (isTableLocked || isOrderLocked) {
-        if (isMounted) {
-          setIsPasscodeRequired(false);
-          setIsOrderLocked(true);
-        }
       }
 
       // 2. Kiểm tra session tại client
@@ -210,19 +214,14 @@ export default function MenuPage() {
         !session.sessionToken ||
         (normStoredNum !== tableNumber && kdsStoredNum !== currentNormTable && session?.tableNumber !== tableNumber)
       ) {
-        if (isMounted && !isTableLocked && !isOrderLocked) {
-          setIsPasscodeRequired(true);
+        if (isMounted) {
+          setIsPasscodeRequired((prev) => (!prev ? true : prev));
         }
         return;
       }
 
       if (isMounted) {
-        if (!isTableLocked && !isOrderLocked) {
-          setIsPasscodeRequired(false);
-        }
-        if (session.isHost !== undefined) {
-          setIsHost(Boolean(session.isHost));
-        }
+        setIsPasscodeRequired((prev) => (prev ? false : prev));
       }
 
       // Tải danh sách thiết bị kết nối thời gian thực
@@ -230,18 +229,33 @@ export default function MenuPage() {
         const devices = await tableApi.getDevices(tableNumber);
         if (Array.isArray(devices) && devices.length > 0) {
           const activeList = devices.filter((d) => d.isActive);
-          setDeviceCount(activeList.length);
+          setDeviceCount((prev) => (prev !== activeList.length ? activeList.length : prev));
 
           const currentToken = session?.deviceToken;
-          if (currentToken) {
-            const currentDev = devices.find((d) => d.deviceToken === currentToken);
-            if (currentDev) {
-              setIsHost(Boolean(currentDev.isHost));
-              if (!currentDev.isActive) {
-                alert('Thiết bị của bạn đã bị Chủ Bàn hoặc Quản Trị Viên ngắt kết nối khỏi bàn.');
-                clearTableSession();
-                window.location.reload();
-              }
+          const currentDev = devices.find(
+            (d) => (currentToken && d.deviceToken === currentToken) || d.isCurrentDevice
+          );
+          if (currentDev) {
+            const serverIsHost = Boolean(currentDev.isHost);
+            setIsHost((prev) => (prev !== serverIsHost ? serverIsHost : prev));
+
+            // Đồng bộ ngay lại vào localStorage để lần sau getStoredTableSession() không bị lệch
+            const curr = getStoredTableSession();
+            if (curr && curr.isHost !== serverIsHost) {
+              saveTableSession({ ...curr, isHost: serverIsHost });
+            }
+
+            if (!currentDev.isActive) {
+              alert('Thiết bị của bạn đã bị Chủ Bàn hoặc Quản Trị Viên ngắt kết nối khỏi bàn.');
+              clearTableSession();
+              window.location.reload();
+            }
+          } else if (devices.length === 1 && devices[0].isActive) {
+            const serverIsHost = Boolean(devices[0].isHost);
+            setIsHost((prev) => (prev !== serverIsHost ? serverIsHost : prev));
+            const curr = getStoredTableSession();
+            if (curr && curr.isHost !== serverIsHost) {
+              saveTableSession({ ...curr, isHost: serverIsHost });
             }
           }
         }
@@ -285,10 +299,12 @@ export default function MenuPage() {
               const isLocked = Boolean(data.isOrderLocked);
               setIsOrderLocked(isLocked);
               if (isLocked) {
-                setCartTab('all');
+                setCartTab('rounds');
                 setIsPasscodeRequired(false);
                 syncTableOrders();
               }
+            } else if (data.type === 'ORDER_ADJUSTED' || data.type === 'ORDER_ITEMS_UPDATED') {
+              syncTableOrders();
             }
           }
         };
@@ -311,7 +327,7 @@ export default function MenuPage() {
         const isLocked = Boolean(detail.isOrderLocked);
         setIsOrderLocked(isLocked);
         if (isLocked) {
-          setCartTab('all');
+          setCartTab('rounds');
           setIsPasscodeRequired(false);
           syncTableOrders();
         }
@@ -323,19 +339,15 @@ export default function MenuPage() {
       if (e.key === 'hoadiemcat_locked_tables') {
         try {
           const map = JSON.parse(e.newValue || '{}');
-          if (
-            map[tableNumber.toUpperCase()] !== undefined ||
-            map[currentNormTable.toUpperCase()] !== undefined
-          ) {
-            const isLocked = Boolean(
-              map[tableNumber.toUpperCase()] ?? map[currentNormTable.toUpperCase()]
-            );
-            setIsOrderLocked(isLocked);
-            if (isLocked) {
-              setCartTab('all');
-              setIsPasscodeRequired(false);
-              syncTableOrders();
-            }
+          const isLocked = Boolean(
+            map[tableNumber.toUpperCase()] ||
+            map[currentNormTable.toUpperCase()]
+          );
+          setIsOrderLocked(isLocked);
+          if (isLocked) {
+            setCartTab('rounds');
+            setIsPasscodeRequired(false);
+            syncTableOrders();
           }
         } catch {}
       }
@@ -350,7 +362,7 @@ export default function MenuPage() {
             const isLocked = Boolean(s.isOrderLocked);
             setIsOrderLocked(isLocked);
             if (isLocked) {
-              setCartTab('all');
+              setCartTab('rounds');
               setIsPasscodeRequired(false);
               syncTableOrders();
             }
@@ -708,7 +720,7 @@ export default function MenuPage() {
         const isLocked = Boolean(payload.isOrderLocked);
         setIsOrderLocked(isLocked);
         if (isLocked) {
-          setCartTab('all');
+          setCartTab('rounds');
           setIsPasscodeRequired(false);
           syncTableOrders();
         }
@@ -727,7 +739,13 @@ export default function MenuPage() {
           localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
         } catch {}
       }
-      if (payload.type === 'KITCHEN_ITEM_STATUS_TOGGLED' || payload.type === 'WAITER_ITEM_DELIVERED') {
+      if (
+        payload.type === 'ORDER_ITEMS_UPDATED' ||
+        payload.type === 'ORDER_ITEM_CANCELLED' ||
+        payload.type === 'ORDER_ITEM_UPDATED'
+      ) {
+        syncTableOrders();
+      } else if (payload.type === 'KITCHEN_ITEM_STATUS_TOGGLED' || payload.type === 'WAITER_ITEM_DELIVERED') {
         useKdsStore.getState().applyRemoteItemStatusUpdate(payload);
       } else if (payload.type === 'WAITER_ALL_ITEMS_DELIVERED') {
         useKdsStore.getState().deliverAllReadyItems(payload.orderId);
@@ -760,7 +778,7 @@ export default function MenuPage() {
           const isLocked = Boolean(tableData.isOrderLocked);
           setIsOrderLocked(isLocked);
           if (isLocked) {
-            setCartTab('all');
+            setCartTab('rounds');
             setIsPasscodeRequired(false);
             syncTableOrders();
           }
@@ -938,9 +956,16 @@ export default function MenuPage() {
     }
 
     const list = [];
-    tableOrders.forEach((order) => {
+    tableOrders.forEach((order, orderIdx) => {
+      // Đảm bảo số đợt gọi món tăng dần chuẩn xác theo từng order (Đợt 1, Đợt 2,...)
+      const hasDuplicateRounds = tableOrders.some((o, i) => tableOrders.some((other, j) => i !== j && o.roundNumber === other.roundNumber));
+      const orderRound = (!hasDuplicateRounds && order.roundNumber) ? order.roundNumber : (orderIdx + 1);
+
       if (Array.isArray(order.items)) {
         order.items.forEach((item) => {
+          if (item.status === 'CANCELLED' || item.status === 'cancelled') {
+            return;
+          }
           const dishMatch = dishesList.find(
             (d) => String(d.id) === String(item.menuItemId) || d.name === item.name
           );
@@ -953,13 +978,14 @@ export default function MenuPage() {
             orderId: order.id,
             orderCode: order.orderCode,
             tableCode: order.tableCode,
+            orderRound: orderRound,
             orderedAt: item.orderedAt || (order.createdAt ? new Date(order.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''),
           });
         });
       }
     });
 
-    // Gom nhóm các món ở trạng thái "Đã phục vụ" (DELIVERED) cùng loại với nhau
+    // Gom nhóm các món ở trạng thái "Đã phục vụ" (DELIVERED) cùng loại trong cùng 1 đợt với nhau
     const result = [];
     const deliveredMap = new Map(); // groupKey -> index trong result
 
@@ -969,8 +995,8 @@ export default function MenuPage() {
         // Món đang chế biến hoặc chờ phục vụ: hiển thị riêng lẻ theo từng đợt gọi
         result.push({ ...item });
       } else {
-        // Món đã phục vụ: gom nhóm theo món
-        const groupKey = String(item.dishId || item.menuItemId || item.name).trim().toLowerCase();
+        // Món đã phục vụ: gom nhóm theo món trong cùng đợt gọi
+        const groupKey = `${item.orderRound || 1}-${String(item.dishId || item.menuItemId || item.name).trim().toLowerCase()}`;
         if (deliveredMap.has(groupKey)) {
           const existingIndex = deliveredMap.get(groupKey);
           const existing = result[existingIndex];
@@ -986,6 +1012,7 @@ export default function MenuPage() {
           const groupedItem = {
             ...item,
             entryId: `grouped-delivered-${item.dishId || item.id}`,
+            orderRound: item.orderRound || 1,
             notes: item.note ? [item.note] : [],
           };
           deliveredMap.set(groupKey, result.length);
@@ -1229,14 +1256,35 @@ export default function MenuPage() {
     });
   };
 
+  // Toast thông báo sau khi xóa món / xóa hết giỏ hàng (góc dưới cùng bên phải)
+  const [cartToast, setCartToast] = useState({ isVisible: false, title: '', message: '' });
+  const toastTimerRef = useRef(null);
+
+  const showCartToast = useCallback((message, title = 'Đã Xóa Thành Công') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setCartToast({ isVisible: true, title, message });
+    toastTimerRef.current = setTimeout(() => {
+      setCartToast((prev) => ({ ...prev, isVisible: false }));
+    }, 3200);
+  }, []);
+
   // Xóa món khỏi giỏ
   const handleRemoveItem = (dishId) => {
     if (isOrderLocked) return;
+    const itemToDelete = cartItems.find((item) => item.id === dishId);
+    const itemName = itemToDelete?.name;
+
     setCartItems((prev) => {
       const next = prev.filter((item) => item.id !== dishId);
       syncCartToServer(next);
       return next;
     });
+
+    if (itemName) {
+      showCartToast(`Đã xóa món "${itemName}" khỏi giỏ hàng.`, 'Đã Xóa Món Ăn');
+    } else {
+      showCartToast('Đã xóa món ăn khỏi giỏ hàng.', 'Đã Xóa Món Ăn');
+    }
   };
 
   // Xóa toàn bộ giỏ
@@ -1248,6 +1296,7 @@ export default function MenuPage() {
       localStorage.removeItem(`hoadiemcat_cart_${currentNormTable}`);
       cartChannelRef.current?.postMessage({ type: 'CART_UPDATED', items: [] });
     } catch {}
+    showCartToast('Đã xóa toàn bộ món ăn trong giỏ hàng.', 'Đã Xóa Hết Giỏ Hàng');
   };
 
   // Cập nhật ghi chú riêng cho từng món
@@ -1273,6 +1322,9 @@ export default function MenuPage() {
 
     const itemsToSubmit = (orderData && orderData.items) ? orderData.items : cartItems;
     if (itemsToSubmit.length === 0) return;
+
+    // Khi người dùng vừa ấn nút gửi món ăn vào bếp sẽ chuyển từ tab chọn món sang tab Xem đợt
+    setCartTab('rounds');
 
     isSubmittingOrder.current = true;
 
@@ -1369,7 +1421,7 @@ export default function MenuPage() {
           <button
             type="button"
             onClick={() => {
-              setCartTab('all');
+              setCartTab('rounds');
               setIsCartOpen(true);
             }}
             className="flex-shrink-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/25 to-amber-600/25 hover:from-amber-500/35 hover:to-amber-600/35 border border-amber-500/50 text-[#FFE088] text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 whitespace-nowrap shadow-xs"
@@ -1527,7 +1579,7 @@ export default function MenuPage() {
       />
 
       {/* 6.1. Popup Modal Đóng Băng Toàn Bộ Giao Diện: Đang Trong Quá Trình Thanh Toán */}
-      {isOrderLocked && (
+      {isOrderLocked && !isTransferModalOpen && !hasActiveTransfer && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn select-none">
           <div className="bg-[#141417] border border-amber-500/40 rounded-2xl w-full max-w-lg sm:max-w-xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.9)] flex flex-col transform-gpu animate-scaleIn">
             {/* Header: Gọn gàng, giảm chiều cao */}
@@ -1685,8 +1737,10 @@ export default function MenuPage() {
         tableNumber={tableNumber}
         isHost={isHost}
         cartItems={cartItems}
+        onActiveTransferChange={setHasActiveTransfer}
         onTransferSuccess={() => {
           setIsTransferModalOpen(false);
+          setHasActiveTransfer(false);
         }}
       />
 
@@ -1729,6 +1783,14 @@ export default function MenuPage() {
           </div>
         </div>
       )}
+
+      {/* 11. Toast Thông Báo Góc Dưới Cùng Bên Phải Sau Khi Xóa Món / Xóa Hết */}
+      <CartToastNotification
+        isVisible={cartToast.isVisible}
+        title={cartToast.title}
+        message={cartToast.message}
+        onClose={() => setCartToast((prev) => ({ ...prev, isVisible: false }))}
+      />
     </div>
   );
 }
