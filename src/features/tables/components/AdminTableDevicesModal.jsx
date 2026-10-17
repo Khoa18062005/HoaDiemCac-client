@@ -72,7 +72,15 @@ export default function AdminTableDevicesModal({
     }
   };
 
+  const activeDevices = devices.filter((d) => d.isActive !== false);
+  const hasConnectedDevices = activeDevices.length > 0;
+
   const handleResetHost = async () => {
+    if (!hasConnectedDevices) {
+      showFeedback('Bàn chưa có thiết bị nào kết nối!', true);
+      return;
+    }
+
     if (!window.confirm(`Đặt lại quyền Chủ Bàn cho bàn ${table.name || table.tableNumber}? Người quét mã hoặc nhập PIN tiếp theo sẽ trở thành Chủ Bàn.`)) {
       return;
     }
@@ -84,13 +92,11 @@ export default function AdminTableDevicesModal({
       await fetchDevices();
       if (onDeviceUpdated) onDeviceUpdated();
     } catch (err) {
-      showFeedback('Lỗi khi đặt lại Chủ Bàn: ' + (err.message || ''), true);
+      showFeedback('Lỗi khi đặt lại Chủ Bàn: ' + (err.response?.data?.message || err.message || ''), true);
     } finally {
       setActionLoading(null);
     }
   };
-
-  const activeDevices = devices.filter((d) => d.isActive !== false);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
@@ -150,9 +156,17 @@ export default function AdminTableDevicesModal({
           <button
             type="button"
             onClick={handleResetHost}
-            disabled={actionLoading === 'reset_host'}
-            className="py-1 px-2.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-[11px] text-amber-300 font-medium flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-            title="Đặt lại quyền Chủ Bàn (Thiết bị quét tiếp theo sẽ là Chủ Bàn)"
+            disabled={actionLoading === 'reset_host' || !hasConnectedDevices}
+            className={`py-1 px-2.5 rounded-lg border text-[11px] font-medium flex items-center gap-1.5 transition-all ${
+              !hasConnectedDevices || actionLoading === 'reset_host'
+                ? 'opacity-40 cursor-not-allowed bg-zinc-800 border-zinc-700 text-zinc-500 pointer-events-none'
+                : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-300 active:scale-95 cursor-pointer'
+            }`}
+            title={
+              !hasConnectedDevices
+                ? 'Bàn chưa có thiết bị nào kết nối để đặt lại Chủ Bàn'
+                : 'Đặt lại quyền Chủ Bàn (Thiết bị quét tiếp theo sẽ là Chủ Bàn)'
+            }
           >
             <RotateCcw
               className={`w-3 h-3 text-amber-400 ${

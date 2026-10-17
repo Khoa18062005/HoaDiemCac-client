@@ -13,6 +13,7 @@ import {
   Receipt,
   UtensilsCrossed,
   ArrowLeftRight,
+  ArrowRight,
   Users2,
   Printer,
   Sparkles,
@@ -64,6 +65,7 @@ export default function AdminTableDetailModal({
 }) {
   const [actionLoading, setActionLoading] = useState(null);
   const [feedback, setFeedback] = useState(null);
+  const lastToggleTimeRef = React.useRef(0);
 
   // Danh sách các đợt order của bàn được tải trực tiếp theo thời gian thực
   const [localOrders, setLocalOrders] = useState([]);
@@ -74,6 +76,7 @@ export default function AdminTableDetailModal({
 
   // Trạng thái Chuyển / Ghép bàn trực tiếp từ POS
   const [isDirectTransferOpen, setIsDirectTransferOpen] = useState(false);
+  const [isConfirmDirectTransferOpen, setIsConfirmDirectTransferOpen] = useState(false);
   const [transferType, setTransferType] = useState('MOVE'); // 'MOVE' | 'MERGE'
   const [selectedTargetTableId, setSelectedTargetTableId] = useState('');
   const [transferReason, setTransferReason] = useState('');
@@ -81,6 +84,18 @@ export default function AdminTableDetailModal({
   // Trạng thái Cụm Bàn Tiệc Lớn (Master-Slave Table Clustering)
   const [isClusterOpen, setIsClusterOpen] = useState(false);
   const [selectedSlaveIds, setSelectedSlaveIds] = useState([]);
+
+  // Đóng modal xác nhận chuyển bàn bằng phím Escape
+  useEffect(() => {
+    if (!isConfirmDirectTransferOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsConfirmDirectTransferOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isConfirmDirectTransferOpen]);
 
   // Tự động tải danh sách đợt order của bàn từ API khi mở modal
   const fetchOrdersForTable = useCallback(async () => {
@@ -105,6 +120,7 @@ export default function AdminTableDetailModal({
       // Reset các trạng thái popup khi đóng modal
       setIsPaymentStepperOpen(false);
       setIsDirectTransferOpen(false);
+      setIsConfirmDirectTransferOpen(false);
       setIsClusterOpen(false);
       setSelectedSlaveIds([]);
     }
@@ -271,8 +287,13 @@ export default function AdminTableDetailModal({
     } catch {}
   };
 
-  // Khóa / Mở khóa gọi món khẩn cấp (Nút ngoài)
+  // Khóa / Mở khóa gọi món khẩn cấp (Nút ngoài) kèm debounce chống spam
   const handleToggleOrderLock = async () => {
+    const now = Date.now();
+    if (actionLoading === 'lock' || (now - lastToggleTimeRef.current < 1200)) {
+      return;
+    }
+    lastToggleTimeRef.current = now;
     setActionLoading('lock');
     const targetTableNum = table.tableNumber || table.code || '';
     const newLockState = !Boolean(table.isOrderLocked);
@@ -289,12 +310,23 @@ export default function AdminTableDetailModal({
     } catch (err) {
       showFeedback('Lỗi khi khóa/mở khóa: ' + (err.message || ''), true);
     } finally {
-      setActionLoading(null);
+      setTimeout(() => {
+        setActionLoading(null);
+      }, 800);
     }
   };
 
 
-  // Thực hiện Chuyển hoặc Ghép bàn trực tiếp từ POS
+  // Mở modal xác nhận điều chuyển bàn
+  const handleOpenConfirmDirectTransfer = () => {
+    if (!selectedTargetTableId) {
+      showFeedback('Vui lòng chọn bàn đích!', true);
+      return;
+    }
+    setIsConfirmDirectTransferOpen(true);
+  };
+
+  // Thực hiện Chuyển hoặc Ghép bàn trực tiếp từ POS sau khi xác nhận
   const handleDirectTransfer = async () => {
     if (!selectedTargetTableId) {
       showFeedback('Vui lòng chọn bàn đích!', true);
@@ -309,6 +341,7 @@ export default function AdminTableDetailModal({
         transferReason || 'Nhân viên thực hiện trực tiếp trên POS'
       );
       showFeedback(res?.message || 'Chuyển bàn thành công!');
+      setIsConfirmDirectTransferOpen(false);
       setIsDirectTransferOpen(false);
       if (onTableUpdated) onTableUpdated();
       setTimeout(() => {
@@ -496,14 +529,24 @@ export default function AdminTableDetailModal({
                       disabled={actionLoading === 'lock'}
                       onClick={handleToggleOrderLock}
                       className={`flex-1 h-8 rounded-lg border text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                        table.isOrderLocked
+                        actionLoading === 'lock'
+                          ? 'opacity-50 cursor-not-allowed bg-zinc-800 text-zinc-500 border-zinc-700'
+                          : table.isOrderLocked
                           ? 'bg-crimson/20 border-crimson/50 text-crimson-glow hover:bg-crimson/30'
                           : 'bg-surface-card border-surface-border text-[#A0A0A5] hover:text-white'
                       }`}
-                      title="Khóa/mở quyền đặt món khẩn cấp"
+                      title={actionLoading === 'lock' ? 'Đang xử lý...' : 'Khóa/mở quyền đặt món khẩn cấp'}
                     >
-                      {table.isOrderLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-                      <span>{table.isOrderLocked ? 'Đang Khóa' : 'Khóa Order'}</span>
+                      {actionLoading === 'lock' ? (
+                        <RefreshCw className="w-3 h-3 animate-spin text-zinc-300" />
+                      ) : table.isOrderLocked ? (
+                        <Lock className="w-3 h-3" />
+                      ) : (
+                        <Unlock className="w-3 h-3" />
+                      )}
+                      <span>
+                        {actionLoading === 'lock' ? 'Đang lưu...' : table.isOrderLocked ? 'Đang Khóa' : 'Khóa Order'}
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -796,7 +839,7 @@ export default function AdminTableDetailModal({
                   <button
                     type="button"
                     disabled={actionLoading === 'transfer' || !selectedTargetTableId}
-                    onClick={handleDirectTransfer}
+                    onClick={handleOpenConfirmDirectTransfer}
                     className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-110 text-black font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {actionLoading === 'transfer' ? (
@@ -851,6 +894,147 @@ export default function AdminTableDetailModal({
                 )}
 
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 1.5. Modal Xác Nhận Điều Chuyển Bàn Trực Tiếp Trên POS (Confirmation Dialog) */}
+      {isConfirmDirectTransferOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn select-none"
+          onClick={() => actionLoading !== 'transfer' && setIsConfirmDirectTransferOpen(false)}
+        >
+          <div
+            className="bg-[#18181C] border border-[rgba(212,175,55,0.4)] w-full max-w-md rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col relative text-[#FDFBF7] animate-scaleIn"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Hiệu ứng ánh sáng góc */}
+            <div className="absolute top-0 right-0 w-44 h-44 bg-gradient-to-bl from-amber-500/20 via-[#D4AF37]/15 to-transparent rounded-bl-full pointer-events-none" />
+
+            {/* Header */}
+            <div className="p-5 pb-3 flex items-start gap-3.5 relative z-10 border-b border-white/10 bg-[#16161A]">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-600 to-amber-700 border border-amber-500/50 flex items-center justify-center text-black shadow-lg flex-shrink-0">
+                <ArrowLeftRight className="w-5 h-5 text-black" />
+              </div>
+              <div className="flex-1 min-w-0 pr-6">
+                <span className="text-[10px] font-mono tracking-widest uppercase text-[#FFD54F] font-bold block mb-0.5">
+                  HỆ THỐNG POS • HỎA DIỆM CÁC
+                </span>
+                <h3 className="text-base font-serif font-bold text-white leading-tight">
+                  Xác Nhận Điều Chuyển Bàn
+                </h3>
+                <p className="text-[11px] text-[#A39E93] mt-0.5">
+                  Kiểm tra thông tin trước khi thực hiện chuyển đổi
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => actionLoading !== 'transfer' && setIsConfirmDirectTransferOpen(false)}
+                className="absolute top-4 right-4 p-1.5 rounded-full text-[#9E9AA0] hover:text-white hover:bg-white/10 transition-colors"
+                title="Đóng"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4 relative z-10 text-xs leading-relaxed">
+              {/* So sánh Bàn nguồn -> Bàn đích trực quan */}
+              <div className="p-3.5 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-between gap-2">
+                {/* Bàn chuyển đi */}
+                <div className="flex-1 text-center p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                  <span className="text-[10px] uppercase font-mono text-amber-400 font-bold block mb-1">
+                    Bàn Chuyển Đi
+                  </span>
+                  <p className="text-sm font-bold text-white">
+                    {getDisplayTableName(table)}
+                  </p>
+                  <p className="text-[11px] text-amber-300/80 font-mono">
+                    Mã: {table?.tableNumber || table?.code}
+                  </p>
+                </div>
+
+                {/* Mũi tên chuyển dịch */}
+                <div className="flex flex-col items-center justify-center px-1 text-amber-400">
+                  <ArrowRight className="w-5 h-5 animate-pulse" />
+                </div>
+
+                {/* Bàn tiếp nhận */}
+                {(() => {
+                  const targetTable = allTables.find((t) => String(t.id) === String(selectedTargetTableId));
+                  return (
+                    <div className="flex-1 text-center p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                      <span className="text-[10px] uppercase font-mono text-emerald-400 font-bold block mb-1">
+                        Bàn Tiếp Nhận
+                      </span>
+                      <p className="text-sm font-bold text-white">
+                        {targetTable ? getDisplayTableName(targetTable) : 'Chưa chọn'}
+                      </p>
+                      <p className="text-[11px] text-emerald-300/80 font-mono">
+                        {targetTable ? `Mã: ${targetTable.tableNumber || targetTable.code}` : ''}
+                      </p>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Thông số chi tiết */}
+              <div className="space-y-2 p-3 rounded-xl bg-[#131316] border border-white/5">
+                <div className="flex justify-between items-center text-xs pb-1.5 border-b border-white/5">
+                  <span className="text-[#8E8E93]">Hình thức chuyển:</span>
+                  <span className="font-semibold text-amber-300">
+                    {transferType === 'MOVE' ? 'Chuyển bàn (Sang bàn trống)' : 'Ghép bàn (Vào bàn đang ăn)'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs pb-1.5 border-b border-white/5">
+                  <span className="text-[#8E8E93]">Trạng thái bàn đích:</span>
+                  <span className="font-medium text-emerald-400">
+                    {allTables.find((t) => String(t.id) === String(selectedTargetTableId))?.status === 'AVAILABLE'
+                      ? 'Đang trống (AVAILABLE)'
+                      : 'Đang có khách (OCCUPIED)'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-start text-xs pt-0.5">
+                  <span className="text-[#8E8E93] flex-shrink-0">Lý do điều chuyển:</span>
+                  <span className="text-right text-[#D6D3CD] font-medium ml-2 break-words">
+                    {transferReason || 'Nhân viên thực hiện trực tiếp trên POS'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Cảnh báo tác vụ */}
+              <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-500/30 flex items-start gap-2.5 text-amber-200/90 text-xs">
+                <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <p>
+                  Toàn bộ hóa đơn, các đợt gọi món đã đặt và giỏ hàng của <strong className="text-white">{getDisplayTableName(table)}</strong> sẽ được chuyển sang bàn đích ngay lập tức.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="p-4 bg-[#141416] border-t border-white/10 flex items-center justify-end gap-2.5 relative z-10">
+              <button
+                type="button"
+                disabled={actionLoading === 'transfer'}
+                onClick={() => setIsConfirmDirectTransferOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-white/10 text-[#D6D3CD] font-bold text-xs hover:bg-white/5 active:scale-95 transition-all"
+              >
+                Quay lại
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading === 'transfer'}
+                onClick={handleDirectTransfer}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-110 text-black font-bold text-xs shadow-lg shadow-amber-950/50 active:scale-95 transition-all flex items-center gap-1.5"
+              >
+                {actionLoading === 'transfer' ? (
+                  <RefreshCw className="w-4 h-4 animate-spin text-black" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-black" />
+                )}
+                <span>Đồng ý chuyển bàn</span>
+              </button>
             </div>
           </div>
         </div>
