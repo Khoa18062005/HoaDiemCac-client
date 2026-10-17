@@ -20,6 +20,7 @@ export default function TableTransferModal({
   isHost = true,
   cartItems = [],
   onTransferSuccess,
+  onActiveTransferChange,
 }) {
   const [transferType, setTransferType] = useState('MOVE'); // 'MOVE' | 'MERGE'
   const [reason, setReason] = useState('');
@@ -30,6 +31,13 @@ export default function TableTransferModal({
   // Dữ liệu mã chuyển hiện tại
   const [transferData, setTransferData] = useState(null);
   const [countdown, setCountdown] = useState(0);
+
+  // Thông báo ra component cha khi có mã chuyển bàn đang active
+  useEffect(() => {
+    if (onActiveTransferChange) {
+      onActiveTransferChange(Boolean(transferData));
+    }
+  }, [transferData, onActiveTransferChange]);
 
   // Đếm ngược TTL
   useEffect(() => {
@@ -95,7 +103,7 @@ export default function TableTransferModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-[#18181C] border border-[rgba(212,175,55,0.4)] rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
         {/* Modal Header */}
         <div className="px-5 py-4 bg-gradient-to-r from-[#2A1014] to-[#1A1215] border-b border-[rgba(212,175,55,0.25)] flex items-center justify-between">

@@ -71,6 +71,7 @@ export default function MenuPage() {
   const [deviceCount, setDeviceCount] = useState(1);
   const [isDevicesModalOpen, setIsDevicesModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [hasActiveTransfer, setHasActiveTransfer] = useState(false);
 
   // Trạng thái Bàn bị khóa / Đóng băng order khi nhân viên xem hóa đơn tạm tính hoặc chốt đơn
   // Khởi tạo mặc định là false để loại bỏ hiện tượng hiển thị chớp giật (flash 1s) modal thanh toán khi khách đang dùng bữa F5 tải lại trang.
@@ -1550,7 +1551,7 @@ export default function MenuPage() {
       />
 
       {/* 6.1. Popup Modal Đóng Băng Toàn Bộ Giao Diện: Đang Trong Quá Trình Thanh Toán */}
-      {isOrderLocked && (
+      {isOrderLocked && !isTransferModalOpen && !hasActiveTransfer && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn select-none">
           <div className="bg-[#141417] border border-amber-500/40 rounded-2xl w-full max-w-lg sm:max-w-xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.9)] flex flex-col transform-gpu animate-scaleIn">
             {/* Header: Gọn gàng, giảm chiều cao */}
@@ -1708,8 +1709,10 @@ export default function MenuPage() {
         tableNumber={tableNumber}
         isHost={isHost}
         cartItems={cartItems}
+        onActiveTransferChange={setHasActiveTransfer}
         onTransferSuccess={() => {
           setIsTransferModalOpen(false);
+          setHasActiveTransfer(false);
         }}
       />
 
