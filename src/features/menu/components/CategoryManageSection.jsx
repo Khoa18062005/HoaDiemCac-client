@@ -122,7 +122,7 @@ export default function CategoryManageSection({
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-gold" />
             <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-              DANH SÁCH DANH MỤC THỰC ĐƠN TRONG DATABASE
+              DANH SÁCH DANH MỤC THỰC ĐƠN
             </h3>
             <span className="text-xs text-[#8E8E93] hidden sm:inline">
               • Sắp xếp theo thứ tự hiển thị ưu tiên

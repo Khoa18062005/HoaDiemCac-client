@@ -9,9 +9,10 @@ import {
   ExternalLink,
   Trash2,
   Globe,
-  HardDrive
+  HardDrive,
+  AlertTriangle
 } from 'lucide-react';
-import { uploadImageToCDN } from '@/lib/uploadService';
+import { uploadImageToCDN, validateImageMagicBytes } from '@/lib/uploadService';
 
 export default function MenuItemModal({
   isOpen,
@@ -42,9 +43,11 @@ export default function MenuItemModal({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isImageCorrupted, setIsImageCorrupted] = useState(false);
 
   useEffect(() => {
     const fallbackCat = categories[0]?.slug || String(categories[0]?.id || '');
+    setIsImageCorrupted(false);
     if (initialData) {
       setFormData({
         name: initialData.name || '',
@@ -84,8 +87,8 @@ export default function MenuItemModal({
 
   if (!isOpen) return null;
 
-  // Xử lý khi người dùng chọn file ảnh từ máy tính (chưa upload ngay mà tạo preview)
-  const handleSelectFile = (file) => {
+  // Xử lý khi người dùng chọn file ảnh từ máy tính (kiểm tra định dạng, dung lượng và Magic Bytes)
+  const handleSelectFile = async (file) => {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
@@ -98,6 +101,15 @@ export default function MenuItemModal({
       return;
     }
 
+    // Kiểm tra cấu trúc byte thực tế nhằm phát hiện tệp không phải hình ảnh hợp lệ
+    const magicCheck = await validateImageMagicBytes(file);
+    if (!magicCheck.isValid) {
+      setError('Tệp không phải là hình ảnh hợp lệ. Vui lòng chọn tệp hình ảnh thực tế (JPG, PNG, WEBP, GIF).');
+      handleCancelSelectedFile();
+      setIsImageCorrupted(true);
+      return;
+    }
+
     // Thu hồi link blob cũ nếu có
     if (previewUrl && previewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(previewUrl);
@@ -106,6 +118,7 @@ export default function MenuItemModal({
     const localUrl = URL.createObjectURL(file);
     setSelectedFile(file);
     setPreviewUrl(localUrl);
+    setIsImageCorrupted(false);
     setError('');
   };
 
@@ -141,6 +154,7 @@ export default function MenuItemModal({
     }
     setSelectedFile(null);
     setPreviewUrl('');
+    setIsImageCorrupted(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -166,6 +180,11 @@ export default function MenuItemModal({
     }
     if (Number(formData.price) > MAX_PRICE) {
       setError('Giá món ăn không được vượt quá 1.000.000.000.000 ₫ (1.000 tỷ VNĐ)');
+      return;
+    }
+
+    if (isImageCorrupted) {
+      setError('Tệp ảnh bị lỗi hoặc không thể hiển thị xem trước. Vui lòng chọn tệp hình ảnh khác trước khi lưu!');
       return;
     }
 
@@ -201,7 +220,14 @@ export default function MenuItemModal({
       onClose();
     } catch (err) {
       console.error('Lỗi khi lưu món ăn và ảnh CDN:', err);
-      setError(err.message || 'Không thể lưu món ăn. Vui lòng thử lại!');
+      const rawMsg = err.message || '';
+      if (rawMsg.toLowerCase().includes('invalid image') || rawMsg.toLowerCase().includes('cloudinary') || rawMsg.toLowerCase().includes('không tương thích') || rawMsg.toLowerCase().includes('không hợp lệ')) {
+        setError(rawMsg.includes('Dịch vụ lưu trữ từ chối') || rawMsg.includes('không hợp lệ')
+          ? rawMsg
+          : 'Không thể sử dụng tệp ảnh này: Định dạng không hợp lệ hoặc tệp ảnh bị hỏng. Vui lòng chọn tệp ảnh khác.');
+      } else {
+        setError(rawMsg || 'Không thể lưu món ăn. Vui lòng thử lại!');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -320,10 +346,7 @@ export default function MenuItemModal({
           {/* ========================================================================= */}
           <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between">
-              <label className="text-[#A0A0A5] font-semibold flex items-center gap-1.5">
-                <span>Hình ảnh món ăn</span>
-                <span className="text-[10px] text-gold">(Lưu trữ CDN)</span>
-              </label>
+              <label className="text-[#A0A0A5] font-semibold">Hình ảnh món ăn</label>
 
               {/* Chuyển đổi phương thức: Từ máy tính hoặc Nhập URL */}
               <div className="flex items-center p-0.5 bg-surface rounded-lg border border-surface-border text-[11px]">
@@ -366,21 +389,44 @@ export default function MenuItemModal({
               <div className="space-y-2">
                 {previewUrl ? (
                   // Trường hợp 1: Người dùng vừa chọn ảnh mới từ máy tính (chờ bấm Lưu mới tải lên CDN)
-                  <div className="p-3 bg-surface rounded-xl border border-gold/50 flex items-center gap-4 bg-gold/[0.03]">
-                    <div className="w-16 h-16 rounded-lg overflow-hidden bg-surface-elevated border border-gold/40 flex-shrink-0 flex items-center justify-center relative shadow-md">
-                      <img
-                        src={previewUrl}
-                        alt="Preview ảnh mới"
-                        className="w-full h-full object-cover"
-                      />
+                  <div className={`p-3 bg-surface rounded-xl border flex items-center gap-4 ${
+                    isImageCorrupted ? 'border-crimson bg-crimson/5' : 'border-gold/50 bg-gold/[0.03]'
+                  }`}>
+                    <div className={`w-16 h-16 rounded-lg overflow-hidden bg-surface-elevated border flex-shrink-0 flex items-center justify-center relative shadow-md ${
+                      isImageCorrupted ? 'border-crimson bg-crimson/10' : 'border-gold/40'
+                    }`}>
+                      {isImageCorrupted ? (
+                        <div className="flex flex-col items-center justify-center text-crimson p-1 text-center">
+                          <AlertTriangle className="w-5 h-5 mb-0.5" />
+                          <span className="text-[8px] font-bold">Lỗi ảnh</span>
+                        </div>
+                      ) : (
+                        <img
+                          src={previewUrl}
+                          alt="Preview ảnh mới"
+                          className="w-full h-full object-cover"
+                          onLoad={() => setIsImageCorrupted(false)}
+                          onError={() => {
+                            setIsImageCorrupted(true);
+                            setError('Tệp ảnh bị lỗi hoặc không thể hiển thị xem trước. Vui lòng chọn tệp hình ảnh khác!');
+                          }}
+                        />
+                      )}
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 text-amber-400 text-[11px] font-bold mb-1">
-                        <Upload className="w-3.5 h-3.5 text-gold animate-bounce" />
-                        <span>Ảnh mới (Sẽ tải lên CDN khi bấm Lưu)</span>
-                      </div>
-                      <p className="text-[11px] text-white font-medium truncate">
+                      {isImageCorrupted ? (
+                        <div className="flex items-center gap-1.5 text-crimson text-[11px] font-bold mb-1">
+                          <AlertTriangle className="w-3.5 h-3.5 text-crimson animate-pulse" />
+                          <span>Tệp ảnh bị lỗi (Không thể lưu)</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-amber-400 text-[11px] font-bold mb-1">
+                          <Upload className="w-3.5 h-3.5 text-gold animate-bounce" />
+                          <span>Ảnh mới đã sẵn sàng (Lưu cùng món ăn)</span>
+                        </div>
+                      )}
+                      <p className={`text-[11px] font-medium truncate ${isImageCorrupted ? 'text-crimson font-semibold' : 'text-white'}`}>
                         {selectedFile?.name || 'Tệp hình ảnh'}
                       </p>
                       <span className="text-[10px] text-[#A0A0A5] font-mono">
@@ -420,7 +466,7 @@ export default function MenuItemModal({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 text-jade-bright text-[11px] font-bold mb-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Ảnh hiện tại (Lưu trữ CDN)</span>
+                        <span>Ảnh hiện tại của món ăn</span>
                       </div>
                       <p className="text-[11px] font-mono text-[#A0A0A5] truncate select-all bg-surface-card px-2 py-1 rounded border border-surface-border/80">
                         {formData.image}
@@ -470,8 +516,8 @@ export default function MenuItemModal({
                           hoặc kéo thả tệp hình ảnh vào đây
                         </p>
                       </div>
-                      <span className="text-[10px] text-[#656569] font-mono">
-                        Hỗ trợ JPG, PNG, WEBP, GIF (Chỉ tải lên CDN khi bấm Lưu)
+                      <span className="text-[10px] text-[#656569]">
+                        Hỗ trợ định dạng JPG, PNG, WEBP, GIF (Tối đa 10MB)
                       </span>
                     </div>
                   </div>
@@ -546,13 +592,13 @@ export default function MenuItemModal({
             </button>
             <button
               type="submit"
-              disabled={isSaving}
-              className="px-5 py-2 rounded-lg bg-crimson hover:bg-crimson-glow text-white font-bold shadow-md shadow-crimson/30 transition-all active:scale-95 disabled:opacity-50 cursor-pointer flex items-center gap-2"
+              disabled={isSaving || isImageCorrupted}
+              className="px-5 py-2 rounded-lg bg-crimson hover:bg-crimson-glow text-white font-bold shadow-md shadow-crimson/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
             >
               {isSaving ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-white" />
-                  <span>{selectedFile ? 'Đang tải ảnh CDN & Lưu...' : 'Đang lưu vào Database...'}</span>
+                  <span>{selectedFile ? 'Đang tải ảnh & lưu món...' : 'Đang lưu món ăn...'}</span>
                 </>
               ) : (
                 <span>{isEditing ? 'Lưu Thay Đổi' : 'Thêm Món Ăn'}</span>
