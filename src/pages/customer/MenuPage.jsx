@@ -295,6 +295,8 @@ export default function MenuPage() {
                 setIsPasscodeRequired(false);
                 syncTableOrders();
               }
+            } else if (data.type === 'ORDER_ADJUSTED' || data.type === 'ORDER_ITEMS_UPDATED') {
+              syncTableOrders();
             }
           }
         };
@@ -729,7 +731,13 @@ export default function MenuPage() {
           localStorage.setItem('hoadiemcat_locked_tables', JSON.stringify(lockedMap));
         } catch {}
       }
-      if (payload.type === 'KITCHEN_ITEM_STATUS_TOGGLED' || payload.type === 'WAITER_ITEM_DELIVERED') {
+      if (
+        payload.type === 'ORDER_ITEMS_UPDATED' ||
+        payload.type === 'ORDER_ITEM_CANCELLED' ||
+        payload.type === 'ORDER_ITEM_UPDATED'
+      ) {
+        syncTableOrders();
+      } else if (payload.type === 'KITCHEN_ITEM_STATUS_TOGGLED' || payload.type === 'WAITER_ITEM_DELIVERED') {
         useKdsStore.getState().applyRemoteItemStatusUpdate(payload);
       } else if (payload.type === 'WAITER_ALL_ITEMS_DELIVERED') {
         useKdsStore.getState().deliverAllReadyItems(payload.orderId);
@@ -940,9 +948,16 @@ export default function MenuPage() {
     }
 
     const list = [];
-    tableOrders.forEach((order) => {
+    tableOrders.forEach((order, orderIdx) => {
+      // Đảm bảo số đợt gọi món tăng dần chuẩn xác theo từng order (Đợt 1, Đợt 2,...)
+      const hasDuplicateRounds = tableOrders.some((o, i) => tableOrders.some((other, j) => i !== j && o.roundNumber === other.roundNumber));
+      const orderRound = (!hasDuplicateRounds && order.roundNumber) ? order.roundNumber : (orderIdx + 1);
+
       if (Array.isArray(order.items)) {
         order.items.forEach((item) => {
+          if (item.status === 'CANCELLED' || item.status === 'cancelled') {
+            return;
+          }
           const dishMatch = dishesList.find(
             (d) => String(d.id) === String(item.menuItemId) || d.name === item.name
           );
@@ -955,13 +970,14 @@ export default function MenuPage() {
             orderId: order.id,
             orderCode: order.orderCode,
             tableCode: order.tableCode,
+            orderRound: orderRound,
             orderedAt: item.orderedAt || (order.createdAt ? new Date(order.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''),
           });
         });
       }
     });
 
-    // Gom nhóm các món ở trạng thái "Đã phục vụ" (DELIVERED) cùng loại với nhau
+    // Gom nhóm các món ở trạng thái "Đã phục vụ" (DELIVERED) cùng loại trong cùng 1 đợt với nhau
     const result = [];
     const deliveredMap = new Map(); // groupKey -> index trong result
 
@@ -971,8 +987,8 @@ export default function MenuPage() {
         // Món đang chế biến hoặc chờ phục vụ: hiển thị riêng lẻ theo từng đợt gọi
         result.push({ ...item });
       } else {
-        // Món đã phục vụ: gom nhóm theo món
-        const groupKey = String(item.dishId || item.menuItemId || item.name).trim().toLowerCase();
+        // Món đã phục vụ: gom nhóm theo món trong cùng đợt gọi
+        const groupKey = `${item.orderRound || 1}-${String(item.dishId || item.menuItemId || item.name).trim().toLowerCase()}`;
         if (deliveredMap.has(groupKey)) {
           const existingIndex = deliveredMap.get(groupKey);
           const existing = result[existingIndex];
@@ -988,6 +1004,7 @@ export default function MenuPage() {
           const groupedItem = {
             ...item,
             entryId: `grouped-delivered-${item.dishId || item.id}`,
+            orderRound: item.orderRound || 1,
             notes: item.note ? [item.note] : [],
           };
           deliveredMap.set(groupKey, result.length);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
   Clock,
@@ -12,12 +12,44 @@ import {
   AlertTriangle,
   Receipt,
   UtensilsCrossed,
+  ShoppingCart,
   ArrowLeftRight,
   ArrowRight,
   Users2,
   Printer,
   Sparkles,
 } from 'lucide-react';
+
+// Hook tăng tốc độ cuộn chuột (Mouse Wheel Booster)
+function useFastWheelScroll(speedMultiplier = 2.0) {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleWheel = (e) => {
+      if (el.scrollHeight <= el.clientHeight) return;
+
+      const delta = e.deltaY;
+      const canScrollDown = delta > 0 && el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+      const canScrollUp = delta < 0 && el.scrollTop > 1;
+
+      if (canScrollDown || canScrollUp) {
+        e.preventDefault();
+        const factor = Math.abs(delta) >= 40 ? speedMultiplier : 1.3;
+        el.scrollTop += delta * factor;
+      }
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', handleWheel);
+    };
+  }, [speedMultiplier]);
+
+  return containerRef;
+}
 import { tableApi, getStoredTableSession, saveTableSession } from '@/features/tables/api/tableApi';
 import { orderApi } from '@/features/customer/api/orderApi';
 import { apiClient } from '@/lib/axios';
@@ -28,6 +60,7 @@ import {
   saveActivePaymentFlow,
   clearActivePaymentFlow,
 } from '@/features/payment';
+import AdminOrderAdjustmentModal from './AdminOrderAdjustmentModal';
 
 export function formatCurrencyVND(amount) {
   if (!amount) return '0 ₫';
@@ -91,6 +124,12 @@ export default function AdminTableDetailModal({
     }
     return false;
   });
+
+  // Modal Xem Giỏ Hàng & Điều Chỉnh Order Bếp (UC13)
+  const [isOrderAdjustmentOpen, setIsOrderAdjustmentOpen] = useState(false);
+
+  // Ref tăng tốc độ cuộn chuột (Mouse Wheel Booster)
+  const bodyScrollRef = useFastWheelScroll(2.0);
 
   // Trạng thái Chuyển / Ghép bàn trực tiếp từ POS
   const [isDirectTransferOpen, setIsDirectTransferOpen] = useState(false);
@@ -484,12 +523,28 @@ export default function AdminTableDetailModal({
             )}
 
             {/* Body */}
-            <div className="p-6 overflow-y-auto space-y-6 custom-scrollbar flex-1">
+            <div
+              ref={bodyScrollRef}
+              className="p-6 overflow-y-auto space-y-6 custom-scrollbar flex-1"
+            >
               {/* A. Trạng thái vận hành của bàn */}
               <div>
-                <label className="text-xs font-semibold text-[#A0A0A5] uppercase tracking-wider block mb-2">
-                  Trạng thái vận hành của bàn
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#A0A0A5] uppercase tracking-wider block">
+                    Trạng thái vận hành của bàn
+                  </label>
+                  {(currentStatus === 'OCCUPIED' || localOrders.length > 0 || subtotal > 0) && (
+                    <button
+                      type="button"
+                      onClick={() => setIsOrderAdjustmentOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 -translate-y-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-gold/60 text-gold text-xs font-semibold transition-all active:scale-95 shadow-sm group"
+                      title="Xem giỏ hàng"
+                    >
+                      <ShoppingCart className="w-3.5 h-3.5 group-hover:scale-105 transition-transform text-amber-300" />
+                      <span>Xem giỏ hàng</span>
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-3 gap-2.5">
                   <div
                     className={`py-2.5 px-3 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 select-none cursor-default transition-colors ${
@@ -880,8 +935,9 @@ export default function AdminTableDetailModal({
                 </div>
               )}
 
-              {/* D. Nút Thao Tác Chính Tại Đáy: Chỉ hiện 1 button Thanh Toán khi bàn đang phục vụ */}
+              {/* D. Nút Thao Tác: Thanh toán / Dọn dẹp */}
               <div className="pt-2">
+
                 {currentStatus === 'OCCUPIED' ? (
                   <button
                     type="button"
@@ -1105,6 +1161,19 @@ export default function AdminTableDetailModal({
           onTableUpdated={onTableUpdated}
           onOptimisticUpdate={onOptimisticUpdate}
           syncOrderLockState={syncOrderLockState}
+        />
+      )}
+
+      {/* 3. Modal Điều Chỉnh Order Món Bếp (UC13) */}
+      {isOrderAdjustmentOpen && (
+        <AdminOrderAdjustmentModal
+          isOpen={isOrderAdjustmentOpen}
+          onClose={() => setIsOrderAdjustmentOpen(false)}
+          table={table}
+          onOrderChanged={() => {
+            fetchOrdersForTable();
+            if (onTableUpdated) onTableUpdated();
+          }}
         />
       )}
     </>
