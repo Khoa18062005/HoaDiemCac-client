@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
   Clock,
@@ -17,6 +17,11 @@ import {
 import { tableApi } from '@/features/tables/api/tableApi';
 import { apiClient } from '@/lib/axios';
 import { saveInvoiceToHistory } from '@/features/invoices/api/invoiceApi';
+import {
+  getActivePaymentFlow,
+  saveActivePaymentFlow,
+  clearActivePaymentFlow,
+} from '../utils/paymentStorage';
 
 export function formatCurrencyVND(amount) {
   if (!amount) return '0 ₫';
@@ -58,37 +63,229 @@ export default function PaymentStepperModal({
   onOptimisticUpdate,
   syncOrderLockState,
 }) {
-  // Bắt đầu từ Bước 2 (sau khi ấn nút Thanh Toán ở B1 - Hình 1)
-  const [currentStep, setCurrentStep] = useState(2);
+  // Đọc thông tin tiến trình thanh toán đã lưu (nếu trùng bàn)
+  const activeFlow = useMemo(() => {
+    const saved = getActivePaymentFlow();
+    if (
+      saved &&
+      table &&
+      ((saved.tableId && String(saved.tableId) === String(table.id)) ||
+        (saved.tableNumber &&
+          (saved.tableNumber === table.tableNumber ||
+            saved.tableNumber === table.code)))
+    ) {
+      return saved;
+    }
+    return null;
+  }, [table?.id, table?.tableNumber, table?.code]);
+
+  // Khôi phục đúng bước đang thực hiện trước khi F5 (mặc định bước 2 hoặc bước 3 nếu bàn đã bị đóng băng)
+  const [currentStep, setCurrentStep] = useState(() => {
+    const saved = getActivePaymentFlow();
+    if (
+      saved &&
+      table &&
+      ((saved.tableId && String(saved.tableId) === String(table.id)) ||
+        (saved.tableNumber &&
+          (saved.tableNumber === table.tableNumber ||
+            saved.tableNumber === table.code)))
+    ) {
+      return saved.currentStep || (table?.isOrderLocked ? 3 : 2);
+    }
+    return table?.isOrderLocked ? 3 : 2;
+  });
+
   const [actionLoading, setActionLoading] = useState(null);
   const [feedback, setFeedback] = useState(null);
 
   // Phương thức thanh toán (Tiền mặt / Chuyển khoản)
-  const [paymentMethod, setPaymentMethod] = useState('CASH'); // 'CASH' | 'TRANSFER'
-  const [cashReceived, setCashReceived] = useState('');
-  const [thirdPartySignalStatus, setThirdPartySignalStatus] = useState('WAITING');
+  const [paymentMethod, setPaymentMethod] = useState(() => {
+    const saved = getActivePaymentFlow();
+    if (
+      saved &&
+      table &&
+      ((saved.tableId && String(saved.tableId) === String(table.id)) ||
+        (saved.tableNumber &&
+          (saved.tableNumber === table.tableNumber ||
+            saved.tableNumber === table.code)))
+    ) {
+      return saved.paymentMethod || 'CASH';
+    }
+    return 'CASH';
+  });
+
+  const [cashReceived, setCashReceived] = useState(() => {
+    const saved = getActivePaymentFlow();
+    if (
+      saved &&
+      table &&
+      ((saved.tableId && String(saved.tableId) === String(table.id)) ||
+        (saved.tableNumber &&
+          (saved.tableNumber === table.tableNumber ||
+            saved.tableNumber === table.code)))
+    ) {
+      return saved.cashReceived || '';
+    }
+    return '';
+  });
+
+  const [thirdPartySignalStatus, setThirdPartySignalStatus] = useState(() => {
+    const saved = getActivePaymentFlow();
+    if (
+      saved &&
+      table &&
+      ((saved.tableId && String(saved.tableId) === String(table.id)) ||
+        (saved.tableNumber &&
+          (saved.tableNumber === table.tableNumber ||
+            saved.tableNumber === table.code)))
+    ) {
+      return saved.thirdPartySignalStatus || 'WAITING';
+    }
+    return 'WAITING';
+  });
 
   // Mã hóa đơn thống nhất & Hóa đơn đã thanh toán
-  const [currentInvoiceCode, setCurrentInvoiceCode] = useState('');
-  const [completedInvoice, setCompletedInvoice] = useState(null);
+  const [currentInvoiceCode, setCurrentInvoiceCode] = useState(() => {
+    const saved = getActivePaymentFlow();
+    if (
+      saved &&
+      table &&
+      ((saved.tableId && String(saved.tableId) === String(table.id)) ||
+        (saved.tableNumber &&
+          (saved.tableNumber === table.tableNumber ||
+            saved.tableNumber === table.code))) &&
+      saved.currentInvoiceCode
+    ) {
+      return saved.currentInvoiceCode;
+    }
+    const today = new Date();
+    const ymd = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+    const rand = String(Math.floor(1000 + Math.random() * 9000));
+    return `HD-${ymd}-${rand}`;
+  });
 
-  // Reset khi mở modal
+  const [completedInvoice, setCompletedInvoice] = useState(() => {
+    const saved = getActivePaymentFlow();
+    if (
+      saved &&
+      table &&
+      ((saved.tableId && String(saved.tableId) === String(table.id)) ||
+        (saved.tableNumber &&
+          (saved.tableNumber === table.tableNumber ||
+            saved.tableNumber === table.code)))
+    ) {
+      return saved.completedInvoice || null;
+    }
+    return null;
+  });
+
+  // Dữ liệu món ăn và tài chính đối soát (hỗ trợ fallback tức thì khi F5)
+  const effectiveItems = allItems && allItems.length > 0
+    ? allItems
+    : (activeFlow?.allItems && activeFlow.allItems.length > 0 ? activeFlow.allItems : allItems);
+
+  const effectiveFinalTotal = finalTotal > 0
+    ? finalTotal
+    : (activeFlow?.finalTotal || finalTotal);
+
+  const effectiveSubtotal = subtotal > 0
+    ? subtotal
+    : (activeFlow?.subtotal || subtotal);
+
+  const effectiveVat = vat > 0
+    ? vat
+    : (activeFlow?.vat || vat);
+
+  // Khôi phục hoặc khởi tạo khi mở modal
   useEffect(() => {
     if (isOpen && table) {
-      setCurrentStep(2);
-      setActionLoading(null);
-      setFeedback(null);
-      setPaymentMethod('CASH');
-      setCashReceived('');
-      setThirdPartySignalStatus('WAITING');
-      setCompletedInvoice(null);
+      const active = getActivePaymentFlow();
+      const isMatching =
+        active &&
+        ((active.tableId && String(active.tableId) === String(table.id)) ||
+          (active.tableNumber &&
+            (active.tableNumber === table.tableNumber ||
+              active.tableNumber === table.code)));
 
-      const today = new Date();
-      const ymd = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
-      const rand = String(Math.floor(1000 + Math.random() * 9000));
-      setCurrentInvoiceCode(`HD-${ymd}-${rand}`);
+      if (isMatching) {
+        if (active.currentStep) setCurrentStep(active.currentStep);
+        if (active.paymentMethod) setPaymentMethod(active.paymentMethod);
+        if (active.cashReceived !== undefined) setCashReceived(active.cashReceived);
+        if (active.thirdPartySignalStatus) setThirdPartySignalStatus(active.thirdPartySignalStatus);
+        if (active.currentInvoiceCode) setCurrentInvoiceCode(active.currentInvoiceCode);
+        if (active.completedInvoice) setCompletedInvoice(active.completedInvoice);
+      } else {
+        const initialStep = table.isOrderLocked ? 3 : 2;
+        setCurrentStep(initialStep);
+        setActionLoading(null);
+        setFeedback(null);
+        setPaymentMethod('CASH');
+        setCashReceived('');
+        setThirdPartySignalStatus('WAITING');
+        setCompletedInvoice(null);
+
+        const today = new Date();
+        const ymd = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+        const rand = String(Math.floor(1000 + Math.random() * 9000));
+        const newCode = `HD-${ymd}-${rand}`;
+        setCurrentInvoiceCode(newCode);
+
+        saveActivePaymentFlow({
+          tableId: table.id,
+          tableNumber: table.tableNumber || table.code,
+          tableName: getDisplayTableName(table),
+          currentStep: initialStep,
+          paymentMethod: 'CASH',
+          cashReceived: '',
+          thirdPartySignalStatus: 'WAITING',
+          currentInvoiceCode: newCode,
+          completedInvoice: null,
+          subtotal: effectiveSubtotal,
+          vat: effectiveVat,
+          finalTotal: effectiveFinalTotal,
+          allItems: effectiveItems,
+          updatedAt: Date.now(),
+        });
+      }
     }
   }, [isOpen, table?.id]);
+
+  // Luôn tự động ghi nhớ và lưu trữ tiến trình thanh toán vào localStorage để bảo toàn khi F5
+  useEffect(() => {
+    if (isOpen && table) {
+      saveActivePaymentFlow({
+        tableId: table.id,
+        tableNumber: table.tableNumber || table.code,
+        tableName: getDisplayTableName(table),
+        currentStep,
+        paymentMethod,
+        cashReceived,
+        thirdPartySignalStatus,
+        currentInvoiceCode,
+        completedInvoice,
+        subtotal: effectiveSubtotal,
+        vat: effectiveVat,
+        finalTotal: effectiveFinalTotal,
+        allItems: effectiveItems,
+        updatedAt: Date.now(),
+      });
+    }
+  }, [
+    isOpen,
+    table?.id,
+    table?.tableNumber,
+    table?.code,
+    currentStep,
+    paymentMethod,
+    cashReceived,
+    thirdPartySignalStatus,
+    currentInvoiceCode,
+    completedInvoice,
+    effectiveSubtotal,
+    effectiveVat,
+    effectiveFinalTotal,
+    effectiveItems,
+  ]);
 
   // Khóa cuộn trang khi mở modal
   useEffect(() => {
@@ -110,7 +307,7 @@ export default function PaymentStepperModal({
 
   // Tính tiền khách đưa & tiền thối lại
   const numCashReceived = Number(cashReceived) || 0;
-  const cashChange = Math.max(0, numCashReceived - finalTotal);
+  const cashChange = Math.max(0, numCashReceived - effectiveFinalTotal);
   const targetTableNum = table.tableNumber || table.code || '';
 
   /**
@@ -119,16 +316,19 @@ export default function PaymentStepperModal({
    * tự động rã băng máy khách hàng và trả bàn về hoạt động bình thường.
    */
   const handleCancelPaymentFlow = async () => {
-    // Nếu bàn đang trong trạng thái đóng băng order
+    // 1. Xóa sạch tiến trình thanh toán trong localStorage
+    clearActivePaymentFlow();
+
+    // 2. Nếu bàn đang trong trạng thái đóng băng order hoặc đang ở Bước 3 trở đi
     if (table.isOrderLocked || currentStep >= 3) {
       try {
-        // 1. Phản hồi lạc quan tức thì 0ms (Optimistic UI)
+        // Phản hồi lạc quan tức thì 0ms (Optimistic UI)
         table.isOrderLocked = false;
         if (syncOrderLockState) {
           syncOrderLockState(table.id, targetTableNum, false);
         }
 
-        // 2. Bắn API mở khóa order cho bàn trên Database Backend
+        // Bắn API mở khóa order cho bàn trên Database Backend
         await tableApi.setOrderLock(table.id, false);
 
         if (onTableUpdated) onTableUpdated();
@@ -200,22 +400,22 @@ export default function PaymentStepperModal({
       tableId: table.id,
       tableNumber: table.tableNumber || table.code || 'B01',
       tableName: getDisplayTableName(table),
-      subtotal: subtotal,
+      subtotal: effectiveSubtotal,
       discountPercent: 0,
       discountAmount: 0,
       taxPercent: 8,
-      taxAmount: vat,
-      finalAmount: finalTotal,
+      taxAmount: effectiveVat,
+      finalAmount: effectiveFinalTotal,
       paymentMethod: paymentMethod === 'TRANSFER' ? 'VIETQR' : 'CASH',
       paymentStatus: 'PAID',
       paidAt: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       cashierName: 'Quản Trị Viên',
-      cashReceived: paymentMethod === 'CASH' && numCashReceived ? numCashReceived : (paymentMethod === 'CASH' ? finalTotal : null),
+      cashReceived: paymentMethod === 'CASH' && numCashReceived ? numCashReceived : (paymentMethod === 'CASH' ? effectiveFinalTotal : null),
       cashChange: paymentMethod === 'CASH' ? cashChange : null,
       transactionRef: paymentMethod === 'TRANSFER' ? `VQR${Date.now()}` : null,
       isPrinted: true,
-      items: allItems.map((item) => ({
+      items: effectiveItems.map((item) => ({
         name: item.name || item.dishName || 'Món ăn',
         quantity: Number(item.quantity) || 1,
         price: Number(item.price) || ((Number(item.totalPrice) || 0) / (Number(item.quantity) || 1)) || 0,
@@ -379,10 +579,10 @@ export default function PaymentStepperModal({
 
                 <div className="text-right">
                   <p className="text-[10px] uppercase tracking-wider text-[#8E8E93]">
-                    Tổng tạm tính ({allItems.length} món)
+                    Tổng tạm tính ({effectiveItems.length} món)
                   </p>
                   <p className="font-mono font-extrabold text-gold text-sm">
-                    {formatCurrencyVND(finalTotal)}
+                    {formatCurrencyVND(effectiveFinalTotal)}
                   </p>
                 </div>
               </div>
@@ -438,7 +638,7 @@ export default function PaymentStepperModal({
                     <p className="text-xs text-[#8E8E93]">
                       Mã bàn: <span className="font-mono text-white">{table.tableNumber || table.code}</span>
                       {table.timeSpent && ` • Thời gian: ${table.timeSpent}`}
-                      {` • ${allItems.length} món ăn`}
+                      {` • ${effectiveItems.length} món ăn`}
                     </p>
                   </div>
                 </div>
@@ -468,7 +668,7 @@ export default function PaymentStepperModal({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-border/50 text-[#EDEDED]">
-                      {loadingOrders && allItems.length === 0 ? (
+                      {loadingOrders && effectiveItems.length === 0 ? (
                         <tr>
                           <td colSpan={5} className="py-8 text-center text-[#8E8E93]">
                             <div className="flex items-center justify-center gap-2">
@@ -477,8 +677,8 @@ export default function PaymentStepperModal({
                             </div>
                           </td>
                         </tr>
-                      ) : allItems.length > 0 ? (
-                        allItems.map((item, idx) => {
+                      ) : effectiveItems.length > 0 ? (
+                        effectiveItems.map((item, idx) => {
                           const qty = Number(item.quantity) || 1;
                           const unitPrice = Number(item.price) || 0;
                           const itemTotal = Number(item.totalPrice) || (unitPrice * qty);
@@ -509,8 +709,8 @@ export default function PaymentStepperModal({
                       ) : (
                         <tr>
                           <td colSpan={5} className="py-6 text-center text-[#8E8E93] italic">
-                            {subtotal > 0
-                              ? `Đơn hàng đang có tổng tiền ${formatCurrencyVND(subtotal)}`
+                            {effectiveSubtotal > 0
+                              ? `Đơn hàng đang có tổng tiền ${formatCurrencyVND(effectiveSubtotal)}`
                               : 'Bàn chưa có món ăn nào được ghi nhận.'}
                           </td>
                         </tr>
@@ -523,16 +723,16 @@ export default function PaymentStepperModal({
                 <div className="bg-[#18181C] border border-surface-border rounded-xl p-4 space-y-2">
                   <div className="flex items-center justify-between text-xs text-[#A0A0A5]">
                     <span>Tạm tính (tiền chưa VAT):</span>
-                    <span className="font-mono text-white font-medium">{formatCurrencyVND(subtotal)}</span>
+                    <span className="font-mono text-white font-medium">{formatCurrencyVND(effectiveSubtotal)}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs text-[#A0A0A5]">
                     <span>Thuế VAT (8%):</span>
-                    <span className="font-mono text-purple-400 font-medium">+{formatCurrencyVND(vat)}</span>
+                    <span className="font-mono text-purple-400 font-medium">+{formatCurrencyVND(effectiveVat)}</span>
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-surface-border text-sm">
                     <span className="font-bold text-white uppercase tracking-wider">Tổng Tiền Thanh Toán:</span>
                     <span className="font-mono text-xl font-extrabold text-gold tracking-tight">
-                      {formatCurrencyVND(finalTotal)}
+                      {formatCurrencyVND(effectiveFinalTotal)}
                     </span>
                   </div>
                 </div>
@@ -598,17 +798,17 @@ export default function PaymentStepperModal({
                         <span className="text-[11px] text-[#8E8E93]">Gợi ý:</span>
                         <button
                           type="button"
-                          onClick={() => setCashReceived(String(finalTotal))}
+                          onClick={() => setCashReceived(String(effectiveFinalTotal))}
                           className="px-2.5 py-1 rounded-md bg-surface-card border border-surface-border hover:border-gold/40 text-[11px] font-mono text-[#EDEDED] hover:text-gold transition-colors"
                         >
                           Đúng số tiền
                         </button>
                         {[
-                          Math.ceil(finalTotal / 500000) * 500000,
-                          Math.ceil(finalTotal / 100000) * 100000 + 100000,
+                          Math.ceil(effectiveFinalTotal / 500000) * 500000,
+                          Math.ceil(effectiveFinalTotal / 100000) * 100000 + 100000,
                           2000000,
                         ]
-                          .filter((amt, idx, arr) => amt > finalTotal && arr.indexOf(amt) === idx)
+                          .filter((amt, idx, arr) => amt > effectiveFinalTotal && arr.indexOf(amt) === idx)
                           .slice(0, 3)
                           .map((quickAmt) => (
                             <button
@@ -639,7 +839,7 @@ export default function PaymentStepperModal({
                       <div className="flex flex-col sm:flex-row items-center gap-5">
                         <div className="p-2.5 bg-white rounded-xl shadow-lg flex-shrink-0">
                           <img
-                            src={`https://img.vietqr.io/image/MB-0317892341-compact2.png?amount=${finalTotal}&addInfo=Thanh%20toan%20${table.tableNumber || table.code || 'B01'}`}
+                            src={`https://img.vietqr.io/image/MB-0317892341-compact2.png?amount=${effectiveFinalTotal}&addInfo=Thanh%20toan%20${table.tableNumber || table.code || 'B01'}`}
                             alt="VietQR Chuyển Khoản"
                             className="w-32 h-32 object-contain"
                             loading="lazy"
@@ -661,7 +861,7 @@ export default function PaymentStepperModal({
                           </div>
                           <div className="flex items-center justify-between pb-1 border-b border-surface-border/60">
                             <span className="text-[#8E8E93]">Số tiền:</span>
-                            <span className="font-mono font-extrabold text-gold">{formatCurrencyVND(finalTotal)}</span>
+                            <span className="font-mono font-extrabold text-gold">{formatCurrencyVND(effectiveFinalTotal)}</span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-[#8E8E93]">Nội dung CK:</span>
@@ -691,7 +891,7 @@ export default function PaymentStepperModal({
                                   Đang chờ tín hiệu nhận tiền từ ngân hàng...
                                 </p>
                                 <p className="text-[10px] text-[#A0A0A5]">
-                                  Lắng nghe biến động số dư VietQR cho {formatCurrencyVND(finalTotal)}.
+                                  Lắng nghe biến động số dư VietQR cho {formatCurrencyVND(effectiveFinalTotal)}.
                                 </p>
                               </div>
                             </div>
@@ -803,7 +1003,7 @@ export default function PaymentStepperModal({
                 )}
                 <div className="flex justify-between items-center pt-2 border-t border-surface-border/60">
                   <span className="text-white font-bold uppercase text-[11px]">Tổng số tiền thu:</span>
-                  <span className="font-mono text-base font-extrabold text-gold">{formatCurrencyVND(finalTotal)}</span>
+                  <span className="font-mono text-base font-extrabold text-gold">{formatCurrencyVND(effectiveFinalTotal)}</span>
                 </div>
               </div>
 
@@ -852,7 +1052,10 @@ export default function PaymentStepperModal({
                 </div>
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={() => {
+                    clearActivePaymentFlow();
+                    onClose();
+                  }}
                   className="p-1 rounded-lg text-[#8E8E93] hover:text-[#EDEDED] hover:bg-white/10 transition-colors"
                 >
                   <X className="w-5 h-5" />
@@ -987,7 +1190,10 @@ export default function PaymentStepperModal({
               <div className="px-6 py-4 border-t border-[#27272A] bg-[#121214] flex items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={() => {
+                    clearActivePaymentFlow();
+                    onClose();
+                  }}
                   className="px-4 py-2.5 rounded-xl border border-[#3F3F46] hover:bg-[#27272A] text-xs font-medium text-[#A0A0A5] hover:text-white transition-colors"
                 >
                   Đóng / Trở Về
@@ -996,6 +1202,7 @@ export default function PaymentStepperModal({
                   type="button"
                   onClick={() => {
                     window.print();
+                    clearActivePaymentFlow();
                     onClose();
                   }}
                   className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-crimson to-[#B91C1C] hover:from-[#B91C1C] hover:to-crimson text-white text-xs font-semibold shadow-lg shadow-crimson/20 flex items-center gap-2 transition-all active:scale-[0.98]"
@@ -1050,7 +1257,7 @@ export default function PaymentStepperModal({
               <span className="col-span-4 text-right">T.Tiền</span>
             </div>
             <div className="pt-2 space-y-2">
-              {allItems.map((item, idx) => {
+              {effectiveItems.map((item, idx) => {
                 const qty = Number(item.quantity) || 1;
                 const price = Number(item.price) || 0;
                 const itemTotal = Number(item.totalPrice) || (price * qty);
@@ -1070,15 +1277,15 @@ export default function PaymentStepperModal({
           <div className="py-2.5 border-b border-dashed border-gray-400 space-y-1.5 text-[11px]">
             <div className="flex justify-between">
               <span className="text-gray-600">Tạm tính:</span>
-              <span>{formatCurrencyVND(subtotal)}</span>
+              <span>{formatCurrencyVND(effectiveSubtotal)}</span>
             </div>
             <div className="flex justify-between text-gray-600">
               <span>Thuế VAT (8%):</span>
-              <span>+{formatCurrencyVND(vat)}</span>
+              <span>+{formatCurrencyVND(effectiveVat)}</span>
             </div>
             <div className="flex justify-between text-sm font-bold pt-1 border-t border-gray-300">
               <span className="uppercase">TỔNG THANH TOÁN:</span>
-              <span className="text-red-700 font-extrabold">{formatCurrencyVND(finalTotal)}</span>
+              <span className="text-red-700 font-extrabold">{formatCurrencyVND(effectiveFinalTotal)}</span>
             </div>
           </div>
 

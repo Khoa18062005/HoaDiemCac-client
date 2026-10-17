@@ -22,7 +22,12 @@ import { tableApi, getStoredTableSession, saveTableSession } from '@/features/ta
 import { orderApi } from '@/features/customer/api/orderApi';
 import { apiClient } from '@/lib/axios';
 import { normalizeTableCode } from '@/stores/useKdsStore';
-import { PaymentStepperModal } from '@/features/payment';
+import {
+  PaymentStepperModal,
+  getActivePaymentFlow,
+  saveActivePaymentFlow,
+  clearActivePaymentFlow,
+} from '@/features/payment';
 
 export function formatCurrencyVND(amount) {
   if (!amount) return '0 ₫';
@@ -72,7 +77,20 @@ export default function AdminTableDetailModal({
   const [loadingOrders, setLoadingOrders] = useState(false);
 
   // Modal Quy Trình Thanh Toán Thống Nhất 4 Bước (Payment Stepper Workflow)
-  const [isPaymentStepperOpen, setIsPaymentStepperOpen] = useState(false);
+  const [isPaymentStepperOpen, setIsPaymentStepperOpen] = useState(() => {
+    const active = getActivePaymentFlow();
+    if (
+      active &&
+      table &&
+      ((active.tableId && String(active.tableId) === String(table.id)) ||
+        (active.tableNumber &&
+          (active.tableNumber === table.tableNumber ||
+            active.tableNumber === table.code)))
+    ) {
+      return true;
+    }
+    return false;
+  });
 
   // Trạng thái Chuyển / Ghép bàn trực tiếp từ POS
   const [isDirectTransferOpen, setIsDirectTransferOpen] = useState(false);
@@ -116,6 +134,16 @@ export default function AdminTableDetailModal({
   useEffect(() => {
     if (isOpen && table) {
       fetchOrdersForTable();
+      const active = getActivePaymentFlow();
+      if (
+        active &&
+        ((active.tableId && String(active.tableId) === String(table.id)) ||
+          (active.tableNumber &&
+            (active.tableNumber === table.tableNumber ||
+              active.tableNumber === table.code)))
+      ) {
+        setIsPaymentStepperOpen(true);
+      }
     } else {
       // Reset các trạng thái popup khi đóng modal
       setIsPaymentStepperOpen(false);
@@ -857,7 +885,24 @@ export default function AdminTableDetailModal({
                 {currentStatus === 'OCCUPIED' ? (
                   <button
                     type="button"
-                    onClick={() => setIsPaymentStepperOpen(true)}
+                    onClick={() => {
+                      const startStep = table.isOrderLocked ? 3 : 2;
+                      saveActivePaymentFlow({
+                        tableId: table.id,
+                        tableNumber: table.tableNumber || table.code,
+                        tableName: getDisplayTableName(table),
+                        currentStep: startStep,
+                        paymentMethod: 'CASH',
+                        cashReceived: '',
+                        thirdPartySignalStatus: 'WAITING',
+                        subtotal,
+                        vat,
+                        finalTotal,
+                        allItems,
+                        updatedAt: Date.now(),
+                      });
+                      setIsPaymentStepperOpen(true);
+                    }}
                     className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-600 via-gold to-amber-500 hover:brightness-110 text-black font-extrabold text-sm shadow-lg shadow-gold/25 transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
                   >
                     <Receipt className="w-4 h-4" />
@@ -1046,6 +1091,7 @@ export default function AdminTableDetailModal({
           isOpen={isPaymentStepperOpen}
           onClose={() => {
             setIsPaymentStepperOpen(false);
+            clearActivePaymentFlow();
             if (currentStatus === 'CLEANING') {
               onClose();
             }

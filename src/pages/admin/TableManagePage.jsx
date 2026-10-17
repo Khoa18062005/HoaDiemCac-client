@@ -11,6 +11,7 @@ import { kitchenApi } from '@/features/kitchen';
 import AdminTableDevicesModal from '@/features/tables/components/AdminTableDevicesModal';
 import TableQrPrintModal from '@/features/tables/components/TableQrPrintModal';
 import { wsManager } from '@/lib/websocket';
+import { getActivePaymentFlow, clearActivePaymentFlow } from '@/features/payment';
 
 /**
  * Format số giây đã trôi qua sang chuỗi thời gian ngắn gọn (VD: "25 phút", "1h 15p")
@@ -48,8 +49,40 @@ export default function TableManagePage() {
   const [activeTab, setActiveTab] = useState('ALL');
   const [loading, setLoading] = useState(() => rawTables.length === 0);
 
-  // Modal Chi Tiết & Thao Tác Bàn
-  const [selectedTable, setSelectedTable] = useState(null);
+  // Modal Chi Tiết & Thao Tác Bàn - Tự động khôi phục bàn đang trong tiến trình thanh toán khi F5
+  const [selectedTable, setSelectedTable] = useState(() => {
+    try {
+      const activeFlow = getActivePaymentFlow();
+      if (activeFlow && (activeFlow.tableId || activeFlow.tableNumber)) {
+        const cached = localStorage.getItem('hoadiemcat_tables_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            const found = parsed.find(
+              (t) =>
+                (activeFlow.tableId && String(t.id) === String(activeFlow.tableId)) ||
+                (activeFlow.tableNumber &&
+                  (t.tableNumber === activeFlow.tableNumber || t.code === activeFlow.tableNumber))
+            );
+            if (found && found.status !== 'AVAILABLE') {
+              return found;
+            }
+          }
+        }
+        return {
+          id: activeFlow.tableId,
+          tableNumber: activeFlow.tableNumber,
+          code: activeFlow.tableNumber,
+          name: activeFlow.tableName || `Bàn ${activeFlow.tableNumber}`,
+          status: 'OCCUPIED',
+          isOrderLocked: true,
+        };
+      }
+    } catch (e) {
+      console.warn('Lỗi khôi phục bàn thanh toán khi F5:', e);
+    }
+    return null;
+  });
 
   // Modal Quản Lý Thiết Bị Kết Nối
   const [selectedDevicesTable, setSelectedDevicesTable] = useState(null);
@@ -228,6 +261,24 @@ export default function TableManagePage() {
       window.removeEventListener('focus', handleFocus);
     };
   }, [fetchData, rawTables.length]);
+
+  // Đồng bộ selectedTable với rawTables khi dữ liệu mới nhất được nạp về
+  useEffect(() => {
+    if (selectedTable && rawTables.length > 0) {
+      const fresh = rawTables.find(
+        (t) =>
+          (selectedTable.id && String(t.id) === String(selectedTable.id)) ||
+          (selectedTable.tableNumber &&
+            (t.tableNumber === selectedTable.tableNumber || t.code === selectedTable.tableNumber))
+      );
+      if (fresh) {
+        setSelectedTable((prev) => {
+          if (!prev) return fresh;
+          return { ...fresh, ...prev, orders: fresh.orders || prev.orders };
+        });
+      }
+    }
+  }, [rawTables, selectedTable?.id, selectedTable?.tableNumber]);
 
   // Hợp nhất dữ liệu bàn
   const enrichedTables = useMemo(() => {
@@ -414,7 +465,10 @@ export default function TableManagePage() {
           orders={orders}
           allTables={rawTables}
           isOpen={Boolean(selectedTable)}
-          onClose={() => setSelectedTable(null)}
+          onClose={() => {
+            setSelectedTable(null);
+            clearActivePaymentFlow();
+          }}
           onTableUpdated={handleTableUpdated}
           onOptimisticUpdate={handleOptimisticUpdate}
           onOpenDevices={(t) => setSelectedDevicesTable(t)}

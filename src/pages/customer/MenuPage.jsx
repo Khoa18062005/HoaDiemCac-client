@@ -196,10 +196,14 @@ export default function MenuPage() {
 
       // NẾU BÀN ĐANG TRONG QUÁ TRÌNH THANH TOÁN / KHÓA ORDER:
       // Khách hàng luôn ở lại màn hình tạm tính (Hình 1) đối soát chi tiết
-      if (isTableLocked || isOrderLocked) {
+      if (isTableLocked) {
         if (isMounted) {
           setIsPasscodeRequired(false);
           setIsOrderLocked(true);
+        }
+      } else {
+        if (isMounted) {
+          setIsOrderLocked(false);
         }
       }
 
@@ -212,14 +216,14 @@ export default function MenuPage() {
         !session.sessionToken ||
         (normStoredNum !== tableNumber && kdsStoredNum !== currentNormTable && session?.tableNumber !== tableNumber)
       ) {
-        if (isMounted && !isTableLocked && !isOrderLocked) {
+        if (isMounted && !isTableLocked) {
           setIsPasscodeRequired(true);
         }
         return;
       }
 
       if (isMounted) {
-        if (!isTableLocked && !isOrderLocked) {
+        if (!isTableLocked) {
           setIsPasscodeRequired(false);
         }
         if (session.isHost !== undefined) {
@@ -325,19 +329,15 @@ export default function MenuPage() {
       if (e.key === 'hoadiemcat_locked_tables') {
         try {
           const map = JSON.parse(e.newValue || '{}');
-          if (
-            map[tableNumber.toUpperCase()] !== undefined ||
-            map[currentNormTable.toUpperCase()] !== undefined
-          ) {
-            const isLocked = Boolean(
-              map[tableNumber.toUpperCase()] ?? map[currentNormTable.toUpperCase()]
-            );
-            setIsOrderLocked(isLocked);
-            if (isLocked) {
-              setCartTab('all');
-              setIsPasscodeRequired(false);
-              syncTableOrders();
-            }
+          const isLocked = Boolean(
+            map[tableNumber.toUpperCase()] ||
+            map[currentNormTable.toUpperCase()]
+          );
+          setIsOrderLocked(isLocked);
+          if (isLocked) {
+            setCartTab('all');
+            setIsPasscodeRequired(false);
+            syncTableOrders();
           }
         } catch {}
       }
