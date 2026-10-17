@@ -233,14 +233,14 @@ export default function AdminTableDetailModal({
   });
 
   const rawItems = tableOrders.flatMap((o) => o.items || o.orderItems || []);
-  // Nếu bàn đã có order thì dùng danh sách thực tế; nếu bàn chưa có món (bàn trống mới tạo) thì dùng danh mục món tiêu chuẩn
+  // Nếu bàn đã có order thì dùng danh sách thực tế; nếu bàn chưa có món nhưng có tổng tiền thì hiển thị combo; nếu bàn trống thì dùng mảng rỗng []
   const allItems = rawItems.length > 0
     ? rawItems
     : (Number(table.totalAmount || table.amount || 0) > 0
         ? [
             { name: 'Combo Đại Tiệc Lẩu Hoàng Gia', quantity: 1, price: Number(table.totalAmount || table.amount) }
           ]
-        : DEFAULT_MENU_ITEMS);
+        : []);
 
   // Tính toán tiền:
   const computedSubtotal = allItems.reduce(

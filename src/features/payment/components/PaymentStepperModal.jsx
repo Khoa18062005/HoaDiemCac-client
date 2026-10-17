@@ -180,21 +180,21 @@ export default function PaymentStepperModal({
   });
 
   // Dữ liệu món ăn và tài chính đối soát (hỗ trợ fallback tức thì khi F5)
-  const effectiveItems = allItems && allItems.length > 0
+  const effectiveItems = Array.isArray(allItems) && allItems.length > 0
     ? allItems
-    : (activeFlow?.allItems && activeFlow.allItems.length > 0 ? activeFlow.allItems : allItems);
+    : (loadingOrders && activeFlow?.allItems && activeFlow.allItems.length > 0 ? activeFlow.allItems : (allItems || []));
 
-  const effectiveFinalTotal = finalTotal > 0
+  const effectiveFinalTotal = typeof finalTotal === 'number'
     ? finalTotal
-    : (activeFlow?.finalTotal || finalTotal);
+    : (typeof activeFlow?.finalTotal === 'number' ? activeFlow.finalTotal : 0);
 
-  const effectiveSubtotal = subtotal > 0
+  const effectiveSubtotal = typeof subtotal === 'number'
     ? subtotal
-    : (activeFlow?.subtotal || subtotal);
+    : (typeof activeFlow?.subtotal === 'number' ? activeFlow.subtotal : 0);
 
-  const effectiveVat = vat > 0
+  const effectiveVat = typeof vat === 'number'
     ? vat
-    : (activeFlow?.vat || vat);
+    : (typeof activeFlow?.vat === 'number' ? activeFlow.vat : 0);
 
   // Khôi phục hoặc khởi tạo khi mở modal
   useEffect(() => {
