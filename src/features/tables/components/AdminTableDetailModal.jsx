@@ -64,6 +64,7 @@ export default function AdminTableDetailModal({
 }) {
   const [actionLoading, setActionLoading] = useState(null);
   const [feedback, setFeedback] = useState(null);
+  const lastToggleTimeRef = React.useRef(0);
 
   // Danh sách các đợt order của bàn được tải trực tiếp theo thời gian thực
   const [localOrders, setLocalOrders] = useState([]);
@@ -271,8 +272,13 @@ export default function AdminTableDetailModal({
     } catch {}
   };
 
-  // Khóa / Mở khóa gọi món khẩn cấp (Nút ngoài)
+  // Khóa / Mở khóa gọi món khẩn cấp (Nút ngoài) kèm debounce chống spam
   const handleToggleOrderLock = async () => {
+    const now = Date.now();
+    if (actionLoading === 'lock' || (now - lastToggleTimeRef.current < 1200)) {
+      return;
+    }
+    lastToggleTimeRef.current = now;
     setActionLoading('lock');
     const targetTableNum = table.tableNumber || table.code || '';
     const newLockState = !Boolean(table.isOrderLocked);
@@ -289,7 +295,9 @@ export default function AdminTableDetailModal({
     } catch (err) {
       showFeedback('Lỗi khi khóa/mở khóa: ' + (err.message || ''), true);
     } finally {
-      setActionLoading(null);
+      setTimeout(() => {
+        setActionLoading(null);
+      }, 800);
     }
   };
 
@@ -496,14 +504,24 @@ export default function AdminTableDetailModal({
                       disabled={actionLoading === 'lock'}
                       onClick={handleToggleOrderLock}
                       className={`flex-1 h-8 rounded-lg border text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                        table.isOrderLocked
+                        actionLoading === 'lock'
+                          ? 'opacity-50 cursor-not-allowed bg-zinc-800 text-zinc-500 border-zinc-700'
+                          : table.isOrderLocked
                           ? 'bg-crimson/20 border-crimson/50 text-crimson-glow hover:bg-crimson/30'
                           : 'bg-surface-card border-surface-border text-[#A0A0A5] hover:text-white'
                       }`}
-                      title="Khóa/mở quyền đặt món khẩn cấp"
+                      title={actionLoading === 'lock' ? 'Đang xử lý...' : 'Khóa/mở quyền đặt món khẩn cấp'}
                     >
-                      {table.isOrderLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-                      <span>{table.isOrderLocked ? 'Đang Khóa' : 'Khóa Order'}</span>
+                      {actionLoading === 'lock' ? (
+                        <RefreshCw className="w-3 h-3 animate-spin text-zinc-300" />
+                      ) : table.isOrderLocked ? (
+                        <Lock className="w-3 h-3" />
+                      ) : (
+                        <Unlock className="w-3 h-3" />
+                      )}
+                      <span>
+                        {actionLoading === 'lock' ? 'Đang lưu...' : table.isOrderLocked ? 'Đang Khóa' : 'Khóa Order'}
+                      </span>
                     </button>
                   </div>
                 </div>

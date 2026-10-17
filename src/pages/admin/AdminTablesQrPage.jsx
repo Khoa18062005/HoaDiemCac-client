@@ -51,6 +51,7 @@ export default function AdminTablesQrPage() {
   // Modal tạo bàn mới
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lockingTableId, setLockingTableId] = useState(null);
   const [newTableData, setNewTableData] = useState({
     tableNumber: '',
     name: '',
@@ -149,8 +150,11 @@ export default function AdminTablesQrPage() {
     }
   };
 
-  // Handler bật tắt khóa order khẩn cấp
+  // Handler bật tắt khóa order khẩn cấp kèm chống spam & rate limit
   const handleToggleLock = async (tableId) => {
+    if (lockingTableId === tableId) return;
+    setLockingTableId(tableId);
+
     try {
       const current = tables.find((t) => t.id === tableId);
       const newLocked = !Boolean(current?.isOrderLocked);
@@ -160,7 +164,12 @@ export default function AdminTablesQrPage() {
       );
       showToast(newLocked ? 'Đã kích hoạt khóa order khẩn cấp' : 'Đã mở khóa order cho bàn');
     } catch (err) {
-      showToast('Lỗi khi thao tác khóa bàn', 'error');
+      showToast(err.response?.data?.message || err.message || 'Lỗi khi thao tác khóa bàn', 'error');
+    } finally {
+      // Cooldown 1.2s trước khi mở lại nút để chống spam click dồn dập
+      setTimeout(() => {
+        setLockingTableId(null);
+      }, 1200);
     }
   };
 
@@ -426,6 +435,7 @@ export default function AdminTablesQrPage() {
               <TableCardQr
                 key={table.id}
                 table={table}
+                isLocking={lockingTableId === table.id}
                 onRegeneratePin={handleRegeneratePin}
                 onToggleLock={handleToggleLock}
                 onUpdateStatus={handleUpdateStatus}

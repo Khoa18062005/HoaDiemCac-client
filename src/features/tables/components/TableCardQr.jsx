@@ -21,6 +21,7 @@ function TableCardQr({
   onUpdateStatus,
   onOpenPrintModal,
   onOpenDevices,
+  isLocking = false,
 }) {
   const [copied, setCopied] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
@@ -239,15 +240,31 @@ function TableCardQr({
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {/* Nút Khóa / Mở Order */}
           <button
+            type="button"
+            disabled={isLocking}
             onClick={() => onToggleLock(table.id)}
             className={`p-1.5 rounded-lg border text-xs font-medium flex items-center justify-center transition-all ${
-              table.isOrderLocked
+              isLocking
+                ? 'opacity-50 cursor-not-allowed border-zinc-700 bg-zinc-800 text-zinc-400'
+                : table.isOrderLocked
                 ? 'border-rose-500/50 bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 shadow-sm shadow-rose-950/40'
                 : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 shadow-sm shadow-emerald-950/40'
             }`}
-            title={table.isOrderLocked ? 'Đang KHÓA order - Bấm để MỞ KHÓA cho bàn' : 'Đang MỞ order - Bấm để KHÓA KHẨN CẤP'}
+            title={
+              isLocking
+                ? 'Đang xử lý, vui lòng chờ...'
+                : table.isOrderLocked
+                ? 'Đang KHÓA order - Bấm để MỞ KHÓA cho bàn'
+                : 'Đang MỞ order - Bấm để KHÓA KHẨN CẤP'
+            }
           >
-            {table.isOrderLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+            {isLocking ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-zinc-300" />
+            ) : table.isOrderLocked ? (
+              <Lock className="w-3.5 h-3.5" />
+            ) : (
+              <Unlock className="w-3.5 h-3.5" />
+            )}
           </button>
 
           {/* Nút In Tem QR */}
